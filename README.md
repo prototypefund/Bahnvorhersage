@@ -1,31 +1,50 @@
-# TrAIn_Connection_Prediction: TCP [https://trainconnectionprediction.de/](https://trainconnectionprediction.de/)
+# Bahn-Vorhersage [https://bahnvorhersage.de/](https://bahnvorhersage.de/)
 
 ```bash
-                            ╔═══╗
-   ╔════════════════════════╩═══╩════════════════════════╗
-   ║            ████████    ██████   ██████              ║
-   ║               ██      ██        ██   ██             ║
-   ║               ██      ██        ██████              ║
-   ║               ██      ██        ██                  ║
-   ║               ██       ██████   ██                  ║
-   ╚════════════════════════╦═══╦════════════════════════╝
-                    \''''───║   ╟───''''/
-                     )__,--─║   ╟─--,__(
-                            ║   ║
-      Your friendly         ║   ║
-TrAIn_Connection_Prediction ║   ║
-          Service           ║   ║
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^╜   ╙^^^^^^^^^^^^^^^^^^^^^^^^^^^
+████████████████████████████████████▇▆▅▃▁
+       Bahn-Vorhersage      ███████▙  ▜██▆▁
+███████████████████████████████████████████▃
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█████▄▖
+█████████████████████████████████████████████
+ ▜█▀▀▜█▘                       ▜█▀▀▜█▘   ▀▀▀
 ```
 
-Winning project of the German National Artificial Intelligence Competition 2019 called [BWKI](https://bw-ki.de).
-Visit this project on our website at [https://trainconnectionprediction.de/](https://trainconnectionprediction.de/).
+Bahn-Vorhersage (formerly known as TrAIn_Connection_Prediction) is a train delay prediction system for German railways. We are trying to make rail travel more user-friendly. Our machine learning system predicts the probability that all connecting trains in a connection will be coughed.
+
+## History
+Date | Event  
+---|---
+Summer 2019 | We were searching for an AI project in order to compete in the German National Artificial Intelligence Competition 2019 called [BWKI](https://bw-ki.de) - TrAIn_Connection_Prediction was born
+November 30th, 2019 | We won the BWKI
+January 2020 | Started to switch our data source from zugfinder.de to IRIS
+February 4th, 2020 | We were invited by DB Analytics to present our project
+February 18th 2020 | We won the regional contest of Jugend Forscht. All further competitions this year were canceled due to covid
+March 2020 | After we moved all the data we don't own out of our git-repository, we finally open sourced our project
+Also March 2020 | In order to improve prediction accuracy, we started to gather information about the railway network
+Spring and Summer 2020 | Using IRIS as data source and finding useful data for the railway network is way harder than expected. IRIS is not made at all the gather historic delays and needs to be fetched every 2 Minutes for every single station. Network data is available in some formats, but not in a routable one. Trassenfinder API of DB Netz does not contain private rail tracks. BTW, did you even know that there is a unit called hecto meter (1 hm = 100 m)? At least Trassenfinder API uses it. In the end we wrote a script to parse stations into a railway network gathered with the help of OSMnx.
+September 2020 | It is not only hard to get the IRIS data in the first place, but after gathering data for some time, parsing the data gets very painful. At this time, our database server (4 cores, HDD) takes up to 5 days in order to parse the data.
+October 2020 | Switched from random forests to xgboost
+December 2020 | We moved our servers from the Kepler-Gymnasium to the SFZ Eningen
+January 2021 | As we are participating at Jugend Forscht once again, we are writing new docs for the project and also improving some things in the last second. Our web server is now much easier to deploy, and we actually have some stats for our now hyperparameter tuned machine learning models.
+February 2021 | Just before Jugend Forscht, we decided to change our frontend to use VueJS
+February 26th 2021 | We once again win the local Jugend Forscht competition, so we qualify for the state competition
+March 2021 | We managed to collect some donations and buy a powerful server / workstation for that. We put a Kubernetes cluster on that server and secured our new domain with let's encrypt. Parsing the data now takes one or two hours instead of a week. We also started to crawl obstacle / construction works data.
+March 24th 2021 | We won the 3rd prize at the Jugend Forscht state competition
+Spring and Summer 2021 | A lot was changed but not a lot was changed: During the competition we always had to match deadlines, so many things were left in a kind of working, but not automated nor robust way. We did a lot in order to make the code cleaner and more robust. Also, the Deutsche Bahn does not want us as affiliate partner, so our website will probably not generate any income any time soon
+October 2021 | As we plan to have some kind of arrival and departure boards at some point in time, we rewrote the whole data parser in order to parse gathered data within a few seconds. This was very hard as our parser relied heavily on caching, which relied on the data being sorted by station. In order to make the real-time parsing work, we had to parse the data unordered. To solve this, we added a persistent cache, that could be stored in our database.
+January 2022 | The frontend has grown over the years, and it was time to clean it up. Instead of style classes for every button and textbox, we finally made proper use of bootstrap and created our own theme
+February 2022 | We rebranded our project as Bahn-Vorhersage instead of the hard to memorize "TrAIn_Connection_Prediction". By doing that, we also moved our frontend out of the repository and on GitLab
+December 2021 to March 2022 | We realized that station names etc. change over time. This meant that we needed to introduce a new way of modeling stations, as we do not only need the current station information but also all the historic data. Otherwise, we could not parse the data we gathered one year ago properly. This also meant changing everything that relies on that station data (almost the whole project) and coding some kind of station update utility. This was also way harder than expected, as there are about 10 places to search for station data but none of them is complete
+March 2022 | Also moved the rest of the code to GitLab
+
+
+## Further Information
 
 For the youth competition [Jugend Forscht](https://www.jugend-forscht.de/) (JuFo) in Germany we have written a paper (in german) about our project,  
-which can be found in our repository under [docs/langfassung_tcp.pdf](https://github.com/TrAInConnectionPrediction/tcp/blob/master/docs/langfassung_tcp.pdf).
+which can be found in our repository under [docs/langfassung_tcp.pdf](https://gitlab.com/bahnvorhersage/bahnvorhersage/-/blob/master/docs/langfassung_tcp.pdf).
 
-We also have some interesting plots from our data under [docs/analysis.md](https://github.com/TrAInConnectionPrediction/tcp/blob/master/docs/analysis.md).  
-You can also generate plots on our [website](https://purl.org/tcp/data/stations).
+We also have some interesting plots from our data under [docs/analysis.md](https://gitlab.com/bahnvorhersage/bahnvorhersage/-/blob/master/docs/analysis.md).  
+You can also generate plots on our [website](https://bahnvorhersage.de/stats/stations#content).
 
 ## Running webserver
 
@@ -48,17 +67,6 @@ DOCKER_BUILDKIT=1 docker build -f webserver/Dockerfile.webserver . -t webserver
 docker run -p 5000:5000 -v $(pwd)/config.py:/mnt/config/config.py -v $(pwd)/cache:/usr/src/app/cache webserver
 ```
 The webserver should now be running on http://localhost:5000/
-
-## Frontend development
-
-For the development of the frontend/website, build the vue frontend in development mode:
-
-```bash
-# Go to the website
-cd webserver/website
-# Build Website
-./node_modules/.bin/vue-cli-service build --mode development
-```
 
 ## Installing Cartopy
 
