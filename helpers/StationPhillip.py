@@ -140,7 +140,7 @@ class StationPhillip:
     def _filter_stations_by_date(
         date: DateSelector,
         stations_to_filter: pd.DataFrame,
-        drop_duplicates_by: str,
+        drop_duplicates_by: Union[str, List],
         allow_duplicates: AllowedDuplicates = 'all',
     ):
         stations_to_filter = stations_to_filter.sort_index()
@@ -263,7 +263,12 @@ class StationPhillip:
                 return stations
 
         else:
-            stations = self._filter_stations_by_date(date, self.stations)
+            stations = self._filter_stations_by_date(
+                date,
+                self.stations,
+                drop_duplicates_by=['name', 'eva', 'ds100'],
+                allow_duplicates=allow_duplicates
+            )
             stations = stations.droplevel(level=['name', 'eva', 'ds100'])
             return stations
 
