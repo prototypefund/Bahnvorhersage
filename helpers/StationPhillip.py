@@ -40,6 +40,10 @@ class StationPhillip:
         stations['eva'] = stations['eva'].astype(int)
         stations['name'] = stations['name'].astype(pd.StringDtype())
         stations['ds100'] = stations['ds100'].astype(pd.StringDtype())
+        # TODO: parse array when loading from db
+        stations['meta'] = stations['meta'].str.replace('{', '').str.replace('}', '').str.split(
+            ','
+        ).apply(lambda x: [int(i) for i in x] if x is not None else None)
 
         stations.set_index(
             ['name', 'eva', 'ds100'],
