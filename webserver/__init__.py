@@ -12,7 +12,6 @@ from flask_limiter.util import get_remote_address
 import pyhafas
 from helpers import StreckennetzSteffi, logging
 from data_analysis.per_station import PerStationOverTime
-from webserver.index import index_blueprint
 from webserver.db_logger import db
 
 # Do not use GUI for matplotlib
@@ -63,8 +62,6 @@ def create_app():
         os.makedirs(app.instance_path)
     except OSError:
         pass
-
-    app.register_blueprint(index_blueprint)
 
     app.logger.info("Initializing the api...")
     from webserver import api
