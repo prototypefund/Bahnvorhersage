@@ -7,10 +7,11 @@ if os.path.isfile("/mnt/config/config.py"):
 import config
 
 from flask import Flask
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import pyhafas
 from helpers import StreckennetzSteffi, logging
 from data_analysis.per_station import PerStationOverTime
-from webserver.index import index_blueprint
 from webserver.db_logger import db
 
 # Do not use GUI for matplotlib
@@ -34,7 +35,7 @@ logging.info('Done!')
 
 
 def create_app():
-    import helpers.fancy_print_tcp
+    import helpers.bahn_vorhersage
 
     # Create app with changed paths  https://stackoverflow.com/a/42791810
     app = Flask(
@@ -62,12 +63,17 @@ def create_app():
     except OSError:
         pass
 
-    app.register_blueprint(index_blueprint)
-
     app.logger.info("Initializing the api...")
     from webserver import api
     app.register_blueprint(api.bp)
+    app.register_blueprint(api.bp_limited)
     app.logger.info("Done")
+
+    limiter = Limiter(
+        app,
+        key_func=get_remote_address,
+    )
+    limiter.limit('2 per minute;60 per day')(api.bp_limited)
 
     app.logger.info(
         "\nSetup done, webserver is up and running!\

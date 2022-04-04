@@ -40,6 +40,10 @@ class StationPhillip:
         stations['eva'] = stations['eva'].astype(int)
         stations['name'] = stations['name'].astype(pd.StringDtype())
         stations['ds100'] = stations['ds100'].astype(pd.StringDtype())
+        # TODO: parse array when loading from db
+        stations['meta'] = stations['meta'].str.replace('{', '').str.replace('}', '').str.split(
+            ','
+        ).apply(lambda x: [int(i) for i in x] if x is not None else None)
 
         stations.set_index(
             ['name', 'eva', 'ds100'],
@@ -140,7 +144,7 @@ class StationPhillip:
     def _filter_stations_by_date(
         date: DateSelector,
         stations_to_filter: pd.DataFrame,
-        drop_duplicates_by: str,
+        drop_duplicates_by: Union[str, List],
         allow_duplicates: AllowedDuplicates = 'all',
     ):
         stations_to_filter = stations_to_filter.sort_index()
@@ -263,7 +267,12 @@ class StationPhillip:
                 return stations
 
         else:
-            stations = self._filter_stations_by_date(date, self.stations)
+            stations = self._filter_stations_by_date(
+                date,
+                self.stations,
+                drop_duplicates_by=['name', 'eva', 'ds100'],
+                allow_duplicates=allow_duplicates
+            )
             stations = stations.droplevel(level=['name', 'eva', 'ds100'])
             return stations
 
