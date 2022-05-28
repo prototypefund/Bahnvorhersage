@@ -331,3 +331,4 @@ server_config.py
 helpers/igraph_test.py
 helpers/edgelist.pkl
 webserver/tcp.db
+k8s/redis_secrets.yaml
