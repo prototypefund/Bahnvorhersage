@@ -34,7 +34,7 @@ logging.info('Done!')
 
 
 def create_app():
-    import helpers.fancy_print_tcp
+    import helpers.bahn_vorhersage
 
     # Create app with changed paths  https://stackoverflow.com/a/42791810
     app = Flask(

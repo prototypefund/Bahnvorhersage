@@ -1,5 +1,6 @@
 import os
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import request, jsonify, current_app, Blueprint
@@ -7,10 +8,11 @@ from flask.helpers import send_file
 
 from datetime import datetime
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor
 
 from webserver.connection import (
-    datetimes_to_text,
-    get_connections,
+    get_journeys,
+    from_utc
 )
 from webserver import predictor, streckennetz, per_station_time
 from webserver.db_logger import log_activity
@@ -34,20 +36,25 @@ def analysis(connection: dict):
     dict
         The connection with the evaluation/rating
     """
-    ar_data, dp_data = predictor.get_pred_data(connection["segments"])
+    prediction = {}
+
+    ar_data, dp_data = predictor.get_pred_data(connection)
     ar_prediction = predictor.predict_ar(ar_data)
     dp_prediction = predictor.predict_dp(dp_data)
     transfer_time = np.array(
-        [segment["transfer_time"] for segment in connection["segments"][:-1]]
+        [segment['transfer_time'] for segment in connection[:-1]]
     )
-    con_scores = predictor.predict_con(ar_prediction[:-1], dp_prediction[1:], transfer_time)
-    connection["summary"]["score"] = int(round(con_scores.prod() * 100))
-    for i in range(len(connection["segments"]) - 1):
-        connection["segments"][i]["score"] = int(round(con_scores[i] * 100))
-    for i in range(len(connection["segments"])):
-        connection["segments"][i]["ar_delay"] = ar_prediction[i, 0]
-        connection["segments"][i]["dp_delay"] = 1 - dp_prediction[i, 1]
-    return connection
+    con_scores = predictor.predict_con(
+        ar_prediction[:-1], dp_prediction[1:], transfer_time
+    )
+
+    prediction['connection_score'] = int(round(con_scores.prod() * 100))
+    prediction['transfer_score'] = list(map(lambda s: int(round(s)), con_scores * 100))
+    prediction['ar_predictions'] = ar_prediction[:, 0].tolist()
+    prediction['dp_predictions'] = dp_prediction[:, 1].tolist()
+    prediction['transfer_times'] = transfer_time.tolist()
+
+    return prediction
 
 
 @bp.route("/connect", methods=["GET"])
@@ -95,22 +102,67 @@ def trip():
 
     # optional:
     search_for_departure = request.json['search_for_departure'] if 'search_for_departure' in request.json else True
+    only_regional = request.json['only_regional'] if 'only_regional' in request.json else False
+    bike = request.json['bike'] if 'bike' in request.json else False
 
     current_app.logger.info(
         "Getting connections from " + start + " to " + destination + ", " + str(date)
     )
-    connections = get_connections(
+    journeys, prediction_data = get_journeys(
         start=start,
         destination=destination,
         date=date,
         search_for_departure=search_for_departure,
+        only_regional=only_regional,
+        bike=bike,
     )
 
-    for i in range(len(connections)):
-        connections[i] = analysis(connections[i])
-        connections[i] = datetimes_to_text(connections[i])
+    for i, prediction in enumerate(map(analysis, prediction_data)):
+        journeys[i]['connectionScore'] = prediction['connection_score']
 
-    resp = jsonify(connections)
+        # This id is used for vue.js to render the list of connections
+        journeys[i]['id'] = i
+        journeys[i]['departure'] = journeys[i]['legs'][0]['departure']
+        journeys[i]['plannedDeparture'] = journeys[i]['legs'][0]['plannedDeparture']
+        journeys[i]['arrival'] = journeys[i]['legs'][-1]['arrival']
+        journeys[i]['plannedArrival'] = journeys[i]['legs'][-1]['plannedArrival']
+        journeys[i]['duration'] = (
+            from_utc(journeys[i]['arrival'])
+            - from_utc(journeys[i]['departure'])
+        ).total_seconds()
+        journeys[i]['plannedDuration'] = (
+            from_utc(journeys[i]['plannedArrival'])
+            - from_utc(journeys[i]['plannedDeparture'])
+        ).total_seconds()
+        journeys[i]['price'] = journeys[i]['price']['amount'] if journeys[i]['price'] is not None else -1
+
+
+        walking_legs = 0
+        train_categories = set()
+        for leg_index, leg in enumerate(journeys[i]['legs']):
+            if 'walking' in leg and leg['walking'] == True:
+                walking_legs += 1
+                train_categories.add('Fußweg')
+                continue
+            # The last leg has no transfer and thus no transferScore
+            if leg_index != len(journeys[i]['legs']) - 1:
+                journeys[i]['legs'][leg_index]['transferScore'] = prediction['transfer_score'][leg_index - walking_legs]
+                journeys[i]['legs'][leg_index]['transferTime'] = prediction['transfer_times'][leg_index - walking_legs]
+            journeys[i]['legs'][leg_index]['arrivalPrediction'] = prediction['ar_predictions'][leg_index - walking_legs]
+            journeys[i]['legs'][leg_index]['departurePrediction'] = prediction['dp_predictions'][leg_index - walking_legs]
+            train_categories.add(leg['line']['productName'])
+
+        journeys[i]['trainCategories'] = sorted(list(train_categories))
+        journeys[i]['transfers'] = len(journeys[i]['legs']) - 1 - walking_legs
+    # for i in range(len(prediction_data)):
+    #     res = analysis(prediction_data[i])
+    #     # connections[i] = datetimes_to_text(connections[i])
+
+    # for i in range(len(connections)):
+    #     connections[i] = analysis(connections[i])
+    #     connections[i] = datetimes_to_text(connections[i])
+
+    resp = jsonify(journeys)
     resp.headers.add("Access-Control-Allow-Origin", "*")
     return resp
 
