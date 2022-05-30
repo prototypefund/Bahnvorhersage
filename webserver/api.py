@@ -3,7 +3,7 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from flask import request, jsonify, current_app, Blueprint
+from flask import request, jsonify, current_app, Blueprint, make_response
 from flask.helpers import send_file
 
 from datetime import datetime
@@ -20,6 +20,7 @@ from data_analysis import data_stats
 from config import CACHE_PATH
 
 bp = Blueprint("api", __name__, url_prefix="/api")
+bp_limited = Blueprint("api_rate_limited", __name__, url_prefix='/api')
 
 
 def analysis(connection: dict):
@@ -71,8 +72,29 @@ def connect():
         list: a list of strings with all the known train stations
     """
     resp = jsonify({"stations": streckennetz.sta_list})
-    # resp.headers.add("Access-Control-Allow-Origin", "*")
     return resp
+
+
+@bp_limited.route("/stations.json")
+@log_activity
+def station_dump():
+    """Return all station data as json
+
+    Returns
+    -------
+    json
+        All station data
+    """
+    # We don't use jsonify here, because we have to do the
+    # conversion to str within pandas. Converting the stations
+    # to a dict first results in a Datetime out of bounds error.
+    r = make_response(
+        streckennetz.stations.reset_index(drop=True).to_json(
+            orient='records', indent=None, force_ascii=False
+        )
+    )
+    r.mimetype = 'application/json'
+    return r
 
 
 @bp.route("/trip", methods=["POST"])
@@ -214,11 +236,11 @@ def station_plot(date_range):
         )
 
     current_app.logger.info(f"Returning plot: {path_to_plot}")
-    # For some fucking reason flask searches the file from inside webserver so we have to go back a bit
-    # even though os.path.isfile('cache/plot_cache/'+ plot_name + '.png') works
-    return send_file(
-        path_to_plot, mimetype="image/webp"
-    )
+    # For some fucking reason flask searches the file from inside webserver
+    # so we have to go back a bit even though
+    # os.path.isfile('cache/plot_cache/'+ plot_name + '.png') works
+    return send_file(path_to_plot, mimetype="image/webp")
+
 
 @bp.route("/stationplot/limits")
 @log_activity
@@ -237,6 +259,7 @@ def limits():
     limits['min'] = limits['min'].date().isoformat()
     limits['max'] = limits['max'].date().isoformat()
     return limits
+
 
 @bp.route("/obstacleplot/<string:date_range>.png")
 @log_activity
@@ -267,8 +290,7 @@ def obstacle_plot(date_range):
         )
 
     current_app.logger.info(f"Returning plot: cache/plot_cache/{plot_name}.png")
-    # For some fucking reason flask searches the file from inside webserver so we have to go back a bit
-    # even though os.path.isfile('cache/plot_cache/'+ plot_name + '.png') works
-    return send_file(
-        f"{CACHE_PATH}/plot_cache/{plot_name}.png", mimetype="image/png"
-    )
+    # For some fucking reason flask searches the file from inside webserver
+    # so we have to go back a bit even though
+    # os.path.isfile('cache/plot_cache/'+ plot_name + '.png') works
+    return send_file(f"{CACHE_PATH}/plot_cache/{plot_name}.png", mimetype="image/png")

@@ -4,6 +4,9 @@
 # docker run -v $(pwd)/config.py:/usr/src/app/config.py -v $(pwd)/cache:/usr/src/app/cache update_butler
 # Though I would suggest that you have a seperate config for docker
 # If not so replace -v $(pwd)/config_docker.py:/usr/src/app/config.py with -v $(pwd)/config.py:/usr/src/app/config.py
+# Push:
+# docker tag update_butler trainconnectionprediction/tcp:update_butler
+# docker push trainconnectionprediction/tcp:update_butler
 
 # This build file is from https://www.rockyourcode.com/create-a-multi-stage-docker-build-for-python-flask-and-postgres/
 

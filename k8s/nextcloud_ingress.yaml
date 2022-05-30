@@ -13,7 +13,7 @@ spec:
     secretName: default-tls-secret
   rules:
   - host: "nextcloud.sfz-eningen.de"
-    http:
+    http: &nextcloud
       paths:
         - path: /
           pathType: Prefix
@@ -22,3 +22,7 @@ spec:
               name: sfz-nextcloud
               port:
                 number: 443
+  - host: "nextcloud.marcpanse.de"
+    http: *nextcloud
+  - host: "paralox-nextcloud.de"
+    http: *nextcloud

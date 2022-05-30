@@ -28,15 +28,6 @@ metadata:
     acme.cert-manager.io/http01-edit-in-place: "true" # !!!This seems to be really important!!!
 
     ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      if ($host ~ "qkhrecvu4nfgijjt.myfritz.net")
-      {
-        rewrite ^ https://bahnvorhersage.de$request_uri permanent;
-      }
-      if ($host ~ "srotr07ii29e1ir7.myfritz.net")
-      {
-        rewrite ^ https://bahnvorhersage.de$request_uri permanent;
-      }
 
 spec:
   tls:
@@ -48,11 +39,18 @@ spec:
     - next.trainconnectionprediction.de
     - edury.trainconnectionprediction.de
     - nextcloud.sfz-eningen.de
+    - nextcloud.marcpanse.de
+    - paralox-nextcloud.de
+    - gitlab.sfz-eningen.de
+    - gitlab.marcpanse.de
+    - paralox-git.de
+    - dashboard.sfz-eningen.de
+    - overleaf.sfz-eningen.de
     - overleaf.marcpanse.de
     secretName: default-tls-secret
   rules:
   - host: "bahnvorhersage.de"
-    http:
+    http: &prod_webserver
       paths:
         - path: /api/
           pathType: Prefix
@@ -68,8 +66,10 @@ spec:
               name: frontend-service
               port:
                 number: 80
+  - host: "trainconnectionprediction.de"
+    http: *prod_webserver
   - host: "next.bahnvorhersage.de"
-    http:
+    http: &test_webserver
       paths:
         - path: /api/
           pathType: Prefix
@@ -113,42 +113,8 @@ spec:
               port:
                 number: 80
   - host: "next.trainconnectionprediction.de"
-    http:
-      paths:
-        - path: /api/
-          pathType: Prefix
-          backend:
-            service:
-              name: next-webserver-service
-              port:
-                number: 5000
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: next-frontend-service
-              port:
-                number: 80
-  - host: "qkhrecvu4nfgijjt.myfritz.net"
-    http:
-      paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: webserver-service
-              port:
-                number: 5000
-  - host: "srotr07ii29e1ir7.myfritz.net"
-    http:
-      paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: webserver-service
-              port:
-                number: 5000
+    http: *test_webserver
+
   - host: "edury.trainconnectionprediction.de"
     http:
       paths:
@@ -159,38 +125,8 @@ spec:
               name: edury-decks-service
               port:
                 number: 80
-  - host: "hidden-mystery.de"
-    http:
-      paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: marcs-escaperoom
-              port:
-                number: 80
-  - host: "hiddenmystery.de"
-    http:
-      paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: marcs-escaperoom
-              port:
-                number: 80
-  - host: "marcpanse.de"
-    http:
-      paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: marcs-escaperoom
-              port:
-                number: 80
   - host: "overleaf.marcpanse.de"
-    http:
+    http: &overleaf
       paths:
         - path: /
           pathType: Prefix
@@ -199,3 +135,20 @@ spec:
               name: sfz-overleaf
               port:
                 number: 80
+  - host: "overleaf.sfz-eningen.de"
+    http: *overleaf
+
+  - host: "gitlab.sfz-eningen.de"
+    http: &gitlab
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-gitlab
+              port:
+                number: 80
+  - host: "gitlab.marcpanse.de"
+    http: *gitlab
+  - host: "paralox-git.de"
+    http: *gitlab

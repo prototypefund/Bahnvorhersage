@@ -13,7 +13,10 @@ import requests
 from tqdm import tqdm
 
 DateSelector = Union[
-    datetime.datetime, list[datetime.datetime], Literal['latest'], Literal['all']
+    datetime.datetime, List[datetime.datetime], Literal['latest'], Literal['all']
+]
+AllowedDuplicates = Union[
+    Literal['all'], Literal['first'], Literal['last'], Literal['none']
 ]
 
 
@@ -37,6 +40,10 @@ class StationPhillip:
         stations['eva'] = stations['eva'].astype(int)
         stations['name'] = stations['name'].astype(pd.StringDtype())
         stations['ds100'] = stations['ds100'].astype(pd.StringDtype())
+        # TODO: parse array when loading from db
+        stations['meta'] = stations['meta'].str.replace('{', '').str.replace('}', '').str.split(
+            ','
+        ).apply(lambda x: [int(i) for i in x] if x is not None else None)
 
         stations.set_index(
             ['name', 'eva', 'ds100'],
@@ -107,9 +114,38 @@ class StationPhillip:
         ).set_crs('EPSG:4326')
 
     @staticmethod
+    def _filter_duplicate_station_attributes(
+        stations: pd.DataFrame, by: str, allow_duplicates: AllowedDuplicates = 'all'
+    ) -> pd.DataFrame:
+        """Some stations have the same name for some reason. If one queries for one of these
+        stations by name, StationPhillip will return more than one station for these. As this
+        can be very impratical, it is possible to drop the duplicates.
+
+        Parameters
+        ----------
+        stations : pd.DataFrame
+            The stations in which a duplicate might exist
+        by : str
+            The column to find the duplicate in
+        allow_duplicates : AllowedDuplicates, optional
+            Duplicates to allow. Either `all`, `first`, `last` or `none`, by default 'all'
+
+        Returns
+        -------
+        pd.DataFrame
+            The stations without the duplicates
+        """
+        if allow_duplicates == 'all':
+            return stations
+        else:
+            return stations.drop_duplicates(subset=by, keep=allow_duplicates)
+
+    @staticmethod
     def _filter_stations_by_date(
         date: DateSelector,
         stations_to_filter: pd.DataFrame,
+        drop_duplicates_by: Union[str, List],
+        allow_duplicates: AllowedDuplicates = 'all',
     ):
         stations_to_filter = stations_to_filter.sort_index()
         if isinstance(date, str) and date == 'all':
@@ -134,8 +170,11 @@ class StationPhillip:
         ]
 
         stations_to_filter['date'] = date
-        stations_to_filter.set_index(['date'], append=True, inplace=True)
+        stations_to_filter = StationPhillip._filter_duplicate_station_attributes(
+            stations_to_filter, allow_duplicates=allow_duplicates, by=drop_duplicates_by
+        )
 
+        stations_to_filter.set_index(['date'], append=True, inplace=True)
         return stations_to_filter
 
     def _get_station(
@@ -144,11 +183,15 @@ class StationPhillip:
         name: Union[str, List[str]] = None,
         eva: Union[int, List[int]] = None,
         ds100: Union[str, List[str]] = None,
+        allow_duplicates: AllowedDuplicates = 'all',
     ) -> pd.DataFrame:
         if name is not None:
             if isinstance(name, str):
                 return self._filter_stations_by_date(
-                    date, self.stations.xs(name, level='name')
+                    date,
+                    self.stations.xs(name, level='name'),
+                    drop_duplicates_by='name',
+                    allow_duplicates=allow_duplicates,
                 )
             else:
                 stations = self.stations.loc[
@@ -159,7 +202,12 @@ class StationPhillip:
                     ),
                     :,
                 ]
-                stations = self._filter_stations_by_date(date, stations)
+                stations = self._filter_stations_by_date(
+                    date,
+                    stations,
+                    drop_duplicates_by='name',
+                    allow_duplicates=allow_duplicates,
+                )
                 stations = stations.droplevel(level=['eva', 'ds100'])
 
                 return stations
@@ -167,7 +215,10 @@ class StationPhillip:
         elif eva is not None:
             if isinstance(eva, int):
                 return self._filter_stations_by_date(
-                    date, self.stations.xs(eva, level='eva')
+                    date,
+                    self.stations.xs(eva, level='eva'),
+                    drop_duplicates_by='eva',
+                    allow_duplicates=allow_duplicates,
                 )
             else:
                 stations = self.stations.loc[
@@ -178,7 +229,12 @@ class StationPhillip:
                     ),
                     :,
                 ]
-                stations = self._filter_stations_by_date(date, stations)
+                stations = self._filter_stations_by_date(
+                    date,
+                    stations,
+                    drop_duplicates_by='eva',
+                    allow_duplicates=allow_duplicates,
+                )
                 stations = stations.droplevel(level=['name', 'ds100'])
 
                 return stations
@@ -186,7 +242,10 @@ class StationPhillip:
         elif ds100 is not None:
             if isinstance(ds100, str):
                 return self._filter_stations_by_date(
-                    date, self.stations.xs(ds100, level='ds100')
+                    date,
+                    self.stations.xs(ds100, level='ds100'),
+                    drop_duplicates_by='ds100',
+                    allow_duplicates=allow_duplicates,
                 )
             else:
                 stations = self.stations.loc[
@@ -197,13 +256,23 @@ class StationPhillip:
                     ),
                     :,
                 ]
-                stations = self._filter_stations_by_date(date, stations)
+                stations = self._filter_stations_by_date(
+                    date,
+                    stations,
+                    drop_duplicates_by='ds100',
+                    allow_duplicates=allow_duplicates,
+                )
                 stations = stations.droplevel(level=['name', 'eva'])
 
                 return stations
 
         else:
-            stations = self._filter_stations_by_date(date, self.stations)
+            stations = self._filter_stations_by_date(
+                date,
+                self.stations,
+                drop_duplicates_by=['name', 'eva', 'ds100'],
+                allow_duplicates=allow_duplicates
+            )
             stations = stations.droplevel(level=['name', 'eva', 'ds100'])
             return stations
 
@@ -212,6 +281,7 @@ class StationPhillip:
         date: DateSelector,
         name: Optional[Union[str, List[str]]] = None,
         ds100: Optional[Union[str, List[str]]] = None,
+        allow_duplicates: AllowedDuplicates = 'all',
     ) -> Union[int, pd.Series]:
         """
         Get eva from name or ds100
@@ -238,7 +308,9 @@ class StationPhillip:
         if name is not None and ds100 is not None:
             raise ValueError('Either name or ds100 must be supplied not both')
 
-        eva = self._get_station(date=date, name=name, ds100=ds100).loc[:, 'eva']
+        eva = self._get_station(
+            date=date, name=name, ds100=ds100, allow_duplicates=allow_duplicates
+        ).loc[:, 'eva']
         if isinstance(name, str) or isinstance(ds100, str):
             eva = eva.item()
 
@@ -249,6 +321,7 @@ class StationPhillip:
         date: DateSelector,
         eva: Optional[Union[int, List[int]]] = None,
         ds100: Optional[Union[str, List[str]]] = None,
+        allow_duplicates: AllowedDuplicates = 'all',
     ) -> Union[str, pd.Series]:
         """
         Get name from eva or ds100
@@ -275,7 +348,9 @@ class StationPhillip:
         if eva is not None and ds100 is not None:
             raise ValueError('Either eva or ds100 must be supplied not both')
 
-        name = self._get_station(date=date, eva=eva, ds100=ds100).loc[:, 'name']
+        name = self._get_station(
+            date=date, eva=eva, ds100=ds100, allow_duplicates=allow_duplicates
+        ).loc[:, 'name']
         if isinstance(eva, int) or isinstance(ds100, str):
             name = name.item()
 
@@ -286,6 +361,7 @@ class StationPhillip:
         date: DateSelector,
         eva: Optional[Union[int, List[int]]] = None,
         name: Optional[Union[str, List[str]]] = None,
+        allow_duplicates: AllowedDuplicates = 'all',
     ) -> Union[str, pd.Series]:
         """
         Get ds100 from eva or name
@@ -312,7 +388,9 @@ class StationPhillip:
         if eva is not None and name is not None:
             raise ValueError('Either eva or name must be supplied not both')
 
-        ds100 = self._get_station(date=date, eva=eva, name=name).loc[:, 'ds100']
+        ds100 = self._get_station(
+            date=date, eva=eva, name=name, allow_duplicates=allow_duplicates
+        ).loc[:, 'ds100']
         if isinstance(eva, int) or isinstance(name, str):
             ds100 = ds100.item()
 
@@ -324,6 +402,7 @@ class StationPhillip:
         eva: Optional[Union[int, List[int]]] = None,
         name: Optional[Union[str, List[str]]] = None,
         ds100: Optional[Union[str, List[str]]] = None,
+        allow_duplicates: AllowedDuplicates = 'all',
     ) -> Union[Tuple[int, int], pd.DataFrame]:
         """
         Get location from eva, name or ds100
@@ -353,10 +432,18 @@ class StationPhillip:
         elif eva is None and name is None and ds100 is None:
             raise ValueError('Either eva, name or ds100 must be supplied not none')
 
-        location = self._get_station(date=date, eva=eva, name=name, ds100=ds100).loc[
-            :, ['lon', 'lat']
-        ]
+        location = self._get_station(
+            date=date,
+            eva=eva,
+            name=name,
+            ds100=ds100,
+            allow_duplicates=allow_duplicates,
+        ).loc[:, ['lon', 'lat']]
         if isinstance(eva, int) or isinstance(name, str) or isinstance(ds100, str):
+            # Duplicate Station names exist. Thus, location might have several stations in it.
+            # In that case, we use the location of the first one.
+            if len(location) != 1:
+                location = location.iloc[0, :]
             location = (location['lon'].item(), location['lat'].item())
 
         return location
@@ -580,10 +667,7 @@ def parse_meta(meta: str) -> List[int]:
 
 
 def get_meta_group(
-    eva: int,
-    metas: dict,
-    checked: Set = None,
-    group: Set = None
+    eva: int, metas: dict, checked: Set = None, group: Set = None
 ) -> Tuple[Set[int], Set[int]]:
     if checked is None:
         checked = set()

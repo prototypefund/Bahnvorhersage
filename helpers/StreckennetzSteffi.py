@@ -216,8 +216,8 @@ class StreckennetzSteffi(StationPhillip):
             return sum(map(self.get_length, path))
         else:
             try:
-                u_coords = self.get_location(name=u, date=date)
-                v_coords = self.get_location(name=v, date=date)
+                u_coords = self.get_location(name=u, date=date, allow_duplicates='first')
+                v_coords = self.get_location(name=v, date=date, allow_duplicates='first')
                 return geopy.distance.distance(u_coords, v_coords).meters
             except KeyError:
                 return 0
