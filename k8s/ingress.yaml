@@ -34,6 +34,7 @@ spec:
   - hosts:
     - bahnvorhersage.de
     - next.bahnvorhersage.de
+    - db-rest.bahnvorhersage.de
     - trainconnectionprediction.de
     - next.trainconnectionprediction.de
     - edury.trainconnectionprediction.de
@@ -82,6 +83,33 @@ spec:
           backend:
             service:
               name: next-frontend-service
+              port:
+                number: 80
+  - host: "db-rest.bahnvorhersage.de"
+    http:
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: db-rest-service
+              port:
+                number: 3000
+  - host: "trainconnectionprediction.de"
+    http:
+      paths:
+        - path: /api/
+          pathType: Prefix
+          backend:
+            service:
+              name: webserver-service
+              port:
+                number: 5000
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: frontend-service
               port:
                 number: 80
   - host: "next.trainconnectionprediction.de"

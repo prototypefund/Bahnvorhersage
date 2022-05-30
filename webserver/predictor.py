@@ -1,17 +1,8 @@
 import pickle
 import pandas as pd
-import datetime
 import numpy as np
-from pytz import timezone
 from webserver import streckennetz
 from config import ENCODER_PATH, MODEL_PATH
-
-
-def from_utc(utc_time: str) -> datetime.datetime:
-    return datetime.datetime.strptime(
-        utc_time,
-        "%Y-%m-%dT%H:%M:%S.%f%z"
-    ).astimezone(timezone("Europe/Berlin")).replace(tzinfo=None)
 
 
 class Predictor:

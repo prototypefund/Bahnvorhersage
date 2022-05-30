@@ -1,8 +1,6 @@
 import os
 import sys
 
-from webserver.predictor import from_utc
-
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import requests
 from pytz import timezone
@@ -13,7 +11,13 @@ from helpers import ttl_lru_cache
 from . import client
 
 
-def get_connections(
+def from_utc(utc_time: str) -> datetime.datetime:
+    return datetime.datetime.fromisoformat(
+        utc_time
+    ).astimezone(timezone("Europe/Berlin")).replace(tzinfo=None)
+
+
+def get_journeys(
     start: str,
     destination: str,
     date: datetime.datetime,
@@ -22,6 +26,8 @@ def get_connections(
     hafas_profile: str='db',
     economic: bool=False,
     search_for_departure: bool=True,
+    only_regional: bool=False,
+    bike: bool=False,
 ) -> list:
     """[summary]
 
@@ -32,7 +38,7 @@ def get_connections(
     destination : str
         destination station name
     date : datetime.datetime
-        date and time of departure \n
+        date and time of departure
     max_changes : int, optional
         Maximum number of allowed changes, by default -1
     transfer_time : int, optional
@@ -43,141 +49,85 @@ def get_connections(
         True = not only fastest route, by default False
     search_for_departure : bool, optional
         False = time == arrival time, by default True
+    only_regional : bool, optional
+        True = only search for regional connections, by default False
+    bike : bool, optional
+        True = only search for bike connections, by default False
 
     Returns
     -------
         list : Parsed connections
     """    
-    json = {
-        "start": str(streckennetz.get_eva(name=start, date=date)),
-        "destination": str(streckennetz.get_eva(name=destination, date=date)),
-        "time": date.replace(tzinfo=timezone("CET")).isoformat(),
-        "maxChanges": max_changes,
-        "transferTime": transfer_time,
-        "hafasProfile": hafas_profile,
-        'economic': economic,
-        'searchForDeparture': search_for_departure,
+    request_data = {
+        'from': streckennetz.get_eva(name=start, date=date),
+        'to': streckennetz.get_eva(name=destination, date=date),
+        'results': 6,
+        'transfers': max_changes,
+        'transferTime': transfer_time,
+        'bike': bike,
+        'tickets': True,
+        'nationalExpress': False if only_regional else True,
+        'national': False if only_regional else True,
     }
-    json['tarif'] = {'class': 2,'traveler':{"type": "E"}}
 
-    r = requests.post(
-        "https://marudor.de/api/hafas/v3/tripSearch?profile=db", json=json
-    )
-    # journeys = client.journeys(
-    #     str(streckennetz.get_eva(name=start, date=date)),
-    #     str(streckennetz.get_eva(name=destination, date=date)),
-    #     time.replace(tzinfo=timezone("CET")),
-    #     max_journeys=6,
-    # )
-    connections = parse_connections(r.json())
-    return connections
+    if search_for_departure:
+        request_data['departure'] = date.replace(tzinfo=timezone("CET")).isoformat()
+    else:
+        request_data['arrival'] = date.replace(tzinfo=timezone("CET")).isoformat()
 
+    journeys = requests.get(
+        'https://db-rest.bahnvorhersage.de/journeys', params=request_data
+    ).json()['journeys']
 
-def datetimes_to_text(connection):
-    connection['summary']['dp_pt'] = connection['summary']['dp_pt'].isoformat()
-    connection['summary']['ar_pt'] = connection['summary']['ar_pt'].isoformat()
+    prediction_data = [extract_iris_like(journey) for journey in journeys]
+    
+    ridable = { i for i in range(len(prediction_data)) if prediction_data[i] is not None }
+    prediction_data = [prediction_data[i] for i in ridable]
+    journeys = [journeys[i] for i in ridable]
 
-    connection['summary']['dp_ct'] = connection['summary']['dp_ct'].isoformat()
-    connection['summary']['ar_ct'] = connection['summary']['ar_ct'].isoformat()
-
-    for i in range(len(connection['segments'])):
-        connection['segments'][i]['dp_pt'] = connection['segments'][i]['dp_pt'].isoformat()
-        connection['segments'][i]['ar_pt'] = connection['segments'][i]['ar_pt'].isoformat()
-
-        connection['segments'][i]['dp_ct'] = connection['segments'][i]['dp_ct'].isoformat()
-        connection['segments'][i]['ar_ct'] = connection['segments'][i]['ar_ct'].isoformat()
-
-    return connection
+    return journeys, prediction_data
 
 
-def parse_connection(connection):
-    summary = {}
+def extract_iris_like(connection):
     segments = []
-    # If the first segment is a WALK, we remove it and let the connection start
-    # from the next segment
-    if connection['segments'][0]['type'] == 'WALK':
-        del connection['segments'][0]
 
-    try:
-        summary['dp_station'] = streckennetz.get_name(
-            eva=int(connection['segments'][0]['segmentStart']['id']),
-            date=from_utc(connection['segments'][0]['departure']['scheduledTime'])
-        )
-    except KeyError:
-        summary['dp_station'] = ''
-    summary['dp_station_display_name'] = connection['segments'][0]['segmentStart']['title']
-    summary['dp_pt'] = from_utc(connection['segments'][0]['departure']['scheduledTime'])
-    summary['dp_ct'] = from_utc(connection['segments'][0]['departure']['time'])
-    try:
-        summary['ar_station'] = streckennetz.get_name(
-            eva=int(connection['segments'][-1]['segmentDestination']['id']),
-            date=from_utc(connection['segments'][-1]['arrival']['scheduledTime'])
-        )
-    except KeyError:
-        summary['ar_station'] = ''
-    summary['ar_station_display_name'] = connection['segments'][-1]['segmentDestination']['title']
-    summary['ar_pt'] = from_utc(connection['segments'][-1]['arrival']['scheduledTime'])
-    summary['ar_ct'] = from_utc(connection['segments'][-1]['arrival']['time'])
-    summary['transfers'] = len(connection['segments']) - 1
-    summary['train_categories'] = list(set(connection['segmentTypes'])) # set to get unique categories
-    summary['duration'] = str(summary['ar_ct'] - summary['dp_ct'])[:-3]
-    summary['price'] = connection['tarifSet'][0]['fares'][0]['price'] if 'tarifSet' in connection else -1
-    summary['is_rideable'] = connection['isRideable']
-    for segment in connection['segments']:
-        if segment['type'] == 'WALK':
-            # Add walking time to last segment and skip walk segment
-            segments[-1]['walk'] = (from_utc(segment['arrival']['time'])
-                                    - from_utc(segment['departure']['time'])).seconds \
-                                    // 60
-            # We don't want to count the walk segments as transfers
-            summary['transfers'] = summary['transfers'] - 1
+    for leg in connection['legs']:
+        if 'walking' in leg and leg['walking'] == True:
             continue
-        parsed_segment = {
-            'dp_station_display_name': segment['segmentStart']['title'],
-            'dp_lat': segment['stops'][0]['station']['coordinates']['lat'],
-            'dp_lon': segment['stops'][0]['station']['coordinates']['lng'],
-            'dp_pt': from_utc(segment['departure']['scheduledTime']),
-            'dp_ct': from_utc(segment['departure']['time']),
-            'dp_pp': segment['departure']['scheduledPlatform'] if 'scheduledPlatform' in segment['departure'] else None,
-            'dp_cp': segment['departure']['platform'] if 'platform' in segment['departure'] else None,
-            'ar_station_display_name': segment['segmentDestination']['title'],
-            'ar_lat': segment['stops'][-1]['station']['coordinates']['lat'],
-            'ar_lon': segment['stops'][-1]['station']['coordinates']['lng'],
-            'ar_pt': from_utc(segment['arrival']['scheduledTime']),
-            'ar_ct': from_utc(segment['arrival']['time']),
-            'ar_pp': segment['arrival']['scheduledPlatform'] if 'scheduledPlatform' in segment['arrival'] else None,
-            'ar_cp': segment['arrival']['platform'] if 'platform' in segment['arrival'] else None,
-            'train_name': segment['train']['name'],
-            'ar_c': segment['train']['type'],
-            'ar_n': segment['train']['number'],
-            'ar_o': segment['train']['admin'].replace('_', ''),
-            'dp_c': segment['train']['type'],
-            'dp_n': segment['train']['number'],
-            'dp_o': segment['train']['admin'].replace('_', ''),
-            'walk': 0
-        }
-        try:
-            parsed_segment['dp_station'] = streckennetz.get_name(
-                eva=int(segment['segmentStart']['id']),
-                date=parsed_segment['dp_pt']
-            )
-        except KeyError:
-            parsed_segment['dp_station'] = ''
-        try:
-            parsed_segment['ar_station'] = streckennetz.get_name(
-                eva=int(segment['segmentDestination']['id']),
-                date=parsed_segment['dp_pt']
-            )
-        except KeyError:
-            parsed_segment['ar_station'] = ''
-        try:
-            parsed_segment['train_destination'] = segment['finalDestination'] \
-                if 'finalDestination' in segment \
-                else segment['segmentDestination']['title']
-        except KeyError:
-            parsed_segment['train_destination'] = ''
+
+        if 'cancelled' in leg and leg['cancelled'] == True:
+            return None
         
-        parsed_segment['full_trip'], parsed_segment['stay_times'] = get_trip_of_train(segment['jid'])
+        parsed_segment = {
+            'dp_lat': leg['origin']['location']['latitude'],
+            'dp_lon': leg['origin']['location']['longitude'],
+            'dp_pt': from_utc(leg['plannedDeparture']),
+            'dp_ct': from_utc(leg['departure']),
+            'dp_pp': leg['plannedDeparturePlatform'] if 'plannedDeparturePlatform' in leg else None,
+            'dp_cp': leg['departurePlatform'] if 'departurePlatform' in leg else None,
+            'dp_station': leg['origin']['name'],
+
+            'ar_lat': leg['destination']['location']['latitude'],
+            'ar_lon': leg['destination']['location']['longitude'],
+            'ar_pt': from_utc(leg['plannedArrival']),
+            'ar_ct': from_utc(leg['arrival']),
+            'ar_pp': leg['plannedArrivalPlatform'] if 'plannedArrivalPlatform' in leg else None,
+            'ar_cp': leg['arrivalPlatform'] if 'arrivalPlatform' in leg else None,
+            'ar_station': leg['destination']['name'],
+
+            'train_name': leg['line']['name'],
+            'ar_c': leg['line']['productName'],
+            'ar_n': leg['line']['fahrtNr'],
+            'ar_o': leg['line']['adminCode'].replace('_', ''),
+            'dp_c': leg['line']['productName'],
+            'dp_n': leg['line']['fahrtNr'],
+            'dp_o': leg['line']['adminCode'].replace('_', ''),
+            'walk': 0,
+
+            'train_destination': leg['direction'],
+        }
+        
+        parsed_segment['full_trip'], parsed_segment['stay_times'] = get_trip_of_train(leg['tripId'])
         try:
             parsed_segment['dp_stop_id'] = parsed_segment['full_trip'].index(parsed_segment['dp_station'])
         except ValueError:
@@ -197,22 +147,22 @@ def parse_connection(connection):
         segments.append(parsed_segment)
 
     # Add transfer times
-    for segment in range(len(segments) - 1):
-        if segments[segment + 1]['dp_ct'] < segments[segment]['ar_ct']:
+    for leg in range(len(segments) - 1):
+        if segments[leg + 1]['dp_ct'] < segments[leg]['ar_ct']:
             # Negative transfer time. This should not happen (opinion of the tcp dev team).
             # Hafas however sometimes returns connections with negative transfer times.
-            segments[segment]['transfer_time'] = -(
-                (segments[segment + 1]['ar_ct']
-                - segments[segment]['dp_ct']).seconds
+            segments[leg]['transfer_time'] = -(
+                (segments[leg + 1]['ar_ct']
+                - segments[leg]['dp_ct']).seconds
                 // 60
             )
         else:
-            segments[segment]['transfer_time'] = (
-                (segments[segment + 1]['dp_ct']
-                - segments[segment]['ar_ct']).seconds
+            segments[leg]['transfer_time'] = (
+                (segments[leg + 1]['dp_ct']
+                - segments[leg]['ar_ct']).seconds
                 // 60
             )
-    return {'summary': summary, 'segments': segments}
+    return segments
 
 
 def parse_connections(connections):
