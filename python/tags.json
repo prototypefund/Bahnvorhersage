@@ -1,0 +1,871 @@
+{
+    "total_paths": 873593,
+    "electrified": [
+        "contact_line",
+        710132
+    ],
+    "frequency": [
+        "0",
+        466056
+    ],
+    "gauge": [
+        "1435",
+        802445
+    ],
+    "maxspeed": [
+        "110",
+        380356
+    ],
+    "operator": [
+        "RFI",
+        411267
+    ],
+    "passenger_lines": [
+        "2",
+        308190
+    ],
+    "railway": [
+        "rail",
+        873593
+    ],
+    "usage": [
+        "main",
+        433543
+    ],
+    "voltage": [
+        "3000",
+        466466
+    ],
+    "layer": [
+        "-1",
+        154858
+    ],
+    "tunnel": [
+        "yes",
+        24819
+    ],
+    "bridge": [
+        "viaduct",
+        126639
+    ],
+    "railway:track_ref": [
+        "3",
+        123365
+    ],
+    "highspeed": [
+        "yes",
+        31175
+    ],
+    "railway:preferred_direction": [
+        "forward",
+        74956
+    ],
+    "ref": [
+        "119",
+        288133
+    ],
+    "service": [
+        "yard",
+        416499
+    ],
+    "construction:railway:etcs": [
+        "2",
+        8800
+    ],
+    "embankment": [
+        "yes",
+        13590
+    ],
+    "man_made": [
+        "embankment",
+        132
+    ],
+    "covered": [
+        "no",
+        10128
+    ],
+    "oneway": [
+        "yes",
+        43673
+    ],
+    "tracks": [
+        "1",
+        91950
+    ],
+    "bridge:structure": [
+        "arch",
+        1339
+    ],
+    "access": [
+        "no",
+        1712
+    ],
+    "railway:scmt": [
+        "yes",
+        2774
+    ],
+    "railway:radio": [
+        "gsm-r",
+        95693
+    ],
+    "railway:etcs": [
+        "no",
+        170514
+    ],
+    "railway:lzb": [
+        "no",
+        127054
+    ],
+    "railway:pzb": [
+        "no",
+        232108
+    ],
+    "railway:traffic_mode": [
+        "mixed",
+        152893
+    ],
+    "maxspeed:tilting": [
+        "135",
+        8792
+    ],
+    "railway:preserved": [
+        "yes",
+        5072
+    ],
+    "lit": [
+        "yes",
+        4791
+    ],
+    "highway": [
+        "primary",
+        2465
+    ],
+    "lanes": [
+        "2",
+        855
+    ],
+    "description": [
+        "Tratto Padova-Venezia della futura Ferrovia Verona-Venezia (alta velocit\u00e0)",
+        38887
+    ],
+    "disused": [
+        "yes",
+        536
+    ],
+    "bicycle": [
+        "yes",
+        379
+    ],
+    "surface": [
+        "asphalt",
+        4899
+    ],
+    "start_date": [
+        "1877-07-16",
+        55822
+    ],
+    "foot": [
+        "no",
+        332
+    ],
+    "psv": [
+        "yes",
+        1360
+    ],
+    "tram": [
+        "yes",
+        1185
+    ],
+    "location": [
+        "bridge",
+        535
+    ],
+    "cutting": [
+        "yes",
+        3479
+    ],
+    "railway:track_class": [
+        "D4",
+        39678
+    ],
+    "railway:track_type": [
+        "main",
+        35185
+    ],
+    "structure_gauge": [
+        "GC",
+        22273
+    ],
+    "maxspeed:backward": [
+        "60",
+        7084
+    ],
+    "maxspeed:forward": [
+        "40",
+        7944
+    ],
+    "length": [
+        "192",
+        2406
+    ],
+    "railway:bidirectional": [
+        "regular",
+        58948
+    ],
+    "rack": [
+        "riggenbach",
+        5158
+    ],
+    "railway:main_switch_off": [
+        "yes",
+        109
+    ],
+    "importance": [
+        "international",
+        60050
+    ],
+    "loading_gauge": [
+        "GC",
+        18174
+    ],
+    "railway:ballastless": [
+        "yes",
+        11160
+    ],
+    "incline": [
+        "down",
+        881
+    ],
+    "indoor": [
+        "yes",
+        1071
+    ],
+    "level": [
+        "1",
+        14466
+    ],
+    "website": [
+        "https://www.chiemsee-schifffahrt.de/de/chiemsee-bahn/chiemsee-bahn",
+        1323
+    ],
+    "route": [
+        "RB/RE Richtung Rosenheim",
+        398
+    ],
+    "detail": [
+        "track",
+        83625
+    ],
+    "historic": [
+        "yes",
+        1315
+    ],
+    "disused:railway": [
+        "narrow_gauge",
+        483
+    ],
+    "width": [
+        "0.5",
+        2082
+    ],
+    "railway:gnt": [
+        "no",
+        45979
+    ],
+    "railway:tilting": [
+        "no",
+        10646
+    ],
+    "maxheight": [
+        "3.1",
+        283
+    ],
+    "construction:electrified": [
+        "contact_line",
+        1350
+    ],
+    "construction:frequency": [
+        "16.7",
+        1689
+    ],
+    "construction:voltage": [
+        "15000",
+        1688
+    ],
+    "monorail": [
+        "rubber_tyres",
+        137
+    ],
+    "workrules": [
+        "DE:EBO",
+        70873
+    ],
+    "height": [
+        "45 m",
+        246
+    ],
+    "railway:ls": [
+        "no",
+        42845
+    ],
+    "ref:La": [
+        "940",
+        8061
+    ],
+    "railway:ref": [
+        "116",
+        168
+    ],
+    "video": [
+        "https://youtu.be/cb7mL_xDOk8?t=1705",
+        164
+    ],
+    "image": [
+        "https://commons.m.wikimedia.org/wiki/File:Viaduct_Unterlemnitz_06.jpg",
+        392
+    ],
+    "tourism": [
+        "attraction",
+        114
+    ],
+    "heritage": [
+        "yes",
+        152
+    ],
+    "designation": [
+        "Hof",
+        311
+    ],
+    "deelectrified": [
+        "yes",
+        262
+    ],
+    "draisine": [
+        "yes",
+        100
+    ],
+    "eddy_current_brake": [
+        "no",
+        752
+    ],
+    "grade_of_track": [
+        "-20",
+        388
+    ],
+    "kursbuchstrecke": [
+        "594",
+        565
+    ],
+    "operating_procedure": [
+        "train_control_mode",
+        419
+    ],
+    "radio": [
+        "analog",
+        256
+    ],
+    "tilting_technology": [
+        "no",
+        463
+    ],
+    "traffic_mode": [
+        "passenger;freight",
+        107
+    ],
+    "track_class": [
+        "D4",
+        685
+    ],
+    "combined_transport_codification": [
+        "P/C 410;P/C 80",
+        358
+    ],
+    "power_limit": [
+        "900 A",
+        498
+    ],
+    "opening_date": [
+        "2021-03-01",
+        1127
+    ],
+    "end_date": [
+        "09.12.2017",
+        144
+    ],
+    "railway:interlaced": [
+        "yes",
+        315
+    ],
+    "metre_load": [
+        "6.4",
+        1227
+    ],
+    "network": [
+        "Mansfelder Bergwerksbahn",
+        5171
+    ],
+    "heritage:operator": [
+        "lda",
+        129
+    ],
+    "construction": [
+        "rail",
+        524
+    ],
+    "axle_load": [
+        "21",
+        17022
+    ],
+    "construction:railway": [
+        "tram",
+        137
+    ],
+    "motor_vehicle": [
+        "no",
+        242
+    ],
+    "last_renovation": [
+        "2016",
+        304
+    ],
+    "construction_start_expected": [
+        "2018",
+        443
+    ],
+    "check_date": [
+        "September 2022",
+        234
+    ],
+    "passenger": [
+        "international",
+        770
+    ],
+    "maxspeed:type": [
+        "DE:urban",
+        486
+    ],
+    "sidewalk": [
+        "both",
+        303
+    ],
+    "embedded": [
+        "yes",
+        426
+    ],
+    "railway:etcs:start_date": [
+        "2021-12",
+        827
+    ],
+    "bridge:movable": [
+        "bascule",
+        178
+    ],
+    "railway:zub123": [
+        "yes",
+        822
+    ],
+    "railway:zub123:start_date": [
+        "2019-05",
+        233
+    ],
+    "railway:cbtc": [
+        "sto",
+        264
+    ],
+    "railway:atc": [
+        "yes",
+        1346
+    ],
+    "railway:ctc": [
+        "no",
+        1295
+    ],
+    "railway:rail": [
+        "continuous",
+        1957
+    ],
+    "colour": [
+        "#ffcc00",
+        173
+    ],
+    "maxspeed:sign": [
+        "90",
+        339
+    ],
+    "vehicle": [
+        "no",
+        196
+    ],
+    "bus": [
+        "yes",
+        494
+    ],
+    "preserved": [
+        "yes",
+        193
+    ],
+    "zone:traffic": [
+        "DE:urban",
+        175
+    ],
+    "lanes:backward": [
+        "2",
+        119
+    ],
+    "lanes:forward": [
+        "1",
+        118
+    ],
+    "smoothness": [
+        "excellent",
+        248
+    ],
+    "attraction": [
+        "roller_coaster",
+        267
+    ],
+    "local_ref": [
+        "14",
+        1163
+    ],
+    "railway:gauge": [
+        "1435",
+        153
+    ],
+    "type": [
+        "route",
+        174
+    ],
+    "meter_load": [
+        "7.2",
+        6955
+    ],
+    "electrified:rail": [
+        "top",
+        390
+    ],
+    "tunnel:length": [
+        "314",
+        368
+    ],
+    "id:ctrn_fvg": [
+        "05130000477",
+        1369
+    ],
+    "track_detail": [
+        "yes",
+        141
+    ],
+    "bridge:length": [
+        "540",
+        153
+    ],
+    "railway:electricity:ref": [
+        "208.01",
+        1339
+    ],
+    "speisebezirk": [
+        "203.01",
+        620
+    ],
+    "postal_code": [
+        "13158",
+        210
+    ],
+    "railway:ballastless:system": [
+        "RHEDA-Berlin",
+        318
+    ],
+    "railway:zbs": [
+        "yes",
+        424
+    ],
+    "mapillary": [
+        "https://www.mapillary.com/map/im/G7i76wvz7dV1DsSHGSfsUw",
+        156
+    ],
+    "owner": [
+        "Deutsche Bahn",
+        1418
+    ],
+    "operator:short": [
+        "SRS",
+        321
+    ],
+    "emergency": [
+        "yes",
+        275
+    ],
+    "electrified:start_date": [
+        "2023-11-06",
+        570
+    ],
+    "historic:ref": [
+        "419",
+        145
+    ],
+    "historic:usage": [
+        "branch",
+        158
+    ],
+    "railway:shp": [
+        "yes",
+        165
+    ],
+    "railway:electrified": [
+        "no",
+        151
+    ],
+    "construction:maxspeed": [
+        "170",
+        192
+    ],
+    "boundary": [
+        "administrative",
+        128
+    ],
+    "branch": [
+        "main",
+        370
+    ],
+    "maxspeed:tilted": [
+        "85",
+        230
+    ],
+    "maxspeed:freight": [
+        "50",
+        152
+    ],
+    "abandoned:electrified": [
+        "contact_line",
+        235
+    ],
+    "train": [
+        "yes",
+        283
+    ],
+    "railway:evm": [
+        "no",
+        8136
+    ],
+    "maxaxleload": [
+        "22",
+        653
+    ],
+    "traces": [
+        "1",
+        164
+    ],
+    "railway:area": [
+        "Rydu\u0142towy",
+        154
+    ],
+    "abandoned:frequency": [
+        "0",
+        164
+    ],
+    "abandoned:voltage": [
+        "3000",
+        164
+    ],
+    "viaduct": [
+        "yes",
+        115
+    ],
+    "roller_coaster": [
+        "track",
+        549
+    ],
+    "elect": [
+        "no",
+        186
+    ],
+    "distance": [
+        "476",
+        455
+    ],
+    "status": [
+        "AC,builder:Alstom-Swietelsky,progress:100%",
+        1084
+    ],
+    "designated_direction": [
+        "forward",
+        211
+    ],
+    "railway:lower_pantograph_section": [
+        "yes",
+        145
+    ],
+    "planned": [
+        "abandonment",
+        102
+    ],
+    "grooved": [
+        "no",
+        387
+    ],
+    "railway:maximum_current": [
+        "600",
+        1835
+    ],
+    "lines": [
+        "R31",
+        524
+    ],
+    "commuting": [
+        "yes",
+        1216
+    ],
+    "railway:zsi127": [
+        "yes",
+        652
+    ],
+    "construction_end_expected": [
+        "2017-12-31",
+        431
+    ],
+    "kbs": [
+        "615",
+        379
+    ],
+    "mapping_status": [
+        "incomplete",
+        101
+    ],
+    "workrules:ruleset": [
+        "FV-DB",
+        136
+    ],
+    "barrier": [
+        "fence",
+        125
+    ],
+    "railway:retarder": [
+        "beam",
+        158
+    ],
+    "railway:zub": [
+        "yes",
+        706
+    ],
+    "ref_estimation": [
+        "W3",
+        173
+    ],
+    "on_sight": [
+        "no",
+        188
+    ],
+    "operator:contact_line": [
+        "DB Energie GmbH",
+        425
+    ],
+    "railway:radio:analogue:channel": [
+        "9",
+        252
+    ],
+    "loc_ref": [
+        "1143_36283",
+        3908
+    ],
+    "railway:block": [
+        "103",
+        830
+    ],
+    "system": [
+        "EBO",
+        122
+    ],
+    "railway:pzb:type": [
+        "pzb-600",
+        202
+    ],
+    "construction:start_date": [
+        "2011-03-03",
+        124
+    ],
+    "railway:track_ref:ESTW": [
+        "303",
+        352
+    ],
+    "razed:voltage": [
+        "750",
+        293
+    ],
+    "railway:maximum_current:ET420": [
+        "1050",
+        122
+    ],
+    "ref:FR:SNCF_Reseau": [
+        "70000,1,V1,8.426,502.000",
+        58881
+    ],
+    "railway:kvb": [
+        "yes",
+        31907
+    ],
+    "railway:tvm": [
+        "yes",
+        5828
+    ],
+    "railway:atb": [
+        "yes",
+        29531
+    ],
+    "railway:atb-eg": [
+        "yes",
+        4423
+    ],
+    "railway:atb-ng": [
+        "no",
+        4183
+    ],
+    "HGK:service": [
+        "spur",
+        208
+    ],
+    "start_date:railway": [
+        "1877",
+        453
+    ],
+    "axle:load": [
+        "22.5",
+        589
+    ],
+    "railway:tbl": [
+        "1+",
+        22174
+    ],
+    "ref:FR:geofer": [
+        "25133.02N",
+        122
+    ],
+    "railway:zub222c": [
+        "yes",
+        456
+    ],
+    "railway:ari": [
+        "no",
+        1185
+    ],
+    "railway_site": [
+        "special",
+        139
+    ],
+    "railway_site_passable": [
+        "no",
+        112
+    ],
+    "ref:lor": [
+        "EA1140",
+        339
+    ],
+    "traffic": [
+        "fast",
+        277
+    ],
+    "railway:train_protection": [
+        "ETCS:2;FR:TVM:300",
+        151
+    ]
+}
