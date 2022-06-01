@@ -1,8 +1,9 @@
 import pickle
 import pandas as pd
 import numpy as np
+from xgboost import XGBClassifier
 from webserver import streckennetz
-from config import ENCODER_PATH, MODEL_PATH
+from config import ENCODER_PATH, JSON_MODEL_PATH
 
 
 class Predictor:
@@ -16,8 +17,14 @@ class Predictor:
         self.ar_models = []
         self.dp_models = []
         for model in range(self.n_models):
-            self.ar_models.append(pickle.load(open(MODEL_PATH.format('ar_' + str(model)), "rb")))
-            self.dp_models.append(pickle.load(open(MODEL_PATH.format('dp_' + str(model)), "rb")))
+            booster = XGBClassifier()
+            booster.load_model(JSON_MODEL_PATH.format('ar_' + str(model)))
+            self.ar_models.append(booster)
+
+            booster = XGBClassifier()
+            booster.load_model(JSON_MODEL_PATH.format('dp_' + str(model)))
+            self.dp_models.append(booster)
+
 
     def predict_ar(self, features):
         features = features.to_numpy()
