@@ -41,7 +41,7 @@ PyYAML==6.0
 requests==2.27.1
 scikit-learn==1.1.1
 scipy==1.8.1
-Shapely==1.8.2
+Shapely==1.8.0 # compat: cartopy does not work with Shapely 1.8.1 and 1.8.2 (https://github.com/SciTools/cartopy/issues/2006)
 six==1.16.0
 SQLAlchemy==1.4.37
 texttable==1.6.4
