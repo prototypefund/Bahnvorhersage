@@ -15,7 +15,7 @@ docker-build:
   # All other branches are tagged with the escaped branch name (commit ref slug)
   script:
     - docker pull ${CI_REGISTRY_IMAGE}_builder || true
-    - DOCKER_BUILDKIT=1 docker build -f webserver/Dockerfile.webserver --target compile-image . -t ${CI_REGISTRY_IMAGE}_builder
+    - DOCKER_BUILDKIT=1 docker build -f webserver/Dockerfile.webserver --cache-from ${CI_REGISTRY_IMAGE}_builder --tag ${CI_REGISTRY_IMAGE}_builder --target compile-image .
     - docker push ${CI_REGISTRY_IMAGE}_builder
     - docker pull $CI_REGISTRY_IMAGE || true
     - DOCKER_BUILDKIT=1 docker build -f webserver/Dockerfile.webserver --cache-from $CI_REGISTRY_IMAGE --tag $CI_REGISTRY_IMAGE .
