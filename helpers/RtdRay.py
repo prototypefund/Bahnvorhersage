@@ -269,8 +269,8 @@ def download_rtd():
     """
     with ProgressBar():
         rtd: dd.DataFrame = dd.read_sql_table(RTD_TABLENAME, DB_CONNECT_STRING,
-                                index_col='hash_id', meta=meta, npartitions=200)
-        rtd.to_parquet(RTD_CACHE_PATH, engine='pyarrow', write_metadata_file=False)
+                                index_col='hash_id', meta=meta)
+        rtd.to_parquet(RTD_CACHE_PATH, engine='pyarrow', write_metadata_file=False, compute=True)
         rtd = dd.read_parquet(RTD_CACHE_PATH, engine='pyarrow')
 
         rtd = _parse(rtd)
@@ -278,6 +278,7 @@ def download_rtd():
 
         # Save data to parquet. We have to use pyarrow as fastparquet does not support pd.Int64
         rtd.to_parquet(RTD_CACHE_PATH, engine='pyarrow', write_metadata_file=False)
+        print('Saved to {}'.format(RTD_CACHE_PATH))
 
 
 def upgrade_rtd():
@@ -506,7 +507,9 @@ if __name__ == "__main__":
     parser.add_argument("--local_cluster", help="use dask local cluster / client", action="store_true")
     args = parser.parse_args()
 
-    from helpers import fancy_print_tcp
+    import helpers.bahn_vorhersage
+
+    print(load_data(load_categories=False, columns=['ar_pt']).head())
 
     if args.local_cluster:
         from dask.distributed import Client
