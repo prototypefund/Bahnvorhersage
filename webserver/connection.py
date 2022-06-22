@@ -23,8 +23,6 @@ def get_journeys(
     date: datetime.datetime,
     max_changes: int=-1,
     transfer_time: int=0,
-    hafas_profile: str='db',
-    economic: bool=False,
     search_for_departure: bool=True,
     only_regional: bool=False,
     bike: bool=False,
@@ -43,10 +41,6 @@ def get_journeys(
         Maximum number of allowed changes, by default -1
     transfer_time : int, optional
         Minimal transfer time, by default 0
-    hafas_profile : str, optional
-        Hafas profile to use, by default 'db'
-    economic : bool, optional
-        True = not only fastest route, by default False
     search_for_departure : bool, optional
         False = time == arrival time, by default True
     only_regional : bool, optional
@@ -79,7 +73,10 @@ def get_journeys(
         'https://db-rest.bahnvorhersage.de/journeys', params=request_data
     ).json()['journeys']
 
-    prediction_data = [extract_iris_like(journey) for journey in journeys]
+    trip_ids = extract_trip_ids(journeys)
+    train_trips = get_trips_of_trains(trip_ids)
+
+    prediction_data = [extract_iris_like(journey, train_trips) for journey in journeys]
     
     ridable = { i for i in range(len(prediction_data)) if prediction_data[i] is not None }
     prediction_data = [prediction_data[i] for i in ridable]
@@ -88,10 +85,19 @@ def get_journeys(
     return journeys, prediction_data
 
 
-def extract_iris_like(connection):
+def extract_trip_ids(journeys) -> set:
+    trip_ids = set()
+    for journey in journeys:
+        for leg in journey['legs']:
+            if not leg.get('walking'):
+                trip_ids.add(leg['tripId'])
+    return trip_ids
+
+
+def extract_iris_like(journeys, train_trips):
     segments = []
 
-    for leg in connection['legs']:
+    for leg in journeys['legs']:
         if 'walking' in leg and leg['walking'] == True:
             continue
 
@@ -127,7 +133,7 @@ def extract_iris_like(connection):
             'train_destination': leg['direction'],
         }
         
-        parsed_segment['full_trip'], parsed_segment['stay_times'] = get_trip_of_train(leg['tripId'])
+        parsed_segment['full_trip'], parsed_segment['stay_times'] = train_trips[leg['tripId']]
         try:
             parsed_segment['dp_stop_id'] = parsed_segment['full_trip'].index(parsed_segment['dp_station'])
         except ValueError:
@@ -165,26 +171,11 @@ def extract_iris_like(connection):
     return segments
 
 
-def parse_connections(connections):
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        parsed = list(executor.map(parse_connection, connections['routes']))
-
-    # Remove connections that are not rideable (for example, because of a stop is cancelled)
-    parsed = [connection for connection in parsed if connection['summary']['is_rideable']]
-
-    parsed = sorted(parsed, key=lambda el: el['summary']['dp_ct'])
-    # add unique id used for rendering in vue
-    for i in range(len(parsed)):
-        parsed[i]['id'] = i
-
-    return parsed
-
-
 # This information does change over time, so a permanent cache would give
 # wrong results. Thus, we only cache the result for 3 minutes.
 @ttl_lru_cache(seconds_to_live=180, maxsize=500)
-def get_trip_of_train(jid):
-    trip = client.trip(jid)
+def get_trip_of_train(trip_id):
+    trip = client.trip(trip_id)
     waypoints = [stopover.stop.name for stopover in trip.stopovers]
     stay_times = [
         (stopover.departure - stopover.arrival).seconds // 60
@@ -193,4 +184,13 @@ def get_trip_of_train(jid):
         for stopover
         in trip.stopovers
     ]
-    return waypoints, stay_times
+    return trip_id, waypoints, stay_times
+
+
+def get_trips_of_trains(trip_ids: set) -> dict:
+    with ThreadPoolExecutor(max_workers=len(trip_ids)) as executor:
+        return {
+            trip_id: (waypoints, stay_times)
+            for trip_id, waypoints, stay_times
+            in executor.map(get_trip_of_train, trip_ids)
+        }

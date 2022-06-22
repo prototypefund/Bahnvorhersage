@@ -8,7 +8,6 @@ from flask.helpers import send_file
 
 from datetime import datetime
 import numpy as np
-from concurrent.futures import ThreadPoolExecutor
 
 from webserver.connection import (
     get_journeys,
@@ -176,13 +175,6 @@ def trip():
 
         journeys[i]['trainCategories'] = sorted(list(train_categories))
         journeys[i]['transfers'] = len(journeys[i]['legs']) - 1 - walking_legs
-    # for i in range(len(prediction_data)):
-    #     res = analysis(prediction_data[i])
-    #     # connections[i] = datetimes_to_text(connections[i])
-
-    # for i in range(len(connections)):
-    #     connections[i] = analysis(connections[i])
-    #     connections[i] = datetimes_to_text(connections[i])
 
     resp = jsonify(journeys)
     resp.headers.add("Access-Control-Allow-Origin", "*")
