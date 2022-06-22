@@ -145,7 +145,11 @@ def cached_table_push(df: pd.DataFrame, tablename: str, fast: bool = True, **kwa
     df.to_pickle(cache_path)
     # d6stack is way faster than pandas at inserting data to sql.
     # It exports the dataframe to a csv and then inserts it to the database.
-    if fast:
-        pd_to_psql(df, DB_CONNECT_STRING, tablename, if_exists='replace')
-    else:
-        df.to_sql(tablename, DB_CONNECT_STRING, if_exists='replace', method='multi', chunksize=10_000, **kwargs)
+    try:
+        if fast:
+            pd_to_psql(df, DB_CONNECT_STRING, tablename, if_exists='replace')
+            
+        else:
+            df.to_sql(tablename, DB_CONNECT_STRING, if_exists='replace', method='multi', chunksize=10_000, **kwargs)
+    except Exception as ex:
+        print('could not write to database\n', 'fast=', fast, ex)
