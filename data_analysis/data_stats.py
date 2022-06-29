@@ -80,9 +80,13 @@ def stats_generator() -> pd.DataFrame:
         today = datetime.datetime.combine(
             datetime.datetime.today().date(), datetime.time()
         )
-        yersterday = today - datetime.timedelta(days=1)
+        today = datetime.datetime.combine(
+            datetime.datetime.today().date(), datetime.time()
+        )
 
-        # One day will alsways fit into ram, so we compute the loaded dask DataFrame right away
+        yesterday = today - datetime.timedelta(days=1)
+
+        # One day will always fit into ram, so we compute the loaded dask DataFrame right away
         rtd = RtdRay.load_data(
             columns=[
                 'dp_delay',
@@ -94,11 +98,11 @@ def stats_generator() -> pd.DataFrame:
                 'ar_happened',
                 'dp_happened',
             ],
-            min_date=yersterday,
+            min_date=yesterday,
             max_date=today,
         ).compute()
 
-        stats['new_date'] = yersterday.strftime('%d.%m.%Y')
+        stats['new_date'] = yesterday.strftime('%d.%m.%Y')
         stats['new_num_ar_data'] = int(rtd['ar_happened'].sum())
         stats['new_num_dp_data'] = int(rtd['dp_happened'].sum())
         stats['new_num_ar_cancel'] = int((rtd['ar_cs'] == 'c').sum())
@@ -110,10 +114,10 @@ def stats_generator() -> pd.DataFrame:
         stats['new_avg_dp_delay'] = float(round(rtd['dp_delay'].mean(), 2))
 
         stats['new_perc_ar_delay'] = float(
-            round((((rtd['ar_delay'] > 5).sum() / (stats['new_num_ar_data']))) * 100, 2)
+            round(((rtd['ar_delay'] > 5).sum() / (stats['new_num_ar_data'])) * 100, 2)
         )
         stats['new_perc_dp_delay'] = float(
-            round((((rtd['dp_delay'] > 5).sum() / (stats['new_num_dp_data']))) * 100, 2)
+            round(((rtd['dp_delay'] > 5).sum() / (stats['new_num_dp_data'])) * 100, 2)
         )
         stats['new_perc_ar_cancel'] = float(
             round(
