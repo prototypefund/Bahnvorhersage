@@ -10,7 +10,7 @@
 
 # This build file is from https://www.rockyourcode.com/create-a-multi-stage-docker-build-for-python-flask-and-postgres/
 
-FROM osgeo/proj:8.2.0 as proj
+FROM osgeo/proj:9.0.1 as proj
 
 ## Base image
 FROM python:3.10 AS compile-image
