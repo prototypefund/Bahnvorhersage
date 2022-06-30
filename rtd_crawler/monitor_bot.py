@@ -99,13 +99,13 @@ def monitor_change() -> Union[str, None]:
 async def monitor_website():
     channel = client.get_channel(720671295129518232)
     try:
-        print('testing https://trainconnectionprediction.de...')
-        page = requests.get('https://trainconnectionprediction.de')
+        print('testing https://bahnvorhersage.de...')
+        page = requests.get('https://bahnvorhersage.de')
         if page.ok:
             print('ok')
         else:
             message = str(datetime.datetime.now()) \
-                + ': @everyone Somthing not working on the website:\n{}'.format(str(page))
+                + ': @everyone Something not working on the website:\n{}'.format(str(page))
             print(message)
             await channel.send(message)
     except Exception as ex:
@@ -114,23 +114,23 @@ async def monitor_website():
         await channel.send(message)
 
     try:
-        print('testing https://trainconnectionprediction.de/api/trip from Tübingen Hbf to Köln Hbf...')
+        print('testing https://bahnvorhersage.de/api/trip from Tübingen Hbf to Köln Hbf...')
         search = {
             'start': 'Tübingen Hbf',
             'destination': 'Köln Hbf',
             'date': (datetime.datetime.now() + datetime.timedelta(hours=1)).strftime('%d.%m.%Y %H:%M'),
             'search_for_departure': True
         }
-        trip = requests.post('https://trainconnectionprediction.de/api/trip', json=search)
+        trip = requests.post('https://bahnvorhersage.de/api/trip', json=search)
         if trip.ok:
-                print('ok')
+            print('ok')
         else:
             message = str(datetime.datetime.now()) \
-                + ': @everyone Somthing not working on the website:\n{}'.format(str(trip))
+                + ': @everyone Something not working on the website:\n{}'.format(str(trip))
             print(message)
             await channel.send(message)
     except Exception as e:
-        message = str(datetime.datetime.now()) + ': @everyone Somthing not working on the website:\n{}' \
+        message = str(datetime.datetime.now()) + ': @everyone Something not working on the website:\n{}' \
             .format(''.join(traceback.format_exception(None, e, e.__traceback__)))
         await channel.send(message)
         print(message)
@@ -161,7 +161,7 @@ class Monitor(commands.Cog):
 
 
 if __name__ == "__main__":
-    import helpers.fancy_print_tcp
+    import helpers.bahn_vorhersage
 
     m = Monitor()
     client.run(discord_bot_token)
