@@ -5,18 +5,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import request, jsonify, current_app, Blueprint, make_response
 from flask.helpers import send_file
-
 from datetime import datetime
 import numpy as np
-
-from webserver.connection import (
-    get_journeys,
-    from_utc
-)
+from webserver.connection import get_journeys, from_utc
 from webserver import predictor, streckennetz, per_station_time
 from webserver.db_logger import log_activity
 from data_analysis import data_stats
-from config import CACHE_PATH
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 bp_limited = Blueprint("api_rate_limited", __name__, url_prefix='/api')
@@ -41,9 +35,7 @@ def analysis(connection: dict):
     ar_data, dp_data = predictor.get_pred_data(connection)
     ar_prediction = predictor.predict_ar(ar_data)
     dp_prediction = predictor.predict_dp(dp_data)
-    transfer_time = np.array(
-        [segment['transfer_time'] for segment in connection[:-1]]
-    )
+    transfer_time = np.array([segment['transfer_time'] for segment in connection[:-1]])
     con_scores = predictor.predict_con(
         ar_prediction[:-1], dp_prediction[1:], transfer_time
     )
@@ -122,8 +114,14 @@ def trip():
     date = datetime.strptime(request.json['date'], "%d.%m.%Y %H:%M")
 
     # optional:
-    search_for_departure = request.json['search_for_departure'] if 'search_for_departure' in request.json else True
-    only_regional = request.json['only_regional'] if 'only_regional' in request.json else False
+    search_for_departure = (
+        request.json['search_for_departure']
+        if 'search_for_departure' in request.json
+        else True
+    )
+    only_regional = (
+        request.json['only_regional'] if 'only_regional' in request.json else False
+    )
     bike = request.json['bike'] if 'bike' in request.json else False
 
     current_app.logger.info(
@@ -148,15 +146,15 @@ def trip():
         journeys[i]['arrival'] = journeys[i]['legs'][-1]['arrival']
         journeys[i]['plannedArrival'] = journeys[i]['legs'][-1]['plannedArrival']
         journeys[i]['duration'] = (
-            from_utc(journeys[i]['arrival'])
-            - from_utc(journeys[i]['departure'])
+            from_utc(journeys[i]['arrival']) - from_utc(journeys[i]['departure'])
         ).total_seconds()
         journeys[i]['plannedDuration'] = (
             from_utc(journeys[i]['plannedArrival'])
             - from_utc(journeys[i]['plannedDeparture'])
         ).total_seconds()
-        journeys[i]['price'] = journeys[i]['price']['amount'] if journeys[i]['price'] is not None else -1
-
+        journeys[i]['price'] = (
+            journeys[i]['price']['amount'] if journeys[i]['price'] is not None else -1
+        )
 
         walking_legs = 0
         train_categories = set()
@@ -167,10 +165,18 @@ def trip():
                 continue
             # The last leg has no transfer and thus no transferScore
             if leg_index != len(journeys[i]['legs']) - 1:
-                journeys[i]['legs'][leg_index]['transferScore'] = prediction['transfer_score'][leg_index - walking_legs]
-                journeys[i]['legs'][leg_index]['transferTime'] = prediction['transfer_times'][leg_index - walking_legs]
-            journeys[i]['legs'][leg_index]['arrivalPrediction'] = prediction['ar_predictions'][leg_index - walking_legs]
-            journeys[i]['legs'][leg_index]['departurePrediction'] = prediction['dp_predictions'][leg_index - walking_legs]
+                journeys[i]['legs'][leg_index]['transferScore'] = prediction[
+                    'transfer_score'
+                ][leg_index - walking_legs]
+                journeys[i]['legs'][leg_index]['transferTime'] = prediction[
+                    'transfer_times'
+                ][leg_index - walking_legs]
+            journeys[i]['legs'][leg_index]['arrivalPrediction'] = prediction[
+                'ar_predictions'
+            ][leg_index - walking_legs]
+            journeys[i]['legs'][leg_index]['departurePrediction'] = prediction[
+                'dp_predictions'
+            ][leg_index - walking_legs]
             train_categories.add(leg['line']['productName'])
 
         journeys[i]['trainCategories'] = sorted(list(train_categories))
@@ -230,7 +236,7 @@ def station_plot(date_range):
     current_app.logger.info(f"Returning plot: {path_to_plot}")
     # For some fucking reason flask searches the file from inside webserver
     # so we have to go back a bit even though
-    # os.path.isfile('cache/plot_cache/'+ plot_name + '.png') works
+    # os.path.isfile('cache/plots/'+ plot_name + '.png') works
     return send_file(path_to_plot, mimetype="image/webp")
 
 
@@ -244,45 +250,13 @@ def limits():
     -------
     {
         "min": <min_date>,
-        "max": <max_date>
+        "max": <max_date>,
+        "freq": <frequency in hours>
     }
     """
-    limits = per_station_time.limits()
-    limits['min'] = limits['min'].date().isoformat()
-    limits['max'] = limits['max'].date().isoformat()
-    return limits
-
-
-@bp.route("/obstacleplot/<string:date_range>.png")
-@log_activity
-def obstacle_plot(date_range):
-    """
-    Generates a plot that visualizes all the delays
-    between the two dates specified in the url.
-
-    Parameters
-    ----------
-    date_range : string
-        The date range to generate the plot of in format `%d.%m.%Y, %H:%M-%d.%m.%Y, %H:%M`
-
-    Returns
-    -------
-    flask generated image/png
-        The generated plot
-    """
-
-    if date_range in per_station_time.DEFAULT_PLOTS:
-        plot_name = date_range
-    else:
-        date_range = date_range.split("-")
-        plot_name = per_station_time.generate_plot(
-            datetime.strptime(date_range[0], "%d.%m.%Y %H:%M"),
-            datetime.strptime(date_range[1], "%d.%m.%Y %H:%M"),
-            use_cached_images=True,
-        )
-
-    current_app.logger.info(f"Returning plot: cache/plot_cache/{plot_name}.png")
-    # For some fucking reason flask searches the file from inside webserver
-    # so we have to go back a bit even though
-    # os.path.isfile('cache/plot_cache/'+ plot_name + '.png') works
-    return send_file(f"{CACHE_PATH}/plot_cache/{plot_name}.png", mimetype="image/png")
+    limits = {
+        'max': per_station_time.limits.max.date().isoformat(),
+        'min': per_station_time.limits.min.date().isoformat(),
+        'freq': per_station_time.limits.freq_hours,
+    }
+    return jsonify(limits)

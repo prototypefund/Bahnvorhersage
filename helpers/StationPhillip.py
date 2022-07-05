@@ -41,9 +41,13 @@ class StationPhillip:
         stations['name'] = stations['name'].astype(pd.StringDtype())
         stations['ds100'] = stations['ds100'].astype(pd.StringDtype())
         # TODO: parse array when loading from db
-        stations['meta'] = stations['meta'].str.replace('{', '').str.replace('}', '').str.split(
-            ','
-        ).apply(lambda x: [int(i) for i in x] if x is not None else None)
+        stations['meta'] = (
+            stations['meta']
+            .str.replace('{', '')
+            .str.replace('}', '')
+            .str.split(',')
+            .apply(lambda x: [int(i) for i in x] if x is not None else None)
+        )
 
         stations.set_index(
             ['name', 'eva', 'ds100'],
@@ -271,7 +275,7 @@ class StationPhillip:
                 date,
                 self.stations,
                 drop_duplicates_by=['name', 'eva', 'ds100'],
-                allow_duplicates=allow_duplicates
+                allow_duplicates=allow_duplicates,
             )
             stations = stations.droplevel(level=['name', 'eva', 'ds100'])
             return stations
@@ -449,10 +453,10 @@ class StationPhillip:
         return location
 
     def add_number_of_events(self):
+        # TODO: This function does not work anymore. Switch to PerStationOverTime
         from data_analysis.per_station import PerStationAnalysis
 
         # Fail if cache does not exist
-        # TODO: This function does probably not work anymore
         per_station = PerStationAnalysis(None)
 
         self.stations['number_of_events'] = (

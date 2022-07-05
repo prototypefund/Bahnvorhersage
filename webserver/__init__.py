@@ -1,5 +1,6 @@
 import os
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 basepath = os.path.dirname(os.path.realpath(__file__))
 if os.path.isfile("/mnt/config/config.py"):
@@ -16,6 +17,7 @@ from webserver.db_logger import db
 
 # Do not use GUI for matplotlib
 import matplotlib
+
 matplotlib.use('Agg')
 
 client = pyhafas.HafasClient(pyhafas.profile.DBProfile())
@@ -29,7 +31,8 @@ per_station_time = PerStationOverTime(None, prefer_cache=False)
 logging.info('Done!')
 
 from webserver.predictor import Predictor
-logging.info('Initialising predictior')
+
+logging.info('Initialising predictor')
 predictor = Predictor(n_models=15)
 logging.info('Done!')
 
@@ -47,6 +50,7 @@ def create_app():
     )
 
     from webserverconfig import ProductionConfig, DevelopmentConfig
+
     if app.config["ENV"] == "production":
         app.config.from_object(ProductionConfig)
     else:
@@ -65,6 +69,7 @@ def create_app():
 
     app.logger.info("Initializing the api...")
     from webserver import api
+
     app.register_blueprint(api.bp)
     app.register_blueprint(api.bp_limited)
     app.logger.info("Done")
