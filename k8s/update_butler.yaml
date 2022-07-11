@@ -1,14 +1,14 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  # labels:
-  #   app: updatebutler
   name: updatebutler
   namespace: default
 spec:
   schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
   jobTemplate:
     spec:
+      backoffLimit: 0
       template:
         spec:
           containers:
