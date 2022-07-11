@@ -14,19 +14,17 @@ if __name__ == '__main__':
     print("Init")
 
     from dask.distributed import Client
-    # with Client(n_workers=2, threads_per_worker=1, memory_limit='16GB') as client:
-    #
-    #     print("Done")
-    #
-    #     print("Refreshing local Cache...")
-    #     # If this doesn't work properly switch to
-    #     # TODO switch to RtdRay.upgrade_rtd()
-    #     RtdRay.download_rtd()
-    #     # RtdRay.upgrade_rtd()
-    #
-    #     print("Done")
-    #
-    # print("Generating Statistics...")
+    with Client(n_workers=2, threads_per_worker=1, memory_limit='16GB') as client:
+    
+        print("Done")
+    
+        print("Refreshing local Cache...")
+        # TODO switch to RtdRay.upgrade_rtd()
+        RtdRay.download_rtd()
+    
+        print("Done")
+    
+    print("Generating Statistics...")
 
     print("--Overview")
 

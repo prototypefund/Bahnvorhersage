@@ -5,7 +5,7 @@ variables:
 # https://docs.gitlab.com/ee/development/cicd/templates.html
 # This specific template is located at:
 # https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Docker.gitlab-ci.yml
-docker-build:
+build-webserver:
   # Use the official docker image.
   image: docker:latest
   stage: build
@@ -32,3 +32,32 @@ docker-build:
       --build-arg BUILDKIT_INLINE_CACHE=1
       "."
     - docker push $CI_REGISTRY_IMAGE
+
+
+build-update-butler:
+  # Use the official docker image.
+  image: docker:latest
+  stage: build
+  services:
+    - docker:dind
+  before_script:
+    - echo -n $CI_REGISTRY_TOKEN | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+  # Default branch leaves tag empty (= latest tag)
+  # All other branches are tagged with the escaped branch name (commit ref slug)
+  script:
+    - docker build
+      -f update_butler/Dockerfile.update_butler
+      --cache-from ${CI_REGISTRY_IMAGE_UPDATE_BUTLER}_builder
+      --tag ${CI_REGISTRY_IMAGE_UPDATE_BUTLER}_builder
+      --target compile-image
+      --build-arg BUILDKIT_INLINE_CACHE=1
+      "."
+    - docker push ${CI_REGISTRY_IMAGE_UPDATE_BUTLER}_builder
+    - docker build
+      -f update_butler/Dockerfile.update_butler
+      --cache-from ${CI_REGISTRY_IMAGE_UPDATE_BUTLER}_builder
+      --cache-from $CI_REGISTRY_IMAGE_UPDATE_BUTLER
+      --tag $CI_REGISTRY_IMAGE_UPDATE_BUTLER
+      --build-arg BUILDKIT_INLINE_CACHE=1
+      "."
+    - docker push $CI_REGISTRY_IMAGE_UPDATE_BUTLER
