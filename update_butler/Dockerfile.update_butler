@@ -15,6 +15,16 @@ FROM osgeo/proj:9.0.1 as proj
 ## Base image
 FROM python:3.10 AS compile-image
 
+# Install dependencies (libgeos in order for cartopy to work)
+RUN apt-get update
+RUN apt-get install -y gcc build-essential 
+RUN apt-get install -y libgeos-dev
+
+COPY --from=proj  /usr/share/proj/ /usr/share/proj/
+COPY --from=proj  /usr/include/ /usr/include/
+COPY --from=proj  /usr/bin/ /usr/bin/
+COPY --from=proj  /usr/lib/ /usr/lib/
+
 ## Virtualenv
 ENV VIRTUAL_ENV=/opt/venv
 RUN python3 -m venv $VIRTUAL_ENV
@@ -25,10 +35,16 @@ RUN pip install --upgrade pip
 COPY ./update_butler/requirements.txt requirements.txt
 # RUN pip install pip-tools
 # RUN pip-compile requirements.txt > requirements.txt && pip-sync
+RUN pip install shapely --no-binary shapely
 RUN pip install -r requirements.txt
 
 ## Build-image
 FROM python:3.10 AS runtime-image
+
+# Install dependencies (libgeos in order for cartopy to work)
+RUN apt-get update
+RUN apt-get install -y gcc build-essential 
+RUN apt-get install -y libgeos-dev
 
 COPY --from=proj  /usr/share/proj/ /usr/share/proj/
 COPY --from=proj  /usr/include/ /usr/include/

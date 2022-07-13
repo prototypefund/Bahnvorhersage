@@ -6,6 +6,7 @@ from helpers import RtdRay
 from data_analysis import data_stats
 import datetime
 from data_analysis.per_station import PerStationOverTime
+from dask.distributed import Client
 
 if __name__ == '__main__':
     # Print Logo
@@ -13,7 +14,6 @@ if __name__ == '__main__':
 
     print("Init")
 
-    from dask.distributed import Client
     with Client(n_workers=2, threads_per_worker=1, memory_limit='16GB') as client:
     
         print("Done")
