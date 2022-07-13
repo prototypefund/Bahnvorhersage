@@ -32,7 +32,7 @@ def analysis(connection: dict):
     """
     prediction = {}
 
-    ar_data, dp_data = predictor.get_pred_data(connection)
+    ar_data, dp_data = predictor.get_pred_data(connection, streckennetz)
     ar_prediction = predictor.predict_ar(ar_data)
     dp_prediction = predictor.predict_dp(dp_data)
     transfer_time = np.array([segment['transfer_time'] for segment in connection[:-1]])
