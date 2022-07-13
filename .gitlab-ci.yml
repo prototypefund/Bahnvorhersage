@@ -9,6 +9,8 @@ build-webserver:
   # Use the official docker image.
   image: docker:latest
   stage: build
+  only:
+    - master
   services:
     - docker:dind
   before_script:
@@ -38,6 +40,8 @@ build-update-butler:
   # Use the official docker image.
   image: docker:latest
   stage: build
+  only:
+    - master
   services:
     - docker:dind
   before_script:
