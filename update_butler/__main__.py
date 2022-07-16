@@ -1,4 +1,5 @@
 import os, sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if os.path.isfile("/mnt/config/config.py"):
     sys.path.append("/mnt/config/")
@@ -7,6 +8,7 @@ from data_analysis import data_stats
 import datetime
 from data_analysis.per_station import PerStationOverTime
 from dask.distributed import Client
+from ml_models.xgboost_multi_model import train_models
 
 if __name__ == '__main__':
     # Print Logo
@@ -15,15 +17,15 @@ if __name__ == '__main__':
     print("Init")
 
     with Client(n_workers=2, threads_per_worker=1, memory_limit='16GB') as client:
-    
+
         print("Done")
-    
+
         print("Refreshing local Cache...")
         # TODO switch to RtdRay.upgrade_rtd()
         RtdRay.download_rtd()
-    
+
         print("Done")
-    
+
     print("Generating Statistics...")
 
     print("--Overview")
@@ -49,13 +51,19 @@ if __name__ == '__main__':
             "lat",
             "lon",
         ],
-        min_date=datetime.datetime(2021, 1, 1)
+        min_date=datetime.datetime(2021, 1, 1),
     )
 
     PerStationOverTime(rtd_df, generate=True, use_cache=False)
 
     print("--Done")
 
-    # print("Training ML Models...")
-    # TODO
-    # print("Done")
+    # TODO: Evaluate old models and save some statistics about them
+
+    print("Training ML Models...")
+    train_models(
+        min_date=datetime.datetime.today() - datetime.timedelta(days=7 * 6),
+        return_status=True,
+        obstacles=False,
+    )
+    print("Done")
