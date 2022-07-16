@@ -6,46 +6,95 @@ from xgboost import XGBClassifier
 from sklearn.dummy import DummyClassifier
 from helpers import RtdRay
 import datetime
-import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
-from config import MODEL_PATH, ENCODER_PATH, CACHE_PATH
+import pandas as pd
+import dask.dataframe as dd
+from typing import Literal
+from config import JSON_MODEL_PATH, ENCODER_PATH
 
-# CACHE_PATH = "cache/models/model_{}.pkl"
-CLASSES_TO_COMPUTE = range(15)
 
-hyperparameters = {
-    'ar_0': {'learning_rate': 0.4, 'max_depth': 14, 'n_estimators': 100, 'gamma': 2.8,},
-    'ar_1': {'learning_rate': 0.4, 'max_depth': 14, 'n_estimators': 100, 'gamma': 2.8,},
-    'ar_2': {'learning_rate': 0.4, 'max_depth': 13, 'n_estimators': 100, 'gamma': 2.8,},
-    'ar_3': {'learning_rate': 0.4, 'max_depth': 13, 'n_estimators': 100, 'gamma': 2.8,},
-    'ar_4': {'learning_rate': 0.4, 'max_depth': 12, 'n_estimators': 100, 'gamma': 2.8,},
-    'ar_5': {'learning_rate': 0.4, 'max_depth': 12, 'n_estimators': 100, 'gamma': 2.8,},
-    'ar_6': {'learning_rate': 0.4, 'max_depth': 11, 'n_estimators': 100, 'gamma': 2.8,},
-    'ar_7': {'learning_rate': 0.4, 'max_depth': 11, 'n_estimators': 100, 'gamma': 2.8,},
-    'ar_8': {'learning_rate': 0.4, 'max_depth': 10, 'n_estimators': 100, 'gamma': 2.8,},
-    'ar_9': {'learning_rate': 0.4, 'max_depth': 10, 'n_estimators': 100, 'gamma': 2.8,},
-    'ar_10': {'learning_rate': 0.4, 'max_depth': 10, 'n_estimators': 100, 'gamma': 2.8,},
-    'ar_11': {'learning_rate': 0.4, 'max_depth': 9, 'n_estimators': 100, 'gamma': 2.8,},
-    'ar_12': {'learning_rate': 0.4, 'max_depth': 9, 'n_estimators': 100, 'gamma': 2.8,},
-    'ar_13': {'learning_rate': 0.4, 'max_depth': 8, 'n_estimators': 100, 'gamma': 2.8,},
-    'ar_14': {'learning_rate': 0.4, 'max_depth': 8, 'n_estimators': 100, 'gamma': 2.8,},
-    'dp_0': {'learning_rate': 0.4, 'max_depth': 14, 'n_estimators': 100, 'gamma': 2.8,},
-    'dp_1': {'learning_rate': 0.4, 'max_depth': 14, 'n_estimators': 100, 'gamma': 2.8,},
-    'dp_2': {'learning_rate': 0.4, 'max_depth': 13, 'n_estimators': 100, 'gamma': 2.8,},
-    'dp_3': {'learning_rate': 0.4, 'max_depth': 13, 'n_estimators': 100, 'gamma': 2.8,},
-    'dp_4': {'learning_rate': 0.4, 'max_depth': 12, 'n_estimators': 100, 'gamma': 2.8,},
-    'dp_5': {'learning_rate': 0.4, 'max_depth': 12, 'n_estimators': 100, 'gamma': 2.8,},
-    'dp_6': {'learning_rate': 0.4, 'max_depth': 11, 'n_estimators': 100, 'gamma': 2.8,},
-    'dp_7': {'learning_rate': 0.4, 'max_depth': 11, 'n_estimators': 100, 'gamma': 2.8,},
-    'dp_8': {'learning_rate': 0.4, 'max_depth': 10, 'n_estimators': 100, 'gamma': 2.8,},
-    'dp_9': {'learning_rate': 0.4, 'max_depth': 10, 'n_estimators': 100, 'gamma': 2.8,},
-    'dp_10': {'learning_rate': 0.4, 'max_depth': 10, 'n_estimators': 100, 'gamma': 2.8,},
-    'dp_11': {'learning_rate': 0.4, 'max_depth': 9, 'n_estimators': 100, 'gamma': 2.8,},
-    'dp_12': {'learning_rate': 0.4, 'max_depth': 9, 'n_estimators': 100, 'gamma': 2.8,},
-    'dp_13': {'learning_rate': 0.4, 'max_depth': 8, 'n_estimators': 100, 'gamma': 2.8,},
-    'dp_14': {'learning_rate': 0.4, 'max_depth': 8, 'n_estimators': 100, 'gamma': 2.8,},
-}
+def save_model(model: XGBClassifier, minute: int, ar_or_dp: Literal['ar', 'dp']):
+    """Save trained XGBClassifier model to disk
+
+    Parameters
+    ----------
+    minute : int
+        The minute of delay that the model should predict
+    ar_or_dp : str : `ar` | `dp`
+        Whether the model should predict arrival or departure delays
+
+    Raises
+    ------
+    ValueError
+        `ar_or_dp` is neither `ar` nor `dp`
+    """
+    if ar_or_dp == 'ar':
+        model.save_model(JSON_MODEL_PATH.format('ar_' + str(minute)))
+    elif ar_or_dp == 'dp':
+        model.save_model(JSON_MODEL_PATH.format('dp_' + str(minute)))
+    else:
+        raise ValueError(f'ar_or_dp has to be ar or dp not {ar_or_dp}')
+
+
+def load_model(minute: int, ar_or_dp: Literal['ar', 'dp'], gpu=False) -> XGBClassifier:
+    """Load trained XGBClassifier model for prediction form disk
+
+    Parameters
+    ----------
+    minute : int
+        The minute of delay that the model should predict
+    ar_or_dp : str : `ar` | `dp`
+        Whether the model should predict arrival or departure delays
+    gpu : bool
+        Load model for prediction on GPU, by default False
+
+    Returns
+    -------
+    XGBClassifier
+        The trained classifier model
+
+    Raises
+    ------
+    ValueError
+        `ar_or_dp` is neither `ar` nor `dp`
+    """
+    booster = XGBClassifier()
+    if ar_or_dp == 'ar':
+        booster.load_model(JSON_MODEL_PATH.format('ar_' + str(minute)))
+    elif ar_or_dp == 'dp':
+        booster.load_model(JSON_MODEL_PATH.format('dp_' + str(minute)))
+    else:
+        raise ValueError(f'ar_or_dp has to be ar or dp not {ar_or_dp}')
+
+    if gpu:
+        booster.set_params(predictor='gpu_predictor')
+
+    return booster
+
+
+def split_ar_dp(rtd: pd.DataFrame | dd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Some datapoints contain ar and dp information, some only ar or dp information. Split the data into clear ar and dp subsets.
+
+    Parameters
+    ----------
+    rtd : pd.DataFrame | dd.DataFrame
+        The dataframe to split. Loaded from RtdRay.load_for_ml_model()
+
+    Returns
+    -------
+    tuple[pd.DataFrame, pd.DataFrame]
+        ar and dp subsets of the data. These subsets are likely not the same size.
+    """
+    status_encoder = {
+        'ar': pickle.load(open(ENCODER_PATH.format(encoder="ar_cs"), "rb")),
+        'dp': pickle.load(open(ENCODER_PATH.format(encoder="dp_cs"), "rb")),
+    }
+
+    ar = rtd.loc[~rtd["ar_delay"].isna() | (rtd["ar_cs"] == status_encoder["ar"]["c"])]
+    dp = rtd.loc[~rtd["dp_delay"].isna() | (rtd["dp_cs"] == status_encoder["dp"]["c"])]
+
+    return ar, dp
+
 
 def train_model(train_x, train_y, **model_parameters):
     print("Majority Baseline during training:", majority_baseline(train_x, train_y))
@@ -62,27 +111,23 @@ def train_model(train_x, train_y, **model_parameters):
     return est
 
 
-def train_models(**load_parameters):
+def train_models(n_models=15, **load_parameters):
     train = RtdRay.load_for_ml_model(**load_parameters).compute()
-    status_encoder = {}
-    status_encoder["ar"] = pickle.load(open(ENCODER_PATH.format(encoder="ar_cs"), "rb"))
-    status_encoder["dp"] = pickle.load(open(ENCODER_PATH.format(encoder="dp_cs"), "rb"))
-
-    ar_train = train.loc[
-        ~train["ar_delay"].isna() | (train["ar_cs"] == status_encoder["ar"]["c"])
-    ]
-    dp_train = train.loc[
-        ~train["dp_delay"].isna() | (train["dp_cs"] == status_encoder["dp"]["c"])
-    ]
+    ar_train, dp_train = split_ar_dp(train)
     del train
+
+    status_encoder = {
+        'ar': pickle.load(open(ENCODER_PATH.format(encoder="ar_cs"), "rb")),
+        'dp': pickle.load(open(ENCODER_PATH.format(encoder="dp_cs"), "rb")),
+    }
 
     ar_labels = {}
     dp_labels = {}
-    for label in CLASSES_TO_COMPUTE:
-        ar_labels[label] = (ar_train["ar_delay"] <= label) & (
+    for minute in range(n_models):
+        ar_labels[minute] = (ar_train["ar_delay"] <= minute) & (
             ar_train["ar_cs"] != status_encoder["ar"]["c"]
         )
-        dp_labels[label + 1] = (dp_train["dp_delay"] >= (label + 1)) & (
+        dp_labels[minute + 1] = (dp_train["dp_delay"] >= (minute + 1)) & (
             dp_train["dp_cs"] != status_encoder["dp"]["c"]
         )
 
@@ -100,6 +145,7 @@ def train_models(**load_parameters):
     if not os.path.exists(newpath):
         os.makedirs(newpath)
 
+    # fmt: off
     parameters = {
         -1: {'learning_rate': 0.4, 'max_depth': 14, 'n_estimators': 100, 'gamma': 2.8,},
         0: {'learning_rate': 0.4, 'max_depth': 14, 'n_estimators': 100, 'gamma': 2.8,},
@@ -118,30 +164,28 @@ def train_models(**load_parameters):
         13: {'learning_rate': 0.4, 'max_depth': 8, 'n_estimators': 100, 'gamma': 2.8,},
         14: {'learning_rate': 0.4, 'max_depth': 8, 'n_estimators': 100, 'gamma': 2.8,},
     }
+    # fmt: on
 
-    for label in CLASSES_TO_COMPUTE:
-        model_name = f"ar_{label}"
-        print("training", model_name)
-        pickle.dump(
-            train_model(ar_train, ar_labels[label], **parameters[label]),
-            open(MODEL_PATH.format(model_name), "wb"),
-        )
+    for minute in range(n_models):
+        model_name = f"ar_{minute}"
+        print("Training", model_name, '. . .')
+        model = train_model(ar_train, ar_labels[minute], **parameters[minute])
+        save_model(model, minute=minute, ar_or_dp='ar')
+        print("Training", model_name, "done.")
 
-        label += 1
-        model_name = f"dp_{label}"
-        print("training", model_name)
-        pickle.dump(
-            train_model(
-                dp_train, dp_labels[label], **parameters[label-1]
-            ),  # **parameters[label] # n_estimators=50, max_depth=6
-            open(MODEL_PATH.format(model_name), "wb"),
-        )
+        minute += 1
+        model_name = f"dp_{minute}"
+        print("Training", model_name, '. . .')
+        model = train_model(dp_train, dp_labels[minute], **parameters[minute - 1])
+        save_model(model, minute=minute, ar_or_dp='dp')
+        print("Training", model_name, "done.")
 
 
 def majority_baseline(x, y):
     clf = DummyClassifier(strategy="most_frequent", random_state=0)
     clf.fit(x, y)
     return round((clf.predict(x) == y.to_numpy()).sum() / len(x), 6)
+
 
 def model_score(model, x, y):
     return model.score(x, y)
@@ -150,11 +194,43 @@ def model_score(model, x, y):
 def test_model(model, x_test, y_test, model_name):
     baseline = majority_baseline(x_test, y_test)
     model_score = (model.predict(x_test) == y_test).sum() / len(y_test)
-    
-    print("Model:", model_name)
+
+    print("Model:\t\t\t", model_name)
     print("Majority baseline:\t", round(baseline * 100, 6))
     print("Model accuracy:\t\t", round(model_score * 100, 6))
-    print("Model improvement:\t", round((model_score - baseline)*100, 6))
+    print("Model improvement:\t", round((model_score - baseline) * 100, 6))
+
+
+def test_models(n_models=15, **load_parameters):
+    status_encoder = {
+        'ar': pickle.load(open(ENCODER_PATH.format(encoder="ar_cs"), "rb")),
+        'dp': pickle.load(open(ENCODER_PATH.format(encoder="dp_cs"), "rb")),
+    }
+
+    test = RtdRay.load_for_ml_model(**load_parameters).compute()
+    ar_test, dp_test = split_ar_dp(test)
+
+    ar_test_x = ar_test.drop(columns=["ar_delay", "dp_delay", "ar_cs", "dp_cs"])
+    dp_test_x = dp_test.drop(columns=["ar_delay", "dp_delay", "ar_cs", "dp_cs"])
+    del test
+
+    for model_number in range(n_models):
+        model_name = f"ar_{model_number}"
+        print("test_results for model {}".format(model_name))
+        test_y = (ar_test["ar_delay"] <= model_number) & (
+            ar_test["ar_cs"] != status_encoder["ar"]["c"]
+        )
+        model = load_model(minute=model_number, ar_or_dp="ar", gpu=True)
+        test_model(model, ar_test_x, test_y, model_name)
+
+        model_number += 1
+        model_name = f"dp_{model_number}"
+        print("test_results for model {}".format(model_name))
+        test_y = (dp_test["dp_delay"] >= model_number) & (
+            dp_test["dp_cs"] != status_encoder["dp"]["c"]
+        )
+        model = load_model(minute=model_number, ar_or_dp="dp", gpu=True)
+        test_model(model, dp_test_x, test_y, model_name)
 
 
 def model_roc(model, x_test, y_test, model_name):
@@ -213,58 +289,23 @@ def model_roc(model, x_test, y_test, model_name):
 
 
 if __name__ == "__main__":
-    import helpers.fancy_print_tcp
+    import helpers.bahn_vorhersage
 
-    train_models(
-        # max_date=datetime.datetime(2021, 2, 1),
-        min_date=datetime.datetime.today() - datetime.timedelta(days=7 * 4),
-        long_distance_only=False,
-        return_status=True,
-    )
- 
-    status_encoder = {}
-    status_encoder["ar"] = pickle.load(open(ENCODER_PATH.format(encoder="ar_cs"), "rb"))
-    status_encoder["dp"] = pickle.load(open(ENCODER_PATH.format(encoder="dp_cs"), "rb"))
+    from dask.distributed import Client
 
-    test = RtdRay.load_for_ml_model(
-        # max_date=datetime.datetime(2021, 2, 1),
-        min_date=datetime.datetime(2021, 3, 14), # datetime.datetime(2021, 2, 1) - datetime.timedelta(days=7 * 2),
-        long_distance_only=False,
-        return_status=True,
-    ).compute()
-    ar_test = test.loc[
-        ~test["ar_delay"].isna() | (test["ar_cs"] == status_encoder["ar"]["c"]),
-        ["ar_delay", "ar_cs"],
-    ]
-    dp_test = test.loc[
-        ~test["dp_delay"].isna() | (test["dp_cs"] == status_encoder["dp"]["c"]),
-        ["dp_delay", "dp_cs"],
-    ]
-    # ar_test = test[['ar_delay', 'ar_cs']].dropna(subset=["ar_delay"])
-    # dp_test = test[['dp_delay', 'dp_cs']].dropna(subset=["dp_delay"])
+    # Setting `threads_per_worker` is very important as Dask will otherwise
+    # create as many threads as cpu cores which is to munch for big cpus with small RAM
+    with Client(n_workers=min(10, os.cpu_count() // 4), threads_per_worker=2) as client:
 
-    ar_test_x = test.loc[
-        ~test["ar_delay"].isna() | (test["ar_cs"] == status_encoder["ar"]["c"])
-    ].drop(columns=["ar_delay", "dp_delay", "ar_cs", "dp_cs"], axis=0)
-    dp_test_x = test.loc[
-        ~test["dp_delay"].isna() | (test["dp_cs"] == status_encoder["dp"]["c"])
-    ].drop(columns=["ar_delay", "dp_delay", "ar_cs", "dp_cs"], axis=0)
-    del test
-
-    for model_number in CLASSES_TO_COMPUTE:
-        model_name = f"ar_{model_number}"
-        print("test_results for model {}".format(model_name))
-        test_y = (ar_test["ar_delay"] <= model_number) & (
-            ar_test["ar_cs"] != status_encoder["ar"]["c"]
+        train_models(
+            min_date=datetime.datetime.today() - datetime.timedelta(days=7 * 6),
+            return_status=True,
+            obstacles=False,
         )
-        model = pickle.load(open(MODEL_PATH.format(model_name), "rb"))
-        test_model(model, ar_test_x, test_y, model_name)
 
-        model_number += 1
-        model_name = f"dp_{model_number}"
-        print("test_results for model {}".format(model_name))
-        test_y = (dp_test["dp_delay"] >= model_number) & (
-            dp_test["dp_cs"] != status_encoder["dp"]["c"]
+        test_models(
+            max_date=datetime.datetime.today() - datetime.timedelta(days=7 * 6),
+            min_date=datetime.datetime.today() - datetime.timedelta(days=7 * 8),
+            return_status=True,
+            obstacles=False,
         )
-        model = pickle.load(open(MODEL_PATH.format(model_name), "rb"))
-        test_model(model, dp_test_x, test_y, model_name)
