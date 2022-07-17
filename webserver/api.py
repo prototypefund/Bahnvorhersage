@@ -32,7 +32,7 @@ def analysis(connection: dict):
     """
     prediction = {}
 
-    ar_data, dp_data = predictor.get_pred_data(connection)
+    ar_data, dp_data = predictor.get_pred_data(connection, streckennetz)
     ar_prediction = predictor.predict_ar(ar_data)
     dp_prediction = predictor.predict_dp(dp_data)
     transfer_time = np.array([segment['transfer_time'] for segment in connection[:-1]])
@@ -224,7 +224,7 @@ def station_plot(date_range):
     """
 
     if date_range in per_station_time.DEFAULT_PLOTS:
-        path_to_plot = per_station_time.generate_default(title=date_range)
+        path_to_plot = per_station_time.generate_default(plot_title=date_range)
     else:
         date_range = date_range.split("-")
         path_to_plot = per_station_time.generate_plot(
@@ -254,6 +254,7 @@ def limits():
         "freq": <frequency in hours>
     }
     """
+    per_station_time.data_loader()
     limits = {
         'max': per_station_time.limits.max.date().isoformat(),
         'min': per_station_time.limits.min.date().isoformat(),

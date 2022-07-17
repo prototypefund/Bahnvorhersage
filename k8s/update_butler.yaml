@@ -14,6 +14,9 @@ spec:
           containers:
             - name: updatebutler
               image: trainconnectionprediction/tcp:update_butler
+              resources:
+                limits:
+                  nvidia.com/gpu: 1
               imagePullPolicy: Always
               volumeMounts:
                 - name: tz-berlin # set timezone to CEST

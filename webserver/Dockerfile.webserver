@@ -67,6 +67,7 @@ COPY ./webserver/ /usr/src/app/webserver/
 COPY ./helpers/ /usr/src/app/helpers/
 COPY ./database/ /usr/src/app/database/
 COPY ./data_analysis/ /usr/src/app/data_analysis
+COPY ./ml_models/ /usr/src/app/ml_models
 COPY ./webserverconfig.py /usr/src/app/webserverconfig.py
 
 ## Switch to non-root user

@@ -6,3 +6,4 @@ from .change import Change
 from .plan import Plan
 from .rtd import Rtd, RtdArrays, sql_types
 from .plan_by_id import PlanById
+from .ml_stat import MlStat
