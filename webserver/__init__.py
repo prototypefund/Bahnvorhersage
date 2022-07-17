@@ -14,6 +14,7 @@ import pyhafas
 from helpers import StreckennetzSteffi, logging
 from data_analysis.per_station import PerStationOverTime
 from webserver.db_logger import db
+from ml_models.xgboost_multi_model import Predictor
 
 # Do not use GUI for matplotlib
 import matplotlib
@@ -29,8 +30,6 @@ logging.info('Done!')
 logging.info('Initialising per_station_time')
 per_station_time = PerStationOverTime(None, prefer_cache=False)
 logging.info('Done!')
-
-from webserver.predictor import Predictor
 
 logging.info('Initialising predictor')
 predictor = Predictor(n_models=15)

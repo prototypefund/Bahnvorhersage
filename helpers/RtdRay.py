@@ -1,5 +1,6 @@
 import os, sys
 import pickle
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd
 import dask.dataframe as dd
@@ -96,7 +97,6 @@ df_dict = {
     'ar_cde': pd.Series([], dtype='str'),
     'ar_dc': pd.Series([], dtype='boolean'),
     'ar_l': pd.Series([], dtype='str'),
-
     'dp_pp': pd.Series([], dtype='str'),
     'dp_cp': pd.Series([], dtype='str'),
     'dp_pt': pd.Series([], dtype='datetime64[ns]'),
@@ -111,30 +111,26 @@ df_dict = {
     'dp_cde': pd.Series([], dtype='str'),
     'dp_dc': pd.Series([], dtype='boolean'),
     'dp_l': pd.Series([], dtype='str'),
-
     'f': pd.Series([], dtype='str'),
     't': pd.Series([], dtype='str'),
     'o': pd.Series([], dtype='str'),
     'c': pd.Series([], dtype='str'),
     'n': pd.Series([], dtype='str'),
-
     'distance_to_start': pd.Series([], dtype='float32'),
     'distance_to_end': pd.Series([], dtype='float32'),
     'distance_to_last': pd.Series([], dtype='float32'),
     'distance_to_next': pd.Series([], dtype='float32'),
-
     'obstacles_priority_24': pd.Series([], dtype='float32'),
     'obstacles_priority_37': pd.Series([], dtype='float32'),
     'obstacles_priority_63': pd.Series([], dtype='float32'),
     'obstacles_priority_65': pd.Series([], dtype='float32'),
     'obstacles_priority_70': pd.Series([], dtype='float32'),
     'obstacles_priority_80': pd.Series([], dtype='float32'),
-
     'station': pd.Series([], dtype='str'),
     'id': pd.Series([], dtype='str'),
     'dayly_id': pd.Series([], dtype='int'),
     'date_id': pd.Series([], dtype='datetime64[ns]'),
-    'stop_id': pd.Series([], dtype='Int8')
+    'stop_id': pd.Series([], dtype='Int8'),
 }
 
 
@@ -152,7 +148,7 @@ categoricals = {
     'ar_cs': 'category',
     'dp_cs': 'category',
     'pp': 'category',
-    'station': 'category'
+    'station': 'category',
 }
 
 
@@ -173,12 +169,16 @@ def _get_delays(rtd: dd.DataFrame) -> dd.DataFrame:
     """
     # We never used the cancellation time delta, so it is commented out.
     # rtd['ar_cancellation_time_delta'] = (((rtd['ar_clt'] - rtd['ar_pt']).dt.total_seconds()) // 60).astype('Int16')
-    rtd['ar_delay'] = (((rtd['ar_ct'] - rtd['ar_pt']).dt.total_seconds()) // 60).astype('Int16')
+    rtd['ar_delay'] = (((rtd['ar_ct'] - rtd['ar_pt']).dt.total_seconds()) // 60).astype(
+        'Int16'
+    )
     rtd['ar_happened'] = (rtd['ar_cs'] != 'c') & ~rtd['ar_delay'].isna()
     rtd['ar_cacelled'] = rtd['ar_cs'] == 'c'
 
     # rtd['dp_cancellation_time_delta'] = (((rtd['dp_clt'] - rtd['dp_pt']).dt.total_seconds()) // 60).astype('Int16')
-    rtd['dp_delay'] = (((rtd['dp_ct'] - rtd['dp_pt']).dt.total_seconds()) // 60).astype('Int16')
+    rtd['dp_delay'] = (((rtd['dp_ct'] - rtd['dp_pt']).dt.total_seconds()) // 60).astype(
+        'Int16'
+    )
     rtd['dp_happened'] = (rtd['dp_cs'] != 'c') & ~rtd['dp_delay'].isna()
     rtd['dp_cacelled'] = rtd['dp_cs'] == 'c'
 
@@ -268,9 +268,12 @@ def download_rtd():
     Pull the RTD_TABLENAME table from db, parse it and save it on disk.
     """
     with ProgressBar():
-        rtd: dd.DataFrame = dd.read_sql_table(RTD_TABLENAME, DB_CONNECT_STRING,
-                                index_col='hash_id', meta=meta)
-        rtd.to_parquet(RTD_CACHE_PATH, engine='pyarrow', write_metadata_file=False, compute=True)
+        rtd: dd.DataFrame = dd.read_sql_table(
+            RTD_TABLENAME, DB_CONNECT_STRING, index_col='hash_id', meta=meta
+        )
+        rtd.to_parquet(
+            RTD_CACHE_PATH, engine='pyarrow', write_metadata_file=False, compute=True
+        )
         rtd = dd.read_parquet(RTD_CACHE_PATH, engine='pyarrow')
 
         rtd = _parse(rtd)
@@ -298,16 +301,26 @@ def upgrade_rtd():
     from sqlalchemy.dialects import postgresql
 
     with get_engine().connect() as connection:
-        query = sql.select([Column(c) for c in df_dict] + [Column('hash_id')])\
-            .where((Column('ar_pt', DateTime) > str(max_date)) | (Column('dp_pt', DateTime) > str(max_date)))\
-            .select_from(sql.table(RTD_TABLENAME))\
+        query = (
+            sql.select([Column(c) for c in df_dict] + [Column('hash_id')])
+            .where(
+                (Column('ar_pt', DateTime) > str(max_date))
+                | (Column('dp_pt', DateTime) > str(max_date))
+            )
+            .select_from(sql.table(RTD_TABLENAME))
             .alias('new_rtd')
-        view_query = 'CREATE OR REPLACE VIEW new_rtd AS {}'\
-                     .format(str(query.compile(dialect=postgresql.dialect(),
-                                               compile_kwargs={"literal_binds": True})))
+        )
+        view_query = 'CREATE OR REPLACE VIEW new_rtd AS {}'.format(
+            str(
+                query.compile(
+                    dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+                )
+            )
+        )
         connection.execute(view_query)
-        new_rtd = dd.read_sql_table('new_rtd', DB_CONNECT_STRING,
-                                    index_col='hash_id', meta=meta, npartitions=20)
+        new_rtd = dd.read_sql_table(
+            'new_rtd', DB_CONNECT_STRING, index_col='hash_id', meta=meta, npartitions=20
+        )
 
         new_rtd.to_parquet(RTD_CACHE_PATH + '_new', engine='pyarrow', schema='infer')
     new_rtd = dd.read_parquet(RTD_CACHE_PATH + '_new', engine='pyarrow')
@@ -333,14 +346,17 @@ def upgrade_rtd():
     len_end = len(rtd)
     print('Rows after getting new data:', len_end)
     print('Got', len_end - len_beginning, 'new rows')
-    print('Number of dublicate indicies', rtd.index.compute().duplicated(keep='last').sum())
+    print(
+        'Number of dublicate indicies',
+        rtd.index.compute().duplicated(keep='last').sum(),
+    )
 
 
 def load_data(
-    max_date: Optional[datetime.datetime]=None,
-    min_date: Optional[datetime.datetime]=None,
-    long_distance_only: bool=False,
-    load_categories: bool=True,
+    max_date: Optional[datetime.datetime] = None,
+    min_date: Optional[datetime.datetime] = None,
+    long_distance_only: bool = False,
+    load_categories: bool = True,
     **kwargs
 ) -> dd.DataFrame:
     """
@@ -385,7 +401,9 @@ def load_data(
     try:
         rtd = dd.read_parquet(RTD_CACHE_PATH, engine='pyarrow', **kwargs)
     except FileNotFoundError:
-        print('There was no cache found. New data will be downloaded from the db. This will take a while.')
+        print(
+            'There was no cache found. New data will be downloaded from the db. This will take a while.'
+        )
         download_rtd()
         rtd = dd.read_parquet(RTD_CACHE_PATH, engine='pyarrow', **kwargs)
 
@@ -394,19 +412,21 @@ def load_data(
         if 'ar_pt' in rtd.columns and 'dp_pt' in rtd.columns:
             _filter = rtd.loc[:, ['ar_pt', 'dp_pt']]
         else:
-            _filter = dd.read_parquet(RTD_CACHE_PATH, engine='pyarrow', columns=['ar_pt', 'dp_pt'])
+            _filter = dd.read_parquet(
+                RTD_CACHE_PATH, engine='pyarrow', columns=['ar_pt', 'dp_pt']
+            )
 
         if max_date is not None and min_date is not None:
-            rtd = rtd.loc[((_filter['ar_pt'] >= min_date)
-                          | (_filter['dp_pt'] >= min_date))
-                          & ((_filter['ar_pt'] < max_date)
-                          | (_filter['dp_pt'] < max_date))]
+            rtd = rtd.loc[
+                ((_filter['ar_pt'] >= min_date) | (_filter['dp_pt'] >= min_date))
+                & ((_filter['ar_pt'] < max_date) | (_filter['dp_pt'] < max_date))
+            ]
         elif min_date is not None:
-            rtd = rtd.loc[(_filter['ar_pt'] >= min_date)
-                          | (_filter['dp_pt'] >= min_date)]
+            rtd = rtd.loc[
+                (_filter['ar_pt'] >= min_date) | (_filter['dp_pt'] >= min_date)
+            ]
         elif max_date is not None:
-            rtd = rtd.loc[(_filter['ar_pt'] < max_date)
-                          | (_filter['dp_pt'] < max_date)]
+            rtd = rtd.loc[(_filter['ar_pt'] < max_date) | (_filter['dp_pt'] < max_date)]
 
     if long_distance_only:
         _filter = dd.read_parquet(RTD_CACHE_PATH, engine='pyarrow', columns=['f'])
@@ -423,7 +443,14 @@ def load_data(
     return rtd
 
 
-def load_for_ml_model(return_date_id=False, label_encode=True, return_times=False, return_status=False, **kwargs):
+def load_for_ml_model(
+    return_date_id=False,
+    label_encode=True,
+    return_times=False,
+    return_status=False,
+    obstacles=True,
+    **kwargs
+) -> dd.DataFrame:
     """
     Load columns that are used in machine learning
 
@@ -435,6 +462,10 @@ def load_for_ml_model(return_date_id=False, label_encode=True, return_times=Fals
         Whether to label encode categorical columns, by default True
     return_times : bool, optional
         Whether to return planned and changed arrival and departure times, by default False
+    return_status : bool, optional
+        Whether to return `ar_cs` and `dp_cs`, by default False
+    obstacles : bool, optional
+        Whether to return information about obstacles, by default True
 
     Returns
     -------
@@ -458,31 +489,53 @@ def load_for_ml_model(return_date_id=False, label_encode=True, return_times=Fals
         'dp_pt',
         'pp',
         'stop_id',
-        'obstacles_priority_24',
-        'obstacles_priority_37',
-        'obstacles_priority_63',
-        'obstacles_priority_65',
-        'obstacles_priority_70',
-        'obstacles_priority_80',
     ]
     if return_date_id:
         columns.append('date_id')
     if return_status:
         columns.extend(['ar_cs', 'dp_cs'])
+    if obstacles:
+        columns.extend(
+            [
+                'obstacles_priority_24',
+                'obstacles_priority_37',
+                'obstacles_priority_63',
+                'obstacles_priority_65',
+                'obstacles_priority_70',
+                'obstacles_priority_80',
+            ]
+        )
 
     rtd = load_data(columns=columns, **kwargs)
 
     rtd['minute'] = rtd['ar_pt'].fillna(value=rtd['dp_pt'])
-    rtd['minute'] = (rtd['minute'].dt.minute + rtd['minute'].dt.hour * 60).astype('int16')
+    rtd['minute'] = (rtd['minute'].dt.minute + rtd['minute'].dt.hour * 60).astype(
+        'int16'
+    )
     rtd['day'] = rtd['ar_pt'].fillna(value=rtd['dp_pt']).dt.dayofweek.astype('int8')
-    rtd['stay_time'] = ((rtd['dp_pt'] - rtd['ar_pt']).dt.seconds // 60)  # .astype('Int16')
+    rtd['stay_time'] = (
+        rtd['dp_pt'] - rtd['ar_pt']
+    ).dt.seconds // 60  # .astype('Int16')
 
-    rtd['obstacles_priority_24'] = rtd['obstacles_priority_24'].astype('float32').fillna(0)
-    rtd['obstacles_priority_37'] = rtd['obstacles_priority_37'].astype('float32').fillna(0)
-    rtd['obstacles_priority_63'] = rtd['obstacles_priority_63'].astype('float32').fillna(0)
-    rtd['obstacles_priority_65'] = rtd['obstacles_priority_65'].astype('float32').fillna(0)
-    rtd['obstacles_priority_70'] = rtd['obstacles_priority_70'].astype('float32').fillna(0)
-    rtd['obstacles_priority_80'] = rtd['obstacles_priority_80'].astype('float32').fillna(0)
+    if obstacles:
+        rtd['obstacles_priority_24'] = (
+            rtd['obstacles_priority_24'].astype('float32').fillna(0)
+        )
+        rtd['obstacles_priority_37'] = (
+            rtd['obstacles_priority_37'].astype('float32').fillna(0)
+        )
+        rtd['obstacles_priority_63'] = (
+            rtd['obstacles_priority_63'].astype('float32').fillna(0)
+        )
+        rtd['obstacles_priority_65'] = (
+            rtd['obstacles_priority_65'].astype('float32').fillna(0)
+        )
+        rtd['obstacles_priority_70'] = (
+            rtd['obstacles_priority_70'].astype('float32').fillna(0)
+        )
+        rtd['obstacles_priority_80'] = (
+            rtd['obstacles_priority_80'].astype('float32').fillna(0)
+        )
 
     if label_encode:
         for key in categoricals:
@@ -493,26 +546,31 @@ def load_for_ml_model(return_date_id=False, label_encode=True, return_times=Fals
     if return_times:
         return rtd
     else:
-        return rtd.drop(columns=['ar_ct',
-                                 'ar_pt',
-                                 'dp_ct',
-                                 'dp_pt'], axis=0)
+        return rtd.drop(columns=['ar_ct', 'ar_pt', 'dp_ct', 'dp_pt'], axis=0)
 
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("--download_rtd", help="download all rtd from database", action="store_true")
-    parser.add_argument("--upgrade_rtd", help="download newer rtd from database and append it to rtd cache", action="store_true")
-    parser.add_argument("--local_cluster", help="use dask local cluster / client", action="store_true")
+    parser.add_argument(
+        "--download_rtd", help="download all rtd from database", action="store_true"
+    )
+    parser.add_argument(
+        "--upgrade_rtd",
+        help="download newer rtd from database and append it to rtd cache",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--local_cluster", help="use dask local cluster / client", action="store_true"
+    )
     args = parser.parse_args()
 
     import helpers.bahn_vorhersage
 
-    print(load_data(load_categories=False, columns=['ar_pt']).head())
-
     if args.local_cluster:
         from dask.distributed import Client
+
         # Setting `threads_per_worker` is very important as Dask will otherwise
         # create as many threads as cpu cores which is to munch for big cpus with small RAM
         client = Client(n_workers=min(10, os.cpu_count() // 4), threads_per_worker=2)
@@ -524,6 +582,6 @@ if __name__ == "__main__":
         upgrade_rtd()
 
     rtd = load_data(columns=['ar_pt'])
-    
+
     print('max pt:', rtd['ar_pt'].max().compute())
     print('len rtd:', format(len(rtd), '_'))

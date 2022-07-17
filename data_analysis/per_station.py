@@ -11,8 +11,8 @@ import datetime
 from shapely.ops import clip_by_rect
 import shapely.geometry
 from dataclasses import dataclass
-from typing import Tuple, Dict
 import matplotlib
+import hashlib
 
 matplotlib.use('Agg')
 from matplotlib import colors
@@ -31,7 +31,7 @@ if os.path.isdir("/usr/src/app/cache"):
 # Install proj from source
 # sudo ldconfig
 
-from helpers import StationPhillip, RtdRay, groupby_index_to_flat
+from helpers import StationPhillip, RtdRay, groupby_index_to_flat, ttl_lru_cache
 from database import cached_table_fetch
 from config import CACHE_PATH, n_dask_workers
 
@@ -70,7 +70,8 @@ def create_base_plot(
     crs: cartopy.crs.CRS
         Coordinate reference system for the plot.
     bbox: Tuple[float, float, float, float]
-        Bounding box of the plot. Must be in Geodetic coordinates. (min_lon, max_lon, min_lat, max_lat)
+        Bounding box of the plot. Must be in Geodetic coordinates.
+        (min_lon, max_lon, min_lat, max_lat)
 
     Returns
     -------
@@ -142,6 +143,13 @@ class PerStationOverTime(StationPhillip):
         min_latitude=MIN_LAT,
         max_latitude=MAX_LAT,
     )
+    PLOTS_DIR =  f"{CACHE_PATH}/plots/"
+    PLOT_PATH = os.path.join(PLOTS_DIR, '{version}_{title}.webp')
+
+    version: str
+    rtd: pd.DataFrame | None
+    kwargs: dict
+    data: pd.DataFrame
 
     @dataclass
     class Limits:
@@ -153,28 +161,21 @@ class PerStationOverTime(StationPhillip):
         def freq(self) -> str:
             return str(self.freq_hours) + 'H'
 
-    limits = Limits(freq_hours=int(24 * 1))
+    limits = Limits(freq_hours=int(24 * 7))
 
     def __init__(self, rtd=None, **kwargs):
         super().__init__(**kwargs)
 
-        # The cache from an older version of this class on potentially older data should
-        # not be used. Thus, we create a random version that is attached to the filenames
-        # in the cache.
-        self.version = f'{id(self):x}'
+        if not os.path.exists(self.PLOTS_DIR):
+            os.mkdir(self.PLOTS_DIR)
 
-        if kwargs.get('generate') and rtd is None:
+        self.rtd = rtd
+        self.kwargs = kwargs
+
+        if self.kwargs.get('generate') and self.rtd is None:
             raise ValueError('Cannot generate over time aggregation if rtd is None')
 
-        self.data = cached_table_fetch(
-            'per_station_over_time',
-            table_generator=lambda: self.data_generator(rtd),
-            push=True,
-            **kwargs,
-        )
-
-        self.limits.max = self.data["stop_hour"].max()
-        self.limits.min = self.data["stop_hour"].min()
+        self.data_loader()
 
         # Setup Plot https://stackoverflow.com/questions/9401658/how-to-animate-a-scatter-plot
         self.fig, self.ax = create_base_plot(crs=self.MAP_CRS, bbox=BBOX_GERMANY)
@@ -258,9 +259,31 @@ class PerStationOverTime(StationPhillip):
         data = data.astype(data_types)
         return data
 
+    @ttl_lru_cache(seconds_to_live=60 * 60 * 4)
+    def data_loader(self):
+        self.data = cached_table_fetch(
+            'per_station_over_time',
+            table_generator=lambda: self.data_generator(self.rtd),
+            push=True,
+            **self.kwargs,
+        )
+
+        # The cache from an older version of this class on potentially older data should
+        # not be used. Thus, we create a hash aka version ot the data that is attached
+        # to the filenames in the cache.
+        self.version = hashlib.sha256(
+            pd.util.hash_pandas_object(self.data, index=True).values
+        ).hexdigest()
+
+        self.limits.max = self.data["stop_hour"].max()
+        self.limits.min = self.data["stop_hour"].min()
+
+
     def aggregate_preagregated_data(
         self, start_time: datetime.datetime, end_time: datetime.datetime
     ) -> pd.DataFrame:
+        self.data_loader()
+
         # Extract data that is between start_time and end_time
         current_data = self.data.loc[
             (start_time <= self.data["stop_hour"]) & (self.data["stop_hour"] < end_time)
@@ -318,19 +341,19 @@ class PerStationOverTime(StationPhillip):
 
         return current_data
 
-    def generate_default(self, title: str) -> str:
-        plotpath = f"{CACHE_PATH}/plots/{self.version}_{title}.webp"
-        if not os.path.isfile(plotpath):
-            if title == 'default':
+    def generate_default(self, plot_title: str) -> str:
+        plot_path = self.PLOT_PATH.format(version=self.version, title=plot_title)
+        if not os.path.isfile(plot_path):
+            if plot_title == 'default':
                 self.ax.set_title('', fontsize=16)
             else:
-                self.ax.set_title(title, fontsize=16)
+                self.ax.set_title(plot_title, fontsize=16)
             memory_buffer = io.BytesIO()
             self.fig.savefig(
                 memory_buffer, bbox_inches='tight', dpi=250, transparent=True
             )
-            image_to_webp(memory_buffer, plotpath)
-        return plotpath
+            image_to_webp(memory_buffer, plot_path)
+        return plot_path
 
     def generate_plot(self, start_time, end_time, use_cached_images=False) -> str:
         """
@@ -354,11 +377,11 @@ class PerStationOverTime(StationPhillip):
             # We generate plots over a minimum timespan of limits.freq_hours
             end_time = end_time + datetime.timedelta(hours=self.limits.freq_hours)
 
-        plot_name = (
+        plot_title = (
             start_time.strftime("%d.%m.%Y") + "-" + end_time.strftime("%d.%m.%Y")
         )
 
-        plot_path = f"{CACHE_PATH}/plots/{self.version}_{plot_name}.webp"
+        plot_path = self.PLOT_PATH.format(version=self.version, title=plot_title)
 
         if use_cached_images and os.path.isfile(plot_path):
             # Return cached image
@@ -395,7 +418,7 @@ class PerStationOverTime(StationPhillip):
             self.sc.set_array(color)
 
             self.ax.set_title(
-                plot_name.replace("_", ":").replace('-', ' - '), fontsize=12
+                plot_title.replace("_", ":").replace('-', ' - '), fontsize=12
             )
             memory_buffer = io.BytesIO()
             self.fig.savefig(
@@ -407,7 +430,7 @@ class PerStationOverTime(StationPhillip):
             )
             image_to_webp(memory_buffer, plot_path)
         else:
-            plot_path = self.generate_default(title='no data available')
+            plot_path = self.generate_default(plot_title='no data available')
 
         return plot_path
 
