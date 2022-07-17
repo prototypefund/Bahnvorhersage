@@ -10,6 +10,7 @@ import pandas as pd
 import dask.dataframe as dd
 from typing import Literal
 import numpy as np
+from tqdm import tqdm
 from config import JSON_MODEL_PATH, ENCODER_PATH
 
 
@@ -97,7 +98,7 @@ def split_ar_dp(rtd: pd.DataFrame | dd.DataFrame) -> tuple[pd.DataFrame, pd.Data
 
 
 def train_model(train_x, train_y, **model_parameters):
-    print("Majority Baseline during training:", majority_baseline(train_x, train_y))
+    # print("Majority Baseline during training:", majority_baseline(train_x, train_y))
     est = XGBClassifier(
         n_jobs=-1,
         objective="binary:logistic",
@@ -166,7 +167,7 @@ def train_models(n_models=15, **load_parameters):
     }
     # fmt: on
 
-    for minute in range(n_models):
+    for minute in tqdm(range(n_models), desc="Training models"):
         model_name = f"ar_{minute}"
         print("Training", model_name, '. . .')
         model = train_model(ar_train, ar_labels[minute], **parameters[minute])
@@ -184,21 +185,18 @@ def train_models(n_models=15, **load_parameters):
 def majority_baseline(x, y):
     clf = DummyClassifier(strategy="most_frequent", random_state=0)
     clf.fit(x, y)
-    return round((clf.predict(x) == y.to_numpy()).sum() / len(x), 6)
+    return clf.score(x, y.astype(np.uint8))
 
 
-def model_score(model, x, y):
-    return model.score(x, y)
+def test_model(model, x, y):
+    baseline = majority_baseline(x, y)
+    model_score = model.score(x, y.astype(np.uint8))
 
-
-def test_model(model, x_test, y_test, model_name):
-    baseline = majority_baseline(x_test, y_test)
-    model_score = (model.predict(x_test) == y_test).sum() / len(y_test)
-
-    print("Model:\t\t\t", model_name)
-    print("Majority baseline:\t", round(baseline * 100, 6))
-    print("Model accuracy:\t\t", round(model_score * 100, 6))
-    print("Model improvement:\t", round((model_score - baseline) * 100, 6))
+    return {
+        "baseline": baseline,
+        "accuracy": model_score,
+        'improvement': model_score - baseline,
+    }
 
 
 def test_models(n_models=15, **load_parameters):
@@ -214,23 +212,23 @@ def test_models(n_models=15, **load_parameters):
     dp_test_x = dp_test.drop(columns=["ar_delay", "dp_delay", "ar_cs", "dp_cs"])
     del test
 
-    for model_number in range(n_models):
-        model_name = f"ar_{model_number}"
-        print("test_results for model {}".format(model_name))
-        test_y = (ar_test["ar_delay"] <= model_number) & (
+    test_results = []
+
+    for model_number in tqdm(range(n_models), desc="Testing models"):
+        ar_test_y = (ar_test["ar_delay"] <= model_number) & (
             ar_test["ar_cs"] != status_encoder["ar"]["c"]
         )
         model = load_model(minute=model_number, ar_or_dp="ar", gpu=True)
-        test_model(model, ar_test_x, test_y, model_name)
+        ar_result = test_model(model, ar_test_x, ar_test_y)
+        test_results.append({'minute': model_number, 'ar_or_dp': 'ar', **ar_result})
 
-        model_number += 1
-        model_name = f"dp_{model_number}"
-        print("test_results for model {}".format(model_name))
-        test_y = (dp_test["dp_delay"] >= model_number) & (
+        dp_test_y = (dp_test["dp_delay"] >= model_number) & (
             dp_test["dp_cs"] != status_encoder["dp"]["c"]
         )
         model = load_model(minute=model_number, ar_or_dp="dp", gpu=True)
-        test_model(model, dp_test_x, test_y, model_name)
+        dp_results = test_model(model, dp_test_x, dp_test_y)
+        test_results.append({'minute': model_number, 'ar_or_dp': 'dp', **dp_results})
+    return test_results
 
 
 class Predictor:
@@ -449,14 +447,13 @@ if __name__ == "__main__":
     # Setting `threads_per_worker` is very important as Dask will otherwise
     # create as many threads as cpu cores which is to munch for big cpus with small RAM
     with Client(n_workers=min(10, os.cpu_count() // 4), threads_per_worker=2) as client:
-
         train_models(
             min_date=datetime.datetime.today() - datetime.timedelta(days=7 * 6),
             return_status=True,
             obstacles=False,
         )
 
-        test_models(
+        test_result = test_models(
             max_date=datetime.datetime.today() - datetime.timedelta(days=7 * 6),
             min_date=datetime.datetime.today() - datetime.timedelta(days=7 * 8),
             return_status=True,
