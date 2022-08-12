@@ -51,7 +51,7 @@ def analysis(connection: dict):
 
 @bp.route("/station_list.json", methods=["GET"])
 @log_activity
-def connect():
+def get_station_list():
     """
     Gets called when the website is loaded
     And gets some data from and about the user
@@ -71,7 +71,7 @@ def connect():
 # For compatibility with older versions of the website
 @bp.route("/connect", methods=["GET"])
 @log_activity
-def connect():
+def connect_legacy():
     """
     Gets called when the website is loaded
     And gets some data from and about the user
