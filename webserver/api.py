@@ -49,6 +49,26 @@ def analysis(connection: dict):
     return prediction
 
 
+@bp.route("/station_list.json", methods=["GET"])
+@log_activity
+def connect():
+    """
+    Gets called when the website is loaded
+    And gets some data from and about the user
+    It returns the trainstations for the autofill forms
+
+    Returns
+    -------
+    flask generated json
+        list: a list of strings with all the known train stations
+    """
+    resp = jsonify({"stations": streckennetz.sta_list})
+    # Cache for 1 week
+    resp.cache_control.max_age = 60 * 60 * 24 * 7
+    return resp
+
+
+# For compatibility with older versions of the website
 @bp.route("/connect", methods=["GET"])
 @log_activity
 def connect():
@@ -63,6 +83,8 @@ def connect():
         list: a list of strings with all the known train stations
     """
     resp = jsonify({"stations": streckennetz.sta_list})
+    # Cache for 1 week
+    resp.cache_control.max_age = 60 * 60 * 24 * 7
     return resp
 
 
@@ -85,6 +107,8 @@ def station_dump():
         )
     )
     r.mimetype = 'application/json'
+    # Cache for 1 week
+    r.cache_control.max_age = 60 * 60 * 24 * 7
     return r
 
 
