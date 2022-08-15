@@ -78,10 +78,10 @@ then
         echo "Globals backup"
 
         set -o pipefail
-        if ! pg_dumpall -g -h "$HOSTNAME" -U "$USERNAME" | gzip > $FINAL_BACKUP_DIR"globals".sql.gz.in_progress; then
+        if ! pg_dumpall -g -h "$HOSTNAME" -U "$USERNAME" | lz4 -3 > $FINAL_BACKUP_DIR"globals".sql.lz4.in_progress; then
                 echo "[!!ERROR!!] Failed to produce globals backup" 1>&2
         else
-                mv $FINAL_BACKUP_DIR"globals".sql.gz.in_progress $FINAL_BACKUP_DIR"globals".sql.gz
+                mv $FINAL_BACKUP_DIR"globals".sql.lz4.in_progress $FINAL_BACKUP_DIR"globals".sql.lz4
         fi
         set +o pipefail
 else
@@ -112,10 +112,10 @@ do
 	echo "Schema-only backup of $DATABASE"
 
 	set -o pipefail
-	if ! pg_dump -Fp -s -h "$HOSTNAME" -U "$USERNAME" "$DATABASE" | gzip > $FINAL_BACKUP_DIR"$DATABASE"_SCHEMA.sql.gz.in_progress; then
+	if ! pg_dump -Fp -s -h "$HOSTNAME" -U "$USERNAME" "$DATABASE" | lz4 -3 > $FINAL_BACKUP_DIR"$DATABASE"_SCHEMA.lz4.gz.in_progress; then
 		echo "[!!ERROR!!] Failed to backup database schema of $DATABASE" 1>&2
 	else
-		mv $FINAL_BACKUP_DIR"$DATABASE"_SCHEMA.sql.gz.in_progress $FINAL_BACKUP_DIR"$DATABASE"_SCHEMA.sql.gz
+		mv $FINAL_BACKUP_DIR"$DATABASE"_SCHEMA.sql.lz4.in_progress $FINAL_BACKUP_DIR"$DATABASE"_SCHEMA.sql.lz4
 	fi
 	set +o pipefail
 done
@@ -142,10 +142,10 @@ do
 		echo "Plain backup of $DATABASE"
 
 		set -o pipefail
-		if ! pg_dump -Fp -h "$HOSTNAME" -U "$USERNAME" "$DATABASE" | gzip > $FINAL_BACKUP_DIR"$DATABASE".sql.gz.in_progress; then
+		if ! pg_dump -Fp -h "$HOSTNAME" -U "$USERNAME" "$DATABASE" | lz4 -3 > $FINAL_BACKUP_DIR"$DATABASE".sql.lz4.in_progress; then
 			echo "[!!ERROR!!] Failed to produce plain backup database $DATABASE" 1>&2
 		else
-			mv $FINAL_BACKUP_DIR"$DATABASE".sql.gz.in_progress $FINAL_BACKUP_DIR"$DATABASE".sql.gz
+			mv $FINAL_BACKUP_DIR"$DATABASE".sql.lz4.in_progress $FINAL_BACKUP_DIR"$DATABASE".sql.lz4
 		fi
 		set +o pipefail
 	fi
