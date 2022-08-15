@@ -4,7 +4,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pickle
 from xgboost import XGBClassifier
 from sklearn.dummy import DummyClassifier
-from helpers import RtdRay, ttl_lru_cache
+from helpers import RtdRay, ttl_lru_cache, StreckennetzSteffi
 import datetime
 import pandas as pd
 import dask.dataframe as dd
@@ -329,7 +329,7 @@ class Predictor:
         return np.minimum(con_score, np.ones(len(con_score)))
 
     def get_pred_data(
-        self, segments: list, streckennetz
+        self, segments: list[dict], streckennetz: StreckennetzSteffi,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         dtypes = {
             'station': 'int',

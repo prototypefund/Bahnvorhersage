@@ -1,11 +1,13 @@
 import datetime
 from flask_sqlalchemy import SQLAlchemy
+
 # from webserver import db
 from flask import json, request
 from functools import wraps
 from sqlalchemy.dialects.postgresql import JSON
 
 db = SQLAlchemy()
+
 
 class LogEntry(db.Model):
     __tablename__ = 'website_connect_log'
@@ -24,7 +26,19 @@ class LogEntry(db.Model):
     kwargs = db.Column(JSON)
     request_data = db.Column(JSON)
 
-    def __init__(self, page, host_url, platform, browser, version, user_agent, ip, request_data, args, kwargs):
+    def __init__(
+        self,
+        page,
+        host_url,
+        platform,
+        browser,
+        version,
+        user_agent,
+        ip,
+        request_data,
+        args,
+        kwargs,
+    ):
         self.time = datetime.datetime.now()
         self.page = page
         self.host_url = host_url
@@ -42,6 +56,7 @@ def log_activity(func):
     """
     A decorator, that logs all the traffic through this function to the Database
     """
+
     @wraps(func)
     def decorated(*args, **kwargs):
         db.session.add(
@@ -52,13 +67,16 @@ def log_activity(func):
                 browser=request.user_agent.browser,
                 version=request.user_agent.version,
                 user_agent=request.user_agent.string,
-                ip=request.remote_addr if 'X-Forwarded-For' not in request.headers else request.headers['X-Forwarded-For'],
+                ip=request.remote_addr
+                if 'X-Forwarded-For' not in request.headers
+                else request.headers['X-Forwarded-For'],
                 request_data=request.get_json(silent=True),
                 args=args,
-                kwargs=kwargs
+                kwargs=kwargs,
             )
         )
         db.session.commit()
 
         return func(*args, **kwargs)
+
     return decorated

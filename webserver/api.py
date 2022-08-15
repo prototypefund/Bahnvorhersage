@@ -6,47 +6,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from flask import request, jsonify, current_app, Blueprint, make_response
 from flask.helpers import send_file
 from datetime import datetime
-import numpy as np
-from webserver.connection import get_journeys, from_utc
-from webserver import predictor, streckennetz, per_station_time
+from webserver.connection import get_and_rate_journeys
+from webserver import streckennetz, per_station_time
 from webserver.db_logger import log_activity
 from data_analysis import data_stats
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 bp_limited = Blueprint("api_rate_limited", __name__, url_prefix='/api')
-
-
-def analysis(connection: dict):
-    """
-    Analyses/evaluates/rates a given connection using machine learning
-
-    Parameters
-    ----------
-    connection : dict
-        The connection to analyze
-
-    Returns
-    -------
-    dict
-        The connection with the evaluation/rating
-    """
-    prediction = {}
-
-    ar_data, dp_data = predictor.get_pred_data(connection, streckennetz)
-    ar_prediction = predictor.predict_ar(ar_data)
-    dp_prediction = predictor.predict_dp(dp_data)
-    transfer_time = np.array([segment['transfer_time'] for segment in connection[:-1]])
-    con_scores = predictor.predict_con(
-        ar_prediction[:-1], dp_prediction[1:], transfer_time
-    )
-
-    prediction['connection_score'] = int(round(con_scores.prod() * 100))
-    prediction['transfer_score'] = list(map(lambda s: int(round(s)), con_scores * 100))
-    prediction['ar_predictions'] = ar_prediction[:, 0].tolist()
-    prediction['dp_predictions'] = dp_prediction[:, 1].tolist()
-    prediction['transfer_times'] = transfer_time.tolist()
-
-    return prediction
 
 
 @bp.route("/station_list.json", methods=["GET"])
@@ -116,8 +82,8 @@ def station_dump():
 @log_activity
 def trip():
     """
-    Gets a connection from `startbhf` to `zielbhf` at a given date `date`
-    using marudors HAFAS api. And rates the connection
+    Searches and rates connections from `start` to
+    `destination` at a given `date`.
 
     Parameters
     ----------
@@ -126,7 +92,8 @@ def trip():
     destination : str
         (from request) the station name of the destination
     date  : str
-        (from request) the date and time at which the trip should take place in format `%d.%m.%Y %H:%M`
+        (from request) the date and time at which the trip
+        should take place in format `%d.%m.%Y %H:%M`
 
     Returns
     -------
@@ -151,61 +118,10 @@ def trip():
     current_app.logger.info(
         "Getting connections from " + start + " to " + destination + ", " + str(date)
     )
-    journeys, prediction_data = get_journeys(
-        start=start,
-        destination=destination,
-        date=date,
-        search_for_departure=search_for_departure,
-        only_regional=only_regional,
-        bike=bike,
+
+    journeys = get_and_rate_journeys(
+        start, destination, date, search_for_departure, only_regional, bike
     )
-
-    for i, prediction in enumerate(map(analysis, prediction_data)):
-        journeys[i]['connectionScore'] = prediction['connection_score']
-
-        # This id is used for vue.js to render the list of connections
-        journeys[i]['id'] = i
-        journeys[i]['departure'] = journeys[i]['legs'][0]['departure']
-        journeys[i]['plannedDeparture'] = journeys[i]['legs'][0]['plannedDeparture']
-        journeys[i]['arrival'] = journeys[i]['legs'][-1]['arrival']
-        journeys[i]['plannedArrival'] = journeys[i]['legs'][-1]['plannedArrival']
-        journeys[i]['duration'] = (
-            from_utc(journeys[i]['arrival']) - from_utc(journeys[i]['departure'])
-        ).total_seconds()
-        journeys[i]['plannedDuration'] = (
-            from_utc(journeys[i]['plannedArrival'])
-            - from_utc(journeys[i]['plannedDeparture'])
-        ).total_seconds()
-        journeys[i]['price'] = (
-            journeys[i]['price']['amount'] if journeys[i]['price'] is not None else -1
-        )
-
-        walking_legs = 0
-        train_categories = set()
-        for leg_index, leg in enumerate(journeys[i]['legs']):
-            if 'walking' in leg and leg['walking'] == True:
-                walking_legs += 1
-                train_categories.add('Fußweg')
-                continue
-            # The last leg has no transfer and thus no transferScore
-            if leg_index != len(journeys[i]['legs']) - 1:
-                journeys[i]['legs'][leg_index]['transferScore'] = prediction[
-                    'transfer_score'
-                ][leg_index - walking_legs]
-                journeys[i]['legs'][leg_index]['transferTime'] = prediction[
-                    'transfer_times'
-                ][leg_index - walking_legs]
-            journeys[i]['legs'][leg_index]['arrivalPrediction'] = prediction[
-                'ar_predictions'
-            ][leg_index - walking_legs]
-            journeys[i]['legs'][leg_index]['departurePrediction'] = prediction[
-                'dp_predictions'
-            ][leg_index - walking_legs]
-            train_categories.add(leg['line']['productName'])
-
-        journeys[i]['trainCategories'] = sorted(list(train_categories))
-        journeys[i]['transfers'] = len(journeys[i]['legs']) - 1 - walking_legs
-
     resp = jsonify(journeys)
     resp.headers.add("Access-Control-Allow-Origin", "*")
     return resp
