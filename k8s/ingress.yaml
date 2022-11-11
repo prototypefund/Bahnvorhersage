@@ -47,6 +47,7 @@ spec:
     - dashboard.sfz-eningen.de
     - overleaf.sfz-eningen.de
     - overleaf.marcpanse.de
+    - focalboard.marcpanse.de
     secretName: default-tls-secret
   rules:
   - host: "bahnvorhersage.de"
@@ -152,3 +153,20 @@ spec:
     http: *gitlab
   - host: "paralox-git.de"
     http: *gitlab
+  - host: "focalboard.marcpanse.de"
+    http: &focalboard
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-focalboard
+              port:
+                number: 80
+        - path: /register
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-deny-access
+              port:
+                number: 80
