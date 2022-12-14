@@ -1,5 +1,6 @@
 import os
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pangres
 import pandas as pd
@@ -19,6 +20,7 @@ class Rtd(Base):
     """
     Scheme for parsed data.
     """
+
     __tablename__ = RTD_TABLENAME
     ar_pp = Column(Text)
     ar_cp = Column(Text)
@@ -34,7 +36,7 @@ class Rtd(Base):
     ar_cde = Column(Text)
     ar_dc = Column(Boolean)
     ar_l = Column(Text)
-    
+
     dp_pp = Column(Text)
     dp_cp = Column(Text)
     dp_pt = Column(DateTime)
@@ -114,7 +116,7 @@ class Rtd(Base):
                 dtype=sql_types,
                 create_schema=False,
                 add_new_columns=False,
-                adapt_dtype_of_empty_db_columns=False
+                adapt_dtype_of_empty_db_columns=False,
             )
 
     def __init__(self) -> None:
@@ -163,7 +165,7 @@ class RtdArrays(Base):
     hdc = Column(JSON)
     conn = Column(JSON)
     rtr = Column(JSON)
-    
+
     hash_id = Column(BIGINT, primary_key=True, autoincrement=False)
 
 
@@ -189,7 +191,6 @@ sql_types = {
     'ar_m_t': ARRAY(String(length=1)),
     'ar_m_ts': ARRAY(DateTime),
     'ar_m_c': ARRAY(Integer),
-
     'dp_ppth': ARRAY(Text),
     'dp_cpth': ARRAY(Text),
     'dp_pp': Text,
@@ -210,13 +211,11 @@ sql_types = {
     'dp_m_t': ARRAY(String(length=1)),
     'dp_m_ts': ARRAY(DateTime),
     'dp_m_c': ARRAY(Integer),
-
     'f': String(length=1),
     't': Text,
     'o': Text,
     'c': Text,
     'n': Text,
-
     'm_id': ARRAY(Text),
     'm_t': ARRAY(String(length=1)),
     'm_ts': ARRAY(DateTime),
@@ -225,19 +224,16 @@ sql_types = {
     'hdc': JSON,
     'conn': JSON,
     'rtr': JSON,
-
     'station': Text,
     'id': Text,
     'dayly_id': BIGINT,
     'date_id': DateTime,
     'stop_id': Integer,
     'hash_id': Integer,
-    
     'distance_to_start': Float,
     'distance_to_end': Float,
     'distance_to_last': Float,
     'distance_to_next': Float,
-
     'obstacles_priority_24': Float,
     'obstacles_priority_37': Float,
     'obstacles_priority_63': Float,

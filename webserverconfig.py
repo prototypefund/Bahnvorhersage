@@ -1,5 +1,6 @@
 from database import DB_CONNECT_STRING
 
+
 class Config(object):
     # Database
     SQLALCHEMY_DATABASE_URI = 'sqlite:///tcp.db'

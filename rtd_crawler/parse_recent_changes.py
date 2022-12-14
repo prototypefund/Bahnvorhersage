@@ -1,5 +1,6 @@
 import os
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd
 import datetime
@@ -23,12 +24,12 @@ obstacles = ObstacleOlly(prefer_cache=False)
 
 
 # These are the names of columns that contain time information and should be parsed into a datetime
-time_names = ('pt', 'ct', 'clt', 'ts')
+time_names = {'pt', 'ct', 'clt', 'ts'}
 # These are parts of message that might be interesting to us
-message_parts_to_parse = ('id', 't', 'c', 'ts')
+message_parts_to_parse = {'id', 't', 'c', 'ts'}
 
 
-def db_to_datetime(dt) -> datetime.datetime:
+def db_to_datetime(dt: str) -> datetime.datetime:
     """
     Convert bahn time in format: '%y%m%d%H%M' to datetime.
     As it it fastest to directly construct a datetime object from this, no strptime is used.
@@ -39,7 +40,9 @@ def db_to_datetime(dt) -> datetime.datetime:
     Returns:
         datetime.datetime: converted bahn time
     """
-    return datetime.datetime(int('20' + dt[0:2]), int(dt[2:4]), int(dt[4:6]), int(dt[6:8]), int(dt[8:10]))
+    return datetime.datetime(
+        int('20' + dt[0:2]), int(dt[2:4]), int(dt[4:6]), int(dt[6:8]), int(dt[8:10])
+    )
 
 
 def parse_stop_plan(stop: dict) -> dict:
@@ -55,7 +58,7 @@ def parse_stop_plan(stop: dict) -> dict:
     dict
         Parsed Stop
     """
-    # Create a int64 hash to be used as index.
+    # Create an int64 hash to be used as index.
     stop['hash_id'] = hash64(stop['id'])
 
     # Split id into the three id parts: the id unique on the date, the date, the stop number
@@ -110,7 +113,9 @@ def add_change_to_stop(stop: dict, change: dict) -> dict:
                             if 'ar_m_' + msg_part not in stop:
                                 stop['ar_m_' + msg_part] = []
                             if msg_part in time_names:
-                                stop['ar_m_' + msg_part].append(db_to_datetime(msg[msg_part]))
+                                stop['ar_m_' + msg_part].append(
+                                    db_to_datetime(msg[msg_part])
+                                )
                             elif msg_part == 'c':
                                 stop['ar_m_c'].append(int(msg[msg_part]))
                             else:
@@ -131,7 +136,9 @@ def add_change_to_stop(stop: dict, change: dict) -> dict:
                             if 'dp_m_' + msg_part not in stop:
                                 stop['dp_m_' + msg_part] = []
                             if msg_part in time_names:
-                                stop['dp_m_' + msg_part].append(db_to_datetime(msg[msg_part]))
+                                stop['dp_m_' + msg_part].append(
+                                    db_to_datetime(msg[msg_part])
+                                )
                             elif msg_part == 'c':
                                 stop['dp_m_c'].append(int(msg[msg_part]))
                             else:
@@ -154,14 +161,16 @@ def add_change_to_stop(stop: dict, change: dict) -> dict:
                         stop['m_c'].append(int(msg[msg_part]))
                     else:
                         stop['m_' + msg_part].append(msg[msg_part])
-    return stop    
+    return stop
 
 
-def add_distance(rtd):
+def add_distance(rtd: pd.DataFrame) -> pd.DataFrame:
     for prefix in ('ar', 'dp'):
         rtd[prefix + '_ct'] = rtd[prefix + '_ct'].fillna(value=rtd[prefix + '_pt'])
 
-        rtd[prefix + '_cpth'] = rtd[prefix + '_cpth'].fillna(value=rtd[prefix + '_ppth'])
+        rtd[prefix + '_cpth'] = rtd[prefix + '_cpth'].fillna(
+            value=rtd[prefix + '_ppth']
+        )
 
         rtd[prefix + '_cp'] = rtd[prefix + '_cp'].fillna(value=rtd[prefix + '_pp'])
 
@@ -177,10 +186,16 @@ def add_distance(rtd):
         ar_cpth = rtd.at[i, 'ar_cpth']
         station = rtd.at[i, 'station']
         if isinstance(ar_cpth, list):
-            rtd.at[i, 'distance_to_last'] = obstacles.route_length([ar_cpth[-1]] + [station], date=rtd.at[i, 'date_id'])
-            rtd.at[i, 'distance_to_start'] = obstacles.route_length(ar_cpth + [station], date=rtd.at[i, 'date_id'])
+            rtd.at[i, 'distance_to_last'] = obstacles.route_length(
+                [ar_cpth[-1]] + [station], date=rtd.at[i, 'date_id']
+            )
+            rtd.at[i, 'distance_to_start'] = obstacles.route_length(
+                ar_cpth + [station], date=rtd.at[i, 'date_id']
+            )
 
-            path_obstacles = obstacles.obstacles_of_path(ar_cpth + [station], rtd.at[i, 'ar_pt'])
+            path_obstacles = obstacles.obstacles_of_path(
+                ar_cpth + [station], rtd.at[i, 'ar_pt']
+            )
             if path_obstacles is not None:
                 rtd.at[i, 'obstacles_priority_24'] = path_obstacles['priority_24']
                 rtd.at[i, 'obstacles_priority_37'] = path_obstacles['priority_37']
@@ -188,15 +203,19 @@ def add_distance(rtd):
                 rtd.at[i, 'obstacles_priority_65'] = path_obstacles['priority_65']
                 rtd.at[i, 'obstacles_priority_70'] = path_obstacles['priority_70']
                 rtd.at[i, 'obstacles_priority_80'] = path_obstacles['priority_80']
-            
+
         else:
             rtd.at[i, 'distance_to_last'] = 0
             rtd.at[i, 'distance_to_start'] = 0
 
         dp_cpth = rtd.at[i, 'dp_cpth']
         if isinstance(dp_cpth, list):
-            rtd.at[i, 'distance_to_next'] = obstacles.route_length([station] + [dp_cpth[0]], date=rtd.at[i, 'date_id'])
-            rtd.at[i, 'distance_to_end'] = obstacles.route_length([station] + dp_cpth, date=rtd.at[i, 'date_id'])
+            rtd.at[i, 'distance_to_next'] = obstacles.route_length(
+                [station] + [dp_cpth[0]], date=rtd.at[i, 'date_id']
+            )
+            rtd.at[i, 'distance_to_end'] = obstacles.route_length(
+                [station] + dp_cpth, date=rtd.at[i, 'date_id']
+            )
         else:
             rtd.at[i, 'distance_to_next'] = 0
             rtd.at[i, 'distance_to_end'] = 0
@@ -204,7 +223,7 @@ def add_distance(rtd):
     return rtd
 
 
-def parse_timetable(timetables, db):
+def parse_timetable(timetables, db) -> list:
     parsed = []
     timetables = [timetable.plan for timetable in timetables]
     train_ids_to_get = []
@@ -224,10 +243,13 @@ def parse_timetable(timetables, db):
                 parsed.append(stop)
     return parsed
 
+
 # @profile
 def parse_station(station, start_date, end_date):
     with DBManager() as db:
-        stations_timetables = db.plan_of_station(station, date1=start_date, date2=end_date)
+        stations_timetables = db.plan_of_station(
+            station, date1=start_date, date2=end_date
+        )
         parsed = parse_timetable(stations_timetables, db)
 
     if parsed:
@@ -237,9 +259,13 @@ def parse_station(station, start_date, end_date):
         # It than reappears in the planned timetable of the next hour.
         parsed = parsed.loc[~parsed.index.duplicated(keep='last')]
         parsed['station'] = station
-        parsed[['ar_dc', 'ar_hi', 'dp_dc', 'dp_hi']] = parsed[['ar_dc', 'ar_hi', 'dp_dc', 'dp_hi']] == '1'
+        parsed[['ar_dc', 'ar_hi', 'dp_dc', 'dp_hi']] = (
+            parsed[['ar_dc', 'ar_hi', 'dp_dc', 'dp_hi']] == '1'
+        )
         parsed = add_distance(parsed)
-        current_array_cols = [col for col in RtdArrays.__table__.columns.keys() if col in parsed.columns]
+        current_array_cols = [
+            col for col in RtdArrays.__table__.columns.keys() if col in parsed.columns
+        ]
         # There are many columns that contain arrays. These take up a lot of space and aren't
         # used after parsing, so we currently don't store them in the database
         # rtd_arrays_df = parsed.loc[:, current_array_cols]
@@ -250,6 +276,7 @@ def parse_station(station, start_date, end_date):
 
     return True
 
+
 def parse(only_new=True):
     if only_new:
         start_date = rtd.max_date() - datetime.timedelta(days=2)
@@ -258,10 +285,13 @@ def parse(only_new=True):
     end_date = datetime.datetime.now()
     # parse_station('Tübingen Hbf', datetime.datetime(2021, 1, 1, 0, 0), end_date)
     with concurrent.futures.ProcessPoolExecutor(min(32, os.cpu_count())) as executor:
-        futures = {executor.submit(parse_station, station, start_date, end_date): station
-                   for station
-                   in obstacles}
-        for future in tqdm(concurrent.futures.as_completed(futures), total=len(obstacles)):
+        futures = {
+            executor.submit(parse_station, station, start_date, end_date): station
+            for station in obstacles
+        }
+        for future in tqdm(
+            concurrent.futures.as_completed(futures), total=len(obstacles)
+        ):
             future.result()
 
 
@@ -273,4 +303,3 @@ if __name__ == "__main__":
         parse(only_new=True)
     else:
         parse(only_new=False)
-
