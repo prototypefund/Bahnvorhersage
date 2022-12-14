@@ -10,7 +10,7 @@ FROM osgeo/proj:9.0.1 as proj
 
 
 ## Base image
-FROM python:3.10 AS compile-image
+FROM python:3.11 AS compile-image
 
 # Install dependencies (libgeos in order for cartopy to work)
 RUN apt-get update
@@ -30,12 +30,14 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 ## Add and install requirements
 RUN pip install --upgrade pip 
 # Install shapely without binary in order to link to the correct geos lib
+# RUN pip install shapely cartopy --no-binary shapely --no-binary cartopy
+#==1.8.4
 RUN pip install shapely --no-binary shapely
 COPY ./webserver/requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 
 ## runtime-image
-FROM python:3.10 AS runtime-image
+FROM python:3.11 AS runtime-image
 
 COPY --from=proj  /usr/share/proj/ /usr/share/proj/
 COPY --from=proj  /usr/include/ /usr/include/
@@ -53,6 +55,8 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 ## Copy Python dependencies from build image
 COPY --from=compile-image /opt/venv /opt/venv
+# It seems to be overkill to reinstall shapely here, but this fixed the docker build just randomly crashing withour any error
+RUN pip install shapely --no-binary shapely --force
 
 ## set working directory
 WORKDIR /usr/src/app
