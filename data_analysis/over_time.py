@@ -339,37 +339,19 @@ class OverYearWeekly(OverTime):
 
 
 if __name__ == '__main__':
-    import helpers.fancy_print_tcp
+    import helpers.bahn_vorhersage
 
-    rtd_df = RtdRay.load_data(
-        columns=[
-            'ar_pt',
-            'dp_pt',
-            'ar_delay',
-            'ar_happened',
-            'dp_delay',
-            'dp_happened',
-            'ar_cs',
-            'dp_cs',
-        ]
-    )
+    # print('grouping over hour')
+    # time = OverHour(generate=False)
+    # time.plot()
 
-    rtd_df['ar_on_time'] = rtd_df['ar_delay'] <= 5
-    rtd_df['dp_on_time'] = rtd_df['dp_delay'] <= 5
-    rtd_df['ar_canceled'] = rtd_df['ar_cs'] == 'c'
-    rtd_df['dp_canceled'] = rtd_df['dp_cs'] == 'c'
+    # print('grouping over day')
+    # time = OverDay(generate=False)
+    # time.plot()
 
-    print('grouping over hour')
-    time = OverHour(generate=False)
-    time.plot()
-
-    print('grouping over day')
-    time = OverDay(generate=False)
-    time.plot()
-
-    print('grouping over week')
-    time = OverWeek(generate=False)
-    time.plot()
+    # print('grouping over week')
+    # time = OverWeek(generate=False)
+    # time.plot()
 
     print('grouping over year')
     time = OverYear(generate=False)
@@ -377,4 +359,8 @@ if __name__ == '__main__':
 
     print('grouping over year')
     time = OverYearWeekly(generate=False)
-    time.plot(kind='on_time_percentage')
+    time.plot(kind='delay')
+
+    print('grouping over year')
+    time = OverYearWeekly(generate=False)
+    time.plot(kind='cancellations')
