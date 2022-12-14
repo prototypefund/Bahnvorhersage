@@ -39,8 +39,7 @@ Bahn-Vorhersage (formerly known as TrAIn_Connection_Prediction) is a train delay
 | May 2022                    | Beginning on the first of June, Germany introduced the 9€-Ticket for local trains. So we needed a way to route for local trains only. That was easy, as Marudor's API has support for that. However, we found that if we added more options to our search, we should also add an option to search for routes with bikes. And that is not supported by Marudor. So we switched our routing provider once again and moved to a self-hosted instance of https://v5.db.transport.rest/. For that, we had to rewrite all of our server parsing and rendering code. At least now, we use the Friendly-Public-Transit-Format |
 | August 2022                 | Finally, automatically train ML-Models every night to have up-to-date models in the morning. As always, this was way harder than thought, because Kubernetes does not support GPU out of the box. And microk8s runs on containerd instead of docker, which makes it event harder to run gpu because the k8s backend has to be switched from conternerd to docker to nvidia-docker                                                                                                                                                                                                                                     |
 | August 2022                 | Trying to get into the affiliate partner program from DB, we added fancy cards for travel destinations in order to cause desire to travel. This made us rewrite almost all routing code for the frontend and allowed us to introduce a share button to share connection searches. What didn't happen was that we were excluded from the partner program, due to tactical reasons                                                                                                                                                                                                                                      |
-
-
+| October 2022                | It's restyle time! After we found out that DB stole our naming scheme for beta test sites (https://next.bahn.de/ mimics our beta testing site https://next.bahnvorhersage.de/) we inspired ourselves a little bit and remade our design to be way more clear and more intuitive                                                                                                                                                                                                                                                                                                                                       |
 
 
 ## Further Information
@@ -54,7 +53,7 @@ You can also generate plots on our [website](https://bahnvorhersage.de/stats/sta
 ## Running webserver
 
 If you for whatever reason want to run our website on your computer just do as described below.  
-But you are going to need a connection to our database, to do so [contact us...](mailto:theo.doellmann@gmx.de)
+But you are going to need a connection to our database, to do so [contact us...](mailto:info@bahnvorhersage.de)
 
 To run our webserver we strongly recommend to use Docker.
 
@@ -110,5 +109,5 @@ pip install cartopy
 ## Credits
 
 - Marius De Kuthy Meurers aka [NotSomeBot](https://github.com/mariusdkm)
-- Theo Döllman aka [McToel](https://github.com/mctoel)
+- Theo Döllman aka [McToel](https://gitlab.com/mctoel)
   
