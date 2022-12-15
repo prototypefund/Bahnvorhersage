@@ -39,7 +39,7 @@ logging.info('Done!')
 def create_app():
     import helpers.bahn_vorhersage
 
-    # Create app with changed paths  https://stackoverflow.com/a/42791810
+    # Create app with changed paths https://stackoverflow.com/a/42791810
     app = Flask(
         __name__,
         instance_relative_config=True,
@@ -57,7 +57,8 @@ def create_app():
 
     app.logger.info("DB init...")
     db.init_app(app)
-    db.create_all(app=app)
+    with app.app_context():
+        db.create_all()
     app.logger.info("Done")
 
     # ensure the instance folder exists
