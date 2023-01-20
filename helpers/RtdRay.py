@@ -357,6 +357,7 @@ def load_data(
     min_date: Optional[datetime.datetime] = None,
     long_distance_only: bool = False,
     load_categories: bool = True,
+    path: Optional[str] = None,
     **kwargs
 ) -> dd.DataFrame:
     """
@@ -375,6 +376,8 @@ def load_data(
     load_categories : bool, optional
         Whether to load the categories of the categorical columns
         of not, by default True
+    path : str, optional
+        Path to the parquet files. If None, the default path is used
     kwargs
         kwargs passed to dask.dataframe.read_parquet()
 
@@ -398,14 +401,17 @@ def load_data(
                                 ...
     Dask Name: loc-series, 4800 tasks
     """
+    if path is None:
+        path = RTD_CACHE_PATH
+
     try:
-        rtd = dd.read_parquet(RTD_CACHE_PATH, engine='pyarrow', **kwargs)
+        rtd = dd.read_parquet(path, engine='pyarrow', **kwargs)
     except FileNotFoundError:
         print(
             'There was no cache found. New data will be downloaded from the db. This will take a while.'
         )
         download_rtd()
-        rtd = dd.read_parquet(RTD_CACHE_PATH, engine='pyarrow', **kwargs)
+        rtd = dd.read_parquet(path, engine='pyarrow', **kwargs)
 
     # Filter data if min_date and / or max_date is given
     if max_date is not None or min_date is not None:
@@ -413,7 +419,7 @@ def load_data(
             _filter = rtd.loc[:, ['ar_pt', 'dp_pt']]
         else:
             _filter = dd.read_parquet(
-                RTD_CACHE_PATH, engine='pyarrow', columns=['ar_pt', 'dp_pt']
+                path, engine='pyarrow', columns=['ar_pt', 'dp_pt']
             )
 
         if max_date is not None and min_date is not None:
@@ -429,7 +435,7 @@ def load_data(
             rtd = rtd.loc[(_filter['ar_pt'] < max_date) | (_filter['dp_pt'] < max_date)]
 
     if long_distance_only:
-        _filter = dd.read_parquet(RTD_CACHE_PATH, engine='pyarrow', columns=['f'])
+        _filter = dd.read_parquet(path, engine='pyarrow', columns=['f'])
         rtd = rtd.loc[_filter['f'] == 'F']
 
     if load_categories:
@@ -466,6 +472,8 @@ def load_for_ml_model(
         Whether to return `ar_cs` and `dp_cs`, by default False
     obstacles : bool, optional
         Whether to return information about obstacles, by default True
+    **kwargs :
+        kwargs passed to RtdRay.load_data
 
     Returns
     -------
