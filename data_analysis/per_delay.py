@@ -1,74 +1,114 @@
 import os
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import pandas as pd
 import matplotlib.pyplot as plt
-from helpers import RtdRay
-from config import CACHE_PATH
+from helpers import RtdRay, groupby_index_to_flat
+from config import n_dask_workers
+from database import cached_table_fetch
+import seaborn as sns
+from matplotlib.colors import ListedColormap
+import matplotlib.ticker as ticker
+from typing import Optional
 
 
 class DelayAnalysis:
-    def __init__(self, rtd_df, use_cache=True):
-        self.CACHE_PATH = f'{CACHE_PATH}/delay_analysis.csv'
+    def __init__(self, min_delay=0, max_delay=20, **kwargs):
+        self.data = cached_table_fetch(
+            self.tablename,
+            table_generator=self.generate_data,
+            push=True,
+            index_col='index',
+            **kwargs,
+        )
+        self.data = self.data[
+            (self.data.index >= min_delay) & (self.data.index <= max_delay)
+        ]
 
-        try:
-            if not use_cache:
-                raise FileNotFoundError
-            self.data = pd.read_csv(self.CACHE_PATH, header=[0, 1], index_col=0, parse_dates=[0])
-            print('using cached data')
-        except FileNotFoundError:
-            # Use dask Client to do groupby as the groupby is complex and scales well on local cluster.
-            from dask.distributed import Client
-            client = Client(n_workers=min(16, os.cpu_count()))
+    @property
+    def tablename(self):
+        return 'per_delay'
 
-            self.data = rtd_df.groupby('ar_delay').agg({
+    def generate_data(self):
+        rtd = RtdRay.load_data(
+            columns=[
+                'ar_delay',
+                'dp_delay',
+                'ar_pt',
+                'dp_pt',
+                'ar_happened',
+                'dp_happened',
+            ],
+            long_distance_only=True,
+        )
+        from dask.distributed import Client
+
+        with Client(n_workers=n_dask_workers, threads_per_worker=2) as client:
+            rtd = (
+                rtd.groupby('ar_delay')
+                .agg(
+                    {
                         'ar_pt': ['count'],
                         'ar_happened': ['sum'],
                         'dp_pt': ['count'],
                         'dp_happened': ['sum'],
-                    }).compute()
-            self.data = self.data.nlargest(50, columns=('ar_pt', 'count'))
-            self.data = self.data.sort_index()
-            self.data.to_csv(self.CACHE_PATH)
+                    }
+                )
+                .compute()
+            )
+            rtd = rtd.loc[~rtd.index.isna(), :]
+            rtd = rtd.sort_index()
+            rtd = rtd[rtd.index >= 0]
+            rtd = groupby_index_to_flat(rtd)
 
-    def plot_count(self):
+            ar_count_sum = rtd['ar_pt_count'].sum()
+            dp_count_sum = rtd['dp_pt_count'].sum()
+
+            rtd['ar'] = rtd['ar_pt_count'] / ar_count_sum
+            rtd['dp'] = rtd['dp_pt_count'] / dp_count_sum
+
+            rtd['ar_cancellation'] = 1 - rtd['ar_happened_sum'] / rtd['ar_pt_count']
+            rtd['dp_cancellation'] = 1 - rtd['dp_happened_sum'] / rtd['dp_pt_count']
+        return rtd
+
+    def plot(self, loggy=False, save_as: Optional[str] = None,):
+        cols = ['ar', 'dp', 'ar_cancellation', 'dp_cancellation']
         fig, ax1 = plt.subplots()
-        ax1.tick_params(axis="both", labelsize=20) 
+
+        self.data[cols].plot(
+            kind='line',
+            colormap=ListedColormap(sns.color_palette('Paired', n_colors=len(cols))),
+            ax=ax1,
+            linewidth=3,
+            legend=False,
+        )
+
+        ax1.tick_params(axis="both", labelsize=20)
         index = self.data.index.to_numpy()
         ax1.set_xlim(index.min(), index.max())
-        ax1.set_yscale('log')
+        ax1.xaxis.set_major_locator(ticker.MaxNLocator(nbins='auto', integer=True))
+        if loggy:
+            ax1.set_yscale('log')
+        else:
+            ax1.set_ylim(bottom=0)
 
         ax1.grid(True)
 
-        ax1.set_title('Delay distribution', fontsize=50)
-        ax1.set_xlabel('Delay in minutes', fontsize=30)
-        ax1.set_ylabel('Count', color="blue", fontsize=30)
+        ax1.set_title('Verteilung von Verspätungen', fontsize=50)
+        ax1.set_xlabel('Verspätung in Minuten', fontsize=30)
+        ax1.set_ylabel('Wahrscheinlichkeitsdichte', fontsize=30)
 
-        ax1.plot(
-            self.data[('ar_happened', 'sum')] + self.data[('ar_happened', 'sum')],
-            color="blue",
-            linewidth=3,
-            label='Stops',
-        )
-
-        ax1.plot(
-            (self.data[('ar_pt', 'count')]
-            + self.data[('dp_pt', 'count')]
-            - self.data[('ar_happened', 'sum')]
-            - self.data[('ar_happened', 'sum')]),
-            color="orange",
-            linewidth=3,
-            label='Cancellations',
-        )             
-        
         fig.legend(fontsize=20)
-        ax1.set_ylim(bottom=0)
-        plt.show()
+        
+        if save_as:
+            fig.set_size_inches(13.6, 8.5)
+            fig.savefig(save_as, dpi=300, bbox_inches='tight')
+        else:
+            plt.show()
 
 
 if __name__ == '__main__':
-    import helpers.fancy_print_tcp
+    import helpers.bahn_vorhersage
 
-    rtd = RtdRay.load_data(columns=['ar_delay', 'dp_delay', 'ar_pt', 'dp_pt', 'ar_happened', 'dp_happened'])
-    delay = DelayAnalysis(rtd, use_cache=True)
-    delay.plot_count()
+    delay = DelayAnalysis(prefere_cache=False, generate=False)
+    delay.plot(save_as='per_delay_fern.png', loggy=False)
