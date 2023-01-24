@@ -8,7 +8,7 @@
 # kubectl rollout restart deployment.apps/recent-change-crawler
 
 
-FROM python:3.9-slim-buster
+FROM python:3.11-slim-buster
 RUN apt-get update -y && apt-get install -y gcc build-essential
 
 # Keeps Python from generating .pyc files in the container
