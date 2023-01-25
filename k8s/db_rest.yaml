@@ -28,7 +28,7 @@ spec:
         app: db-rest
     spec:
       containers:
-      - image: derhuerst/db-rest:5
+      - image: derhuerst/db-rest:6
         env:
         - name: REDIS_URL
           valueFrom:
