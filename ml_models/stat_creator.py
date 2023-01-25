@@ -26,8 +26,8 @@ if __name__ == '__main__':
             try:
                 print("Training new ml models...")
                 train_models(
-                    max_date=date,
                     min_date=date - timedelta(days=7 * 6),
+                    max_date=date,
                     return_status=True,
                     obstacles=False,
                 )
@@ -37,8 +37,8 @@ if __name__ == '__main__':
             try:
                 print('Testing old ml models...')
                 test_result = test_models(
-                    max_date=date,
-                    min_date=date - timedelta(days=1),
+                    min_date=date,
+                    max_date=date + timedelta(days=1),
                     return_status=True,
                     obstacles=False,
                 )
