@@ -169,17 +169,17 @@ def train_models(n_models=15, **load_parameters):
 
     for minute in tqdm(range(n_models), desc="Training models"):
         model_name = f"ar_{minute}"
-        print("Training", model_name, '. . .')
+        # print("Training", model_name, '. . .')
         model = train_model(ar_train, ar_labels[minute], **parameters[minute])
         save_model(model, minute=minute, ar_or_dp='ar')
-        print("Training", model_name, "done.")
+        # print("Training", model_name, "done.")
 
         minute += 1
         model_name = f"dp_{minute}"
-        print("Training", model_name, '. . .')
+        # print("Training", model_name, '. . .')
         model = train_model(dp_train, dp_labels[minute], **parameters[minute - 1])
         save_model(model, minute=minute, ar_or_dp='dp')
-        print("Training", model_name, "done.")
+        # print("Training", model_name, "done.")
 
 
 def majority_baseline(x, y):
@@ -292,45 +292,82 @@ class Predictor:
         self,
         ar_prediction: np.ndarray,
         dp_prediction: np.ndarray,
-        transfer_time: np.ndarray,
+        transfer_times: np.ndarray,
     ) -> np.ndarray:
-        con_score = np.ones(len(transfer_time))
+        """Calculate connection score based on arrival predictions,
+        departure predictions and transfer times.
+
+        Parameters
+        ----------
+        ar_p : np.ndarray
+            Arrival predictions
+        dp_p : np.ndarray
+            Departure predictions
+        transfer_times : np.ndarray
+            Transfer times between arrival and departure
+
+        Returns
+        -------
+        np.ndarray
+            Connections scores (0 <= con_score <= 1)
+        """
+        con_score = np.ones(len(transfer_times))
 
         for tra_time in range(self.n_models):
-            mask = transfer_time == tra_time
-            if mask.any():
-                con_score[mask] = (
-                    ar_prediction[mask, max(tra_time - 2, 0)]
-                    * dp_prediction[mask, max(0, 2 - tra_time)]
-                )
-                con_score[mask] = con_score[mask] + np.sum(
+            # Mask
+            m = transfer_times == tra_time
+            if m.any():
+                # If the transfer time is 5 minutes, the arriving train can be
+                # delayed by up to 3 minutes, if the departing train is on time.
+                # If the transfer time is 1 minute, even if the arriving train
+                # is on time, the departing train musst be delayed by 1 minute.
+                # Note: 0 <= tra_time < self.n_models
+                max_ar_d = max(tra_time - 2, 0)
+                min_dp_d = max(0, 2 - tra_time)
+
+                # Calculate probability that the connection is made,
+                # if the departing train is on time.
+                con_score[m] = ar_prediction[m, max_ar_d] * dp_prediction[m, min_dp_d]
+
+                # Calculate extra probability that the connection is made,
+                # if the departing train is delayed
+                con_score[m] = con_score[m] + np.sum(
                     (
                         ar_prediction[
-                            mask,
-                            max(tra_time - 2, 0)
-                            + 1 : dp_prediction.shape[1]
-                            - max(0, 2 - tra_time),
+                            m, max_ar_d + 1 : dp_prediction.shape[1] - min_dp_d
                         ]
                         - ar_prediction[
-                            mask,
-                            max(tra_time - 2, 0) : dp_prediction.shape[1]
-                            - 1
-                            - max(0, 2 - tra_time),
+                            m, max_ar_d : dp_prediction.shape[1] - 1 - min_dp_d
                         ]
                     )
                     * dp_prediction[
-                        mask,
-                        max(0, 2 - tra_time)
-                        + 1 : dp_prediction.shape[1]
-                        + min(2 - tra_time, 0),
+                        m, min_dp_d + 1 : dp_prediction.shape[1] + min(2 - tra_time, 0)
                     ],
                     axis=1,
                 )
+        # Somtimes, due to inaccuracies in the prediction, the connection score
+        # can be greater than 1. This is not possible, so we set it to 1.
         return np.minimum(con_score, np.ones(len(con_score)))
 
     def get_pred_data(
-        self, segments: list[dict], streckennetz: StreckennetzSteffi,
+        self,
+        segments: list[dict],
+        streckennetz: StreckennetzSteffi,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Collect data needed for prediction.
+
+        Parameters
+        ----------
+        segments : list[dict]
+            The segments of a train journey
+        streckennetz : StreckennetzSteffi
+            An instance of the StreckennetzSteffi class
+
+        Returns
+        -------
+        tuple[pd.DataFrame, pd.DataFrame]
+            ar_data, dp_data
+        """        
         dtypes = {
             'station': 'int',
             'lat': 'float',
