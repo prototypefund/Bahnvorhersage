@@ -102,43 +102,46 @@ def stats_generator() -> pd.DataFrame:
             max_date=today,
         ).compute()
 
-        stats['new_date'] = yesterday.strftime('%d.%m.%Y')
-        stats['new_num_ar_data'] = int(rtd['ar_happened'].sum())
-        stats['new_num_dp_data'] = int(rtd['dp_happened'].sum())
-        stats['new_num_ar_cancel'] = int((rtd['ar_cs'] == 'c').sum())
-        stats['new_num_dp_cancel'] = int((rtd['dp_cs'] == 'c').sum())
+        if not rtd.empty:
+            stats['new_date'] = yesterday.strftime('%d.%m.%Y')
+            stats['new_num_ar_data'] = int(rtd['ar_happened'].sum())
+            stats['new_num_dp_data'] = int(rtd['dp_happened'].sum())
+            stats['new_num_ar_cancel'] = int((rtd['ar_cs'] == 'c').sum())
+            stats['new_num_dp_cancel'] = int((rtd['dp_cs'] == 'c').sum())
 
-        stats['new_max_ar_delay'] = int(rtd['ar_delay'].max())
-        stats['new_max_dp_delay'] = int(rtd['dp_delay'].max())
-        stats['new_avg_ar_delay'] = float(round(rtd['ar_delay'].mean(), 2))
-        stats['new_avg_dp_delay'] = float(round(rtd['dp_delay'].mean(), 2))
+            stats['new_max_ar_delay'] = int(rtd['ar_delay'].max())
+            stats['new_max_dp_delay'] = int(rtd['dp_delay'].max())
+            stats['new_avg_ar_delay'] = float(round(rtd['ar_delay'].mean(), 2))
+            stats['new_avg_dp_delay'] = float(round(rtd['dp_delay'].mean(), 2))
 
-        stats['new_perc_ar_delay'] = float(
-            round(((rtd['ar_delay'] > 5).sum() / (stats['new_num_ar_data'])) * 100, 2)
-        )
-        stats['new_perc_dp_delay'] = float(
-            round(((rtd['dp_delay'] > 5).sum() / (stats['new_num_dp_data'])) * 100, 2)
-        )
-        stats['new_perc_ar_cancel'] = float(
-            round(
-                (
-                    stats['new_num_ar_cancel']
-                    / (stats['new_num_ar_data'] + stats['new_num_ar_cancel'])
-                )
-                * 100,
-                2,
+            stats['new_perc_ar_delay'] = float(
+                round(((rtd['ar_delay'] > 5).sum() / (stats['new_num_ar_data'])) * 100, 2)
             )
-        )
-        stats['new_perc_dp_cancel'] = float(
-            round(
-                (
-                    stats['new_num_dp_cancel']
-                    / (stats['new_num_dp_data'] + stats['new_num_dp_cancel'])
-                )
-                * 100,
-                2,
+            stats['new_perc_dp_delay'] = float(
+                round(((rtd['dp_delay'] > 5).sum() / (stats['new_num_dp_data'])) * 100, 2)
             )
-        )
+            stats['new_perc_ar_cancel'] = float(
+                round(
+                    (
+                        stats['new_num_ar_cancel']
+                        / (stats['new_num_ar_data'] + stats['new_num_ar_cancel'])
+                    )
+                    * 100,
+                    2,
+                )
+            )
+            stats['new_perc_dp_cancel'] = float(
+                round(
+                    (
+                        stats['new_num_dp_cancel']
+                        / (stats['new_num_dp_data'] + stats['new_num_dp_cancel'])
+                    )
+                    * 100,
+                    2,
+                )
+            )
+        else:
+            print('WARNING: There was no data found on:', yesterday.strftime('%d.%m.%Y'))
 
         return pd.DataFrame({key: [stats[key]] for key in stats})
 

@@ -37,7 +37,6 @@ spec:
     - db-rest.bahnvorhersage.de
     - trainconnectionprediction.de
     - next.trainconnectionprediction.de
-    - edury.trainconnectionprediction.de
     - nextcloud.sfz-eningen.de
     - nextcloud.marcpanse.de
     - paralox-nextcloud.de
@@ -48,6 +47,8 @@ spec:
     - overleaf.sfz-eningen.de
     - overleaf.marcpanse.de
     - focalboard.marcpanse.de
+    - podcast-tech24.de
+    - thesilentwave.de
     secretName: default-tls-secret
   rules:
   - host: "bahnvorhersage.de"
@@ -116,16 +117,6 @@ spec:
   - host: "next.trainconnectionprediction.de"
     http: *test_webserver
 
-  - host: "edury.trainconnectionprediction.de"
-    http:
-      paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: edury-decks-service
-              port:
-                number: 80
   - host: "overleaf.marcpanse.de"
     http: &overleaf
       paths:
@@ -168,5 +159,25 @@ spec:
           backend:
             service:
               name: sfz-deny-access
+              port:
+                number: 80
+  - host: "podcast-tech24.de"
+    http: &podcast
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-podcast
+              port:
+                number: 80
+  - host: "thesilentwave.de"
+    http: &silentwave
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-silentwave
               port:
                 number: 80
