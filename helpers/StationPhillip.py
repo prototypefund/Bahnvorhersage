@@ -43,8 +43,8 @@ class StationPhillip:
         # TODO: parse array when loading from db
         stations['meta'] = (
             stations['meta']
-            .str.replace('{', '')
-            .str.replace('}', '')
+            .str.replace('{', '', regex=False)
+            .str.replace('}', '', regex=False)
             .str.split(',')
             .apply(lambda x: [int(i) for i in x] if x is not None else None)
         )
@@ -733,7 +733,7 @@ def search_station_marudor(search_term):
     return matches
 
 
-def search_iris_single(search_term: Union[str, int], dev_portal_api=False):
+def get_stations_from_iris(search_term: Union[str, int], dev_portal_api=False):
     import urllib.parse
     from rtd_crawler.xml_parser import xml_to_json
     import lxml.etree as etree
@@ -782,7 +782,7 @@ def search_iris_multiple(search_terms: Set[Union[str, int]], dev_portal_api=Fals
     from tqdm import tqdm
 
     return {
-        search_term: search_iris_single(search_term, dev_portal_api)
+        search_term: get_stations_from_iris(search_term, dev_portal_api)
         for search_term in tqdm(search_terms, desc=f'Searching IRIS')
     }
 
