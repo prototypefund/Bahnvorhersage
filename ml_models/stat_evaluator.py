@@ -11,6 +11,7 @@ from helpers import colormaps
 from datetime import datetime
 from typing import Optional
 
+
 def plot_ar(
     stats: pd.DataFrame, min_minute: int, max_minute: int, save_as: Optional[str] = None
 ):
@@ -44,7 +45,7 @@ def plot_ar(
             label=f'Baseline {minute}',
         )
 
-    ax.set_title(f'AR {min_minute} - {max_minute}', fontsize=50)
+    ax.set_title(f'AR {min_minute} - {max_minute - 1}', fontsize=50)
     ax.tick_params(axis='both', labelsize=20)
     ax.set_ylabel('Genauigkeit', fontsize=30)
     ax.set_xlabel('Datum', fontsize=30)
@@ -93,7 +94,7 @@ def plot_dp(
             label=f'Baseline {minute}',
         )
 
-    ax.set_title(f'DP {min_minute} - {max_minute}', fontsize=50)
+    ax.set_title(f'DP {min_minute} - {max_minute - 1}', fontsize=50)
     ax.tick_params(axis='both', labelsize=20)
     ax.set_ylabel('Genauigkeit', fontsize=30)
     ax.set_xlabel('Datum', fontsize=30)
@@ -110,7 +111,7 @@ def plot_dp(
 
 
 if __name__ == '__main__':
-    data = json.load(open("test copy.json", "r"))
+    data = json.load(open("cache/test copy.json", "r"))
     parsed = []
 
     for key in data:
