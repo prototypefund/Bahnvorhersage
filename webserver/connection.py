@@ -9,7 +9,6 @@ from webserver import streckennetz, predictor
 from concurrent.futures import ThreadPoolExecutor
 import datetime
 from helpers import ttl_lru_cache
-from . import client
 import numpy as np
 
 
@@ -296,13 +295,19 @@ def extract_iris_like(journeys: list[dict], train_trips: dict) -> list[dict]:
 # wrong results. Thus, we only cache the result for 3 minutes.
 @ttl_lru_cache(seconds_to_live=180, maxsize=500)
 def get_trip_of_train(trip_id: str):
-    trip = client.trip(trip_id)
-    waypoints = [stopover.stop.name for stopover in trip.stopovers]
+    trip: dict = requests.get(
+        'https://db-rest.bahnvorhersage.de/trips/{}'.format(trip_id),
+    ).json()['trip']
+    waypoints = [stopover['stop']['name'] for stopover in trip['stopovers']]
     stay_times = [
-        (stopover.departure - stopover.arrival).seconds // 60
-        if stopover.departure is not None and stopover.arrival is not None
+        (
+            datetime.datetime.fromisoformat(stopover['departure'])
+            - datetime.datetime.fromisoformat(stopover['arrival'])
+        ).seconds
+        // 60
+        if stopover['departure'] is not None and stopover['arrival'] is not None
         else None
-        for stopover in trip.stopovers
+        for stopover in trip['stopovers']
     ]
     return trip_id, waypoints, stay_times
 

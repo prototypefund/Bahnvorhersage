@@ -10,7 +10,6 @@ import config
 from flask import Flask
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-import pyhafas
 from helpers import StreckennetzSteffi, logging
 from data_analysis.per_station import PerStationOverTime
 from webserver.db_logger import db
@@ -20,8 +19,6 @@ from ml_models.xgboost_multi_model import Predictor
 import matplotlib
 
 matplotlib.use('Agg')
-
-client = pyhafas.HafasClient(pyhafas.profile.DBProfile())
 
 logging.info('Initialising streckennetz')
 streckennetz = StreckennetzSteffi(prefer_cache=False)
