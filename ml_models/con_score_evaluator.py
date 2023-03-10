@@ -4,9 +4,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd
 import numpy as np
 from ml_models.xgboost_multi_model import Predictor
+from helpers import ConnectionRay
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from typing import Optional
+import scipy
 
 
 def scatterplot_trend_line(
@@ -25,7 +27,7 @@ def scatterplot_trend_line(
 
     ax.set_xlim(x.min(), x.max())
     ax.grid(True)
-    
+
     ax.scatter(x=x, y=y, color="blue", alpha=0.05, edgecolor='none')
     ax.set_ylim(-30, 30)
     # calc the trendline
@@ -47,12 +49,22 @@ def scatterplot_trend_line(
     else:
         plt.show()
 
+def cor_test(x, y, name: str):
+    result = scipy.stats.spearmanr(x, y)
+    print('Spearman correlation test result:')
+    print('---------------------------------')
+    print(f'{name}: {result}')
+
+    result = scipy.stats.pearsonr(x, y)
+    print('Pearson correlation test result:')
+    print('--------------------------------')
+    print(f'{name}: {result}')
+
 
 if __name__ == "__main__":
     pred = Predictor()
-    from helpers import ConnectionRay
-
     con_ray = ConnectionRay()
+
     ar_rtd = con_ray.load_ar(
         return_times=True,
         obstacles=False,
@@ -84,11 +96,15 @@ if __name__ == "__main__":
     )
 
     transfer_time = (
-        (dp_rtd['dp_pt'] - ar_rtd['ar_pt']) / pd.Timedelta(minutes=1)
-    ).astype('int').to_numpy()
+        ((dp_rtd['dp_pt'] - ar_rtd['ar_pt']) / pd.Timedelta(minutes=1))
+        .astype('int')
+        .to_numpy()
+    )
     real_transfer_time = (
-        (dp_rtd['dp_ct'] - ar_rtd['ar_ct']) / pd.Timedelta(minutes=1)
-    ).astype('int').to_numpy()
+        ((dp_rtd['dp_ct'] - ar_rtd['ar_ct']) / pd.Timedelta(minutes=1))
+        .astype('int')
+        .to_numpy()
+    )
 
     ar_rtd = ar_rtd.drop(columns=['ar_pt', 'ar_ct'])
     dp_rtd = dp_rtd.drop(columns=['dp_pt', 'dp_ct'])
@@ -132,6 +148,7 @@ if __name__ == "__main__":
         title='5 Minuten Umsteigezeit',
         save_as='con_score_5_min_real_transfer_time.png',
     )
+    cor_test(five_minute_con_score, five_minute_real_transfer_time, '5 min real')
 
     scatterplot_trend_line(
         x=con_score,
@@ -141,6 +158,7 @@ if __name__ == "__main__":
         title='2 - 10 Minuten Umsteigezeit',
         save_as='con_score_2_to_10_min_planned_transfer_time.png',
     )
+    cor_test(con_score, transfer_time, '2-10 min planned')
 
     scatterplot_trend_line(
         x=con_score,
@@ -150,3 +168,4 @@ if __name__ == "__main__":
         title='2 - 10 Minuten Umsteigezeit',
         save_as='con_score_2_to_10_min_real_transfer_time.png',
     )
+    cor_test(con_score, real_transfer_time, '2-10 min real')
