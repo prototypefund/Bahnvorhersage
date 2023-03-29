@@ -86,7 +86,7 @@ class Rtd(Base):
             print(f'database.{self.__tablename__} running offline!')
 
     @staticmethod
-    def max_date(session) -> datetime.datetime:
+    def max_date(session: sqlalchemy.orm.Session) -> datetime.datetime:
         """
         Get the max date used in Rtd. Can be used to select missing data to parse
 
@@ -96,6 +96,18 @@ class Rtd(Base):
             The max date used in Rtd
         """
         return session.query(sqlalchemy.func.max(Rtd.ar_pt)).scalar()
+
+    @staticmethod
+    def count_entries(session: sqlalchemy.orm.Session) -> int:
+        """
+        Get the number of rows in db.
+
+        Returns
+        -------
+        int
+            Number of Rows.
+        """
+        return session.query(Rtd).count()
 
     @staticmethod
     def upsert(df: pd.DataFrame, engine: sqlalchemy.engine):
@@ -118,26 +130,6 @@ class Rtd(Base):
                 add_new_columns=False,
                 adapt_dtype_of_empty_db_columns=False,
             )
-
-    def __init__(self) -> None:
-        try:
-            engine = get_engine()
-            self.metadata.create_all(engine)
-            engine.dispose()
-        except sqlalchemy.exc.OperationalError:
-            print(f'database.{self.__tablename__} running offline!')
-
-    @staticmethod
-    def max_date(session) -> datetime.datetime:
-        """
-        Get the max date used in Rtd. Can be used to select missing data to parse
-
-        Returns
-        -------
-        datetime.datetime
-            The max date used in Rtd
-        """
-        return session.query(sqlalchemy.func.max(Rtd.ar_pt)).scalar()
 
 
 class RtdArrays(Base):
@@ -243,4 +235,12 @@ sql_types = {
 }
 
 if __name__ == '__main__':
+    from helpers import bahn_vorhersage
+    
     Rtd()
+
+    from database import Rtd, sessionfactory
+    engine, Session = sessionfactory()
+
+    with Session() as session:
+        print('Rtd len in db:', Rtd.count_entries(session))
