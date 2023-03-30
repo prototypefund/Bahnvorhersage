@@ -39,11 +39,15 @@ def find_stations() -> Set[str]:
 
 
     with Session() as session:
+        print('Get processable chunk limits from table...')
         db_chunk_limits = PlanById.get_chunk_limits(session)
 
         for chunk_limits in tqdm(db_chunk_limits, desc='Finding stations'):
             station_names.update(extract_station_names(session, chunk_limits))
             print('Found {} stations'.format(len(station_names)))
+
+    return station_names
+
 
 def main():
     redis_client = Redis.from_url(redis_url)
