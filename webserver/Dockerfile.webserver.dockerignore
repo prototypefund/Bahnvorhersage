@@ -16,7 +16,3 @@
 **/*.log
 **/.DS_Store
 **/Thumbs.db
-
-# Node stuff
-**/node_modules
-**/dist
