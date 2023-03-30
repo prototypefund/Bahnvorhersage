@@ -65,15 +65,15 @@ WORKDIR /usr/src/app
 # RUN addgroup --system --gid 420 tcp && adduser --system --no-create-home --uid 420 --gid 420 tcp
 
 ## Add webserver and librays
-COPY ./data_analysis/ /usr/src/app/data_analysis
+COPY ./data_analysis/ /usr/src/app/data_analysis/
 COPY ./database/ /usr/src/app/database/
 COPY ./helpers/ /usr/src/app/helpers/
-COPY ./ml_models/ /usr/src/app/ml_models
-COPY ./model_analysis/ /usr/src/app/ml_models
-COPY ./python/ /usr/src/app/python
-COPY ./rtd_crawler/ /usr/src/app/rtd_crawler
-COPY ./tests/ /usr/src/app/tests
-COPY ./update_butler/ /usr/src/app/update_butler
+COPY ./ml_models/ /usr/src/app/ml_models/
+COPY ./model_analysis/ /usr/src/app/model_analysis/
+COPY ./python/ /usr/src/app/python/
+COPY ./rtd_crawler/ /usr/src/app/rtd_crawler/
+COPY ./tests/ /usr/src/app/tests/
+COPY ./update_butler/ /usr/src/app/update_butler/
 COPY ./webserver/ /usr/src/app/webserver/
 COPY __init__.py /usr/src/app/__init__.py
 COPY ./webserverconfig.py /usr/src/app/webserverconfig.py
