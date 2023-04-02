@@ -49,6 +49,8 @@ spec:
     - focalboard.marcpanse.de
     - podcast-tech24.de
     - thesilentwave.de
+    - dzconnect.de
+    - wohnung-in-esslingen.de
     secretName: default-tls-secret
   rules:
   - host: "bahnvorhersage.de"
@@ -179,5 +181,25 @@ spec:
           backend:
             service:
               name: sfz-silentwave
+              port:
+                number: 80
+  - host: "dzconnect.de"
+    http: &dzconnect
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-dzconnect
+              port:
+                number: 80
+  - host: "wohnung-in-esslingen.de"
+    http: &wohnung-in-esslingen
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-wohnung-in-esslingen
               port:
                 number: 80

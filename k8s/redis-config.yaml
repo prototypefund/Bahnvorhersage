@@ -4,7 +4,7 @@ metadata:
   name: example-redis-config
 data:
   redis-config: |
-    maxmemory 3GB
+    maxmemory 8GB
     maxmemory-policy allkeys-lru
-    requirepass *******enter-password-here*******
+    requirepass LHHhq7jivqfWmcLAeUvD39EPpaGAFVMm6yH5GeerBwWKjcgbL5iybKukLNL63Rs5
     bind * -::*
