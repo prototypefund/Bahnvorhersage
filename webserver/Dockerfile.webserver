@@ -6,7 +6,7 @@
 # If not so replace -v $(pwd)/config_docker.py:/mnt/config/config.py with -v $(pwd)/config.py:/mnt/config/config.py
 
 # This build file is from https://www.rockyourcode.com/create-a-multi-stage-docker-build-for-python-flask-and-postgres/
-FROM osgeo/proj:9.0.1 as proj
+FROM osgeo/proj:9.2.0 as proj
 
 
 ## Base image
