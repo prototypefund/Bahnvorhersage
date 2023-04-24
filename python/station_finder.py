@@ -1,20 +1,35 @@
-import os
-import sys
+from typing import Set, Tuple
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from database import sessionfactory, PlanById
-from typing import Tuple, Set
 import sqlalchemy
-from rtd_crawler.parser_helpers import parse_path
-from tqdm import tqdm
 from redis import Redis
+from tqdm import tqdm
+
 from config import redis_url
+from database import PlanById, sessionfactory
+from rtd_crawler.parser_helpers import parse_path
 
 
 def extract_station_names(
     session: sqlalchemy.orm.Session, chunk_limits: Tuple[int, int]
 ) -> Set[str]:
+    """
+    For each historic delay datapoint, there is a path of stations that
+    the train passed through. If a new station is build, it probably
+    lies on one of these paths. This function extracts all station names
+    from the paths of a chunk of historic delay datapoints.
+
+    Parameters
+    ----------
+    session : sqlalchemy.orm.Session
+        Session to connect to the database
+    chunk_limits : Tuple[int, int]
+        Upper and lower limit of the hash_id of the chunk to process
+
+    Returns
+    -------
+    Set[str]
+        Set of station names
+    """    
     station_names = set()
 
     stops = PlanById.get_stops_from_chunk(session, chunk_limits)
@@ -23,20 +38,27 @@ def extract_station_names(
             stations = parse_path(stop['ar'][0].get('ppth'))
             if stations is not None:
                 station_names.update(stations)
-        
+
         if 'dp' in stop:
             stations = parse_path(stop['dp'][0].get('ppth'))
             if stations is not None:
                 station_names.update(stations)
-    
+
     return station_names
 
 
 def find_stations() -> Set[str]:
+    """
+    Find all station names that exist in the historic delay data.
+
+    Returns
+    -------
+    Set[str]
+        Set of all station names
+    """
     engine, Session = sessionfactory()
 
     station_names = set()
-
 
     with Session() as session:
         print('Get processable chunk limits from table...')
@@ -54,7 +76,6 @@ def main():
 
     stations = find_stations()
     redis_client.sadd('station_names', *stations)
-
 
 
 if __name__ == '__main__':
