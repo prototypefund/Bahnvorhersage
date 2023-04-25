@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: station-finder
+  namespace: default
+spec:
+  schedule: "0 0 * * 6"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          containers:
+            - name: station-finder
+              image: trainconnectionprediction/bahnvorhersage:latest
+              command: ["python3"]
+              args: ["python/station_finder.py"]
+              imagePullPolicy: Always
+              volumeMounts:
+                - name: tz-berlin # set timezone to CEST
+                  mountPath: /etc/localtime
+                - name: config
+                  mountPath: /usr/src/app/config.py
+                  subPath: config.py
+                - name: cache-pvc-storage
+                  mountPath: /usr/src/app/cache
+          restartPolicy: Never
+          volumes:
+            - name: "config"
+              configMap:
+                name: "config"
+            - name: cache-pvc-storage
+              persistentVolumeClaim:
+                claimName: cache-pvc
+            - name: tz-berlin # set timezone to CEST
+              hostPath:
+                path: /usr/share/zoneinfo/Europe/Berlin

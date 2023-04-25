@@ -65,3 +65,31 @@ build-update-butler:
       --build-arg BUILDKIT_INLINE_CACHE=1
       "."
     - docker push $CI_REGISTRY_IMAGE_UPDATE_BUTLER
+
+
+build_bahnvorhersage:
+  # Use the official docker image.
+  image: docker:latest
+  stage: build
+  only:
+    - master
+    - jufo_bundeswettbewerb
+  services:
+    - docker:dind
+  before_script:
+    - echo -n $CI_REGISTRY_TOKEN | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+  script:
+    - docker build
+      --cache-from ${CI_REGISTRY_IMAGE_BAHNVORHERSAGE}_builder
+      --tag ${CI_REGISTRY_IMAGE_BAHNVORHERSAGE}_builder
+      --target compile-image
+      --build-arg BUILDKIT_INLINE_CACHE=1
+      "."
+    - docker push ${CI_REGISTRY_IMAGE_BAHNVORHERSAGE}_builder
+    - docker build
+      --cache-from ${CI_REGISTRY_IMAGE_BAHNVORHERSAGE}_builder
+      --cache-from $CI_REGISTRY_IMAGE_BAHNVORHERSAGE
+      --tag $CI_REGISTRY_IMAGE_BAHNVORHERSAGE
+      --build-arg BUILDKIT_INLINE_CACHE=1
+      "."
+    - docker push $CI_REGISTRY_IMAGE_BAHNVORHERSAGE

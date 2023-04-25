@@ -1,12 +1,13 @@
 import os
 import sys
 from typing import Dict, List, Tuple
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import sqlalchemy
 from sqlalchemy import Column, BIGINT
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.ext.declarative import declarative_base
-from database import engine, get_engine, upsert_base
+from database import get_engine, upsert_base
 import json
 import numpy as np
 
@@ -33,12 +34,17 @@ class PlanById(Base):
     @staticmethod
     def add_plan(session: sqlalchemy.orm.Session, plan: dict):
         if plan:
-            new_plan = [{'hash_id': hash_id, 'stop': json.dumps(plan[hash_id])}
-                            for hash_id in plan if json.dumps(plan[hash_id])]
+            new_plan = [
+                {'hash_id': hash_id, 'stop': json.dumps(plan[hash_id])}
+                for hash_id in plan
+                if json.dumps(plan[hash_id])
+            ]
             PlanById.upsert(session, new_plan)
 
     @staticmethod
-    def get_stops(session: sqlalchemy.orm.Session, hash_ids: List[int]) -> Dict[int, dict]:
+    def get_stops(
+        session: sqlalchemy.orm.Session, hash_ids: List[int]
+    ) -> Dict[int, dict]:
         """
         Get stops that have a given hash_id
 
@@ -67,47 +73,67 @@ class PlanById(Base):
         return session.query(PlanById).count()
 
     @staticmethod
-    def get_chunk_limits(session: sqlalchemy.orm.Session):
+    def get_chunk_limits(session: sqlalchemy.orm.Session) -> List[Tuple[int, int]]:
         minimum = session.query(sqlalchemy.func.min(PlanById.hash_id)).scalar()
         maximum = session.query(sqlalchemy.func.max(PlanById.hash_id)).scalar()
         count = session.query(PlanById.hash_id).count()
         n_divisions = count // 20_000
         divisions = np.linspace(minimum, maximum, n_divisions, dtype=int)
-        chunk_limits = [(divisions[i], divisions[i+1]) for i in range(len(divisions) - 1)]
+        chunk_limits = [
+            (int(divisions[i]), int(divisions[i + 1])) for i in range(len(divisions) - 1)
+        ]
         return chunk_limits
 
     @staticmethod
-    def get_stops_from_chunk(session: sqlalchemy.orm.Session, chunk_limits: Tuple[int, int]) -> Dict[int, dict]:
+    def get_stops_from_chunk(
+        session: sqlalchemy.orm.Session, chunk_limits: Tuple[int, int]
+    ) -> Dict[int, dict]:
         """
-        Get stops that have a given hash_id
+        Get stops that have a hash_id within chunk_limits
 
         Parameters
         ----------
-        hash_ids: list
-            A list of hash_ids to get the corresponding rows from the db.
+        session: sqlalchemy.orm.Session
+            The session to use for the query.
+
+        chunk_limits: tuple
+            A tuple with the lower and upper limit of the chunk.
 
         Returns
         -------
-        Sqlalchemy query with the results.
+        Dict[int, dict]: A dictionary with the hash_id as key and the stop as value.
         """
         # IMPORTANT:
         # The filter should use ints and not floats. Ints makes the postgres planner
         # do a fast Index Scan compared to a slow Parallel Seq Scan
-        stops = session.query(PlanById) \
-            .filter(PlanById.hash_id >= int(chunk_limits[0]), PlanById.hash_id <= int(chunk_limits[1])).all()
+        stops = (
+            session.query(PlanById)
+            .filter(
+                PlanById.hash_id >= int(chunk_limits[0]),
+                PlanById.hash_id <= int(chunk_limits[1]),
+            )
+            .all()
+        )
 
         return {stop.hash_id: json.loads(stop.stop) for stop in stops}
 
     @staticmethod
-    def get_hash_ids_in_chunk_limits(session: sqlalchemy.orm.Session, chunk_limits: Tuple[int, int]) -> List[int]:
-        hash_ids = session.query(PlanById.hash_id) \
-            .filter(PlanById.hash_id >= chunk_limits[0], PlanById.hash_id <= chunk_limits[1]).all()
+    def get_hash_ids_in_chunk_limits(
+        session: sqlalchemy.orm.Session, chunk_limits: Tuple[int, int]
+    ) -> List[int]:
+        hash_ids = (
+            session.query(PlanById.hash_id)
+            .filter(
+                PlanById.hash_id >= chunk_limits[0], PlanById.hash_id <= chunk_limits[1]
+            )
+            .all()
+        )
         return [hash_id[0] for hash_id in hash_ids]
-
 
 
 if __name__ == '__main__':
     from database.engine import sessionfactory
+
     engine, Session = sessionfactory()
 
     with Session() as session:

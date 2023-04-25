@@ -1,13 +1,9 @@
-import os
-import sys
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from helpers import StationPhillip
 import datetime
+
 import numpy as np
 import pandas as pd
 
+from helpers import StationPhillip
 
 stations = StationPhillip(prefer_cache=False)
 
@@ -196,32 +192,32 @@ def test_get_ds100():
 def test_get_location():
     np.testing.assert_allclose(
         stations.get_location(name='Tübingen Hbf', date=datetime.datetime(2021, 1, 1)),
-        (9.055407, 48.515811),
+        (9.056003, 48.515663),
     )
 
     np.testing.assert_allclose(
         stations.get_location(name='Köln Hbf', date=datetime.datetime(2021, 1, 1)),
-        (6.958729, 50.943030),
+        (6.959197, 50.942823),
     )
 
     np.testing.assert_allclose(
         stations.get_location(eva=8000141, date=datetime.datetime(2021, 1, 1)),
-        (9.055407, 48.515811),
+        (9.056003, 48.515663),
     )
 
     np.testing.assert_allclose(
         stations.get_location(eva=8000207, date=datetime.datetime(2021, 1, 1)),
-        (6.958729, 50.943030),
+        (6.959197, 50.942823),
     )
 
     np.testing.assert_allclose(
         stations.get_location(ds100='TT', date=datetime.datetime(2021, 1, 1)),
-        (9.055407, 48.515811),
+        (9.056003, 48.515663),
     )
 
     np.testing.assert_allclose(
         stations.get_location(ds100='KK', date=datetime.datetime(2021, 1, 1)),
-        (6.958729, 50.943030),
+        (6.959197, 50.942823),
     )
 
     locations = stations.get_location(
@@ -237,11 +233,11 @@ def test_get_location():
     assert locations['lon'].dtype == np.float64
     np.testing.assert_allclose(
         locations.loc[('Tübingen Hbf', datetime.datetime(2021, 1, 1))],
-        (9.055407, 48.515811),
+        (9.056003, 48.515663),
     )
     np.testing.assert_allclose(
         locations.loc[('Köln Hbf', datetime.datetime(2021, 1, 1))],
-        (6.958729, 50.943030),
+        (6.959197, 50.942823),
     )
 
     locations = stations.get_location(
@@ -256,10 +252,10 @@ def test_get_location():
     assert locations['lat'].dtype == np.float64
     assert locations['lon'].dtype == np.float64
     np.testing.assert_allclose(
-        locations.loc[(8000141, datetime.datetime(2021, 1, 1))], (9.055407, 48.515811)
+        locations.loc[(8000141, datetime.datetime(2021, 1, 1))], (9.056003, 48.515663)
     )
     np.testing.assert_allclose(
-        locations.loc[(8000207, datetime.datetime(2021, 1, 1))], (6.958729, 50.943030)
+        locations.loc[(8000207, datetime.datetime(2021, 1, 1))], (6.959197, 50.942823)
     )
 
     locations = stations.get_location(
@@ -274,10 +270,10 @@ def test_get_location():
     assert locations['lat'].dtype == np.float64
     assert locations['lon'].dtype == np.float64
     np.testing.assert_allclose(
-        locations.loc[('TT', datetime.datetime(2021, 1, 1))], (9.055407, 48.515811)
+        locations.loc[('TT', datetime.datetime(2021, 1, 1))], (9.056003, 48.515663)
     )
     np.testing.assert_allclose(
-        locations.loc[('KK', datetime.datetime(2021, 1, 1))], (6.958729, 50.943030)
+        locations.loc[('KK', datetime.datetime(2021, 1, 1))], (6.959197, 50.942823)
     )
     assert (
         stations.get_ds100(name='Tübingen Hbf', date=datetime.datetime(2021, 1, 1))
@@ -315,32 +311,32 @@ def test_get_location():
 def test_get_location():
     np.testing.assert_allclose(
         stations.get_location(name='Tübingen Hbf', date=datetime.datetime(2021, 1, 1)),
-        (9.055407, 48.515811),
+        (9.056003, 48.515663),
     )
 
     np.testing.assert_allclose(
         stations.get_location(name='Köln Hbf', date=datetime.datetime(2021, 1, 1)),
-        (6.958729, 50.943030),
+        (6.959197, 50.942823),
     )
 
     np.testing.assert_allclose(
         stations.get_location(eva=8000141, date=datetime.datetime(2021, 1, 1)),
-        (9.055407, 48.515811),
+        (9.056003, 48.515663),
     )
 
     np.testing.assert_allclose(
         stations.get_location(eva=8000207, date=datetime.datetime(2021, 1, 1)),
-        (6.958729, 50.943030),
+        (6.959197, 50.942823),
     )
 
     np.testing.assert_allclose(
         stations.get_location(ds100='TT', date=datetime.datetime(2021, 1, 1)),
-        (9.055407, 48.515811),
+        (9.056003, 48.515663),
     )
 
     np.testing.assert_allclose(
         stations.get_location(ds100='KK', date=datetime.datetime(2021, 1, 1)),
-        (6.958729, 50.943030),
+        (6.959197, 50.942823),
     )
 
     locations = stations.get_location(
@@ -356,11 +352,11 @@ def test_get_location():
     assert locations['lon'].dtype == np.float64
     np.testing.assert_allclose(
         locations.loc[('Tübingen Hbf', datetime.datetime(2021, 1, 1))],
-        (9.055407, 48.515811),
+        (9.056003, 48.515663),
     )
     np.testing.assert_allclose(
         locations.loc[('Köln Hbf', datetime.datetime(2021, 1, 1))],
-        (6.958729, 50.943030),
+        (6.959197, 50.942823),
     )
 
     locations = stations.get_location(
@@ -375,10 +371,10 @@ def test_get_location():
     assert locations['lat'].dtype == np.float64
     assert locations['lon'].dtype == np.float64
     np.testing.assert_allclose(
-        locations.loc[(8000141, datetime.datetime(2021, 1, 1))], (9.055407, 48.515811)
+        locations.loc[(8000141, datetime.datetime(2021, 1, 1))], (9.056003, 48.515663)
     )
     np.testing.assert_allclose(
-        locations.loc[(8000207, datetime.datetime(2021, 1, 1))], (6.958729, 50.943030)
+        locations.loc[(8000207, datetime.datetime(2021, 1, 1))], (6.959197, 50.942823)
     )
 
     locations = stations.get_location(
@@ -393,8 +389,8 @@ def test_get_location():
     assert locations['lat'].dtype == np.float64
     assert locations['lon'].dtype == np.float64
     np.testing.assert_allclose(
-        locations.loc[('TT', datetime.datetime(2021, 1, 1))], (9.055407, 48.515811)
+        locations.loc[('TT', datetime.datetime(2021, 1, 1))], (9.056003, 48.515663)
     )
     np.testing.assert_allclose(
-        locations.loc[('KK', datetime.datetime(2021, 1, 1))], (6.958729, 50.943030)
+        locations.loc[('KK', datetime.datetime(2021, 1, 1))], (6.959197, 50.942823)
     )

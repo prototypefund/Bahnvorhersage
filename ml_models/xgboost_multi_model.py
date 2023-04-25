@@ -231,8 +231,76 @@ def test_models(n_models=15, **load_parameters):
     return test_results
 
 
+def feature_importance(ar_or_dp: Literal['ar', 'dp']):
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+
+    importances = np.zeros((15, Predictor.model(0, ar_or_dp).n_features_in_))
+    for i in range(15):
+        importances[i, :] = Predictor.model(i, ar_or_dp).feature_importances_
+
+    importances = pd.DataFrame(importances, columns=Predictor.FEATURES)
+    importances.rename(columns=Predictor.FEATUER_NAMES, inplace=True)
+
+    ax = sns.heatmap(importances, annot=True, linewidths=0.5)
+    ax.set_ylabel('Model number', fontsize=30)
+    ax.set_xlabel('Feature', fontsize=30)
+
+    fig = ax.get_figure()
+    fig.set_size_inches(13.6, 8.5)
+    fig.savefig(f"feature_importance_{ar_or_dp}.png", dpi=300, bbox_inches='tight')
+    plt.clf()
+
+
 class Predictor:
     CATEGORICALS = ['o', 'c', 'n', 'station', 'pp']
+    FEATURES = [
+        'station',
+        'lat',
+        'lon',
+        'o',
+        'c',
+        'n',
+        'distance_to_start',
+        'distance_to_end',
+        'pp',
+        'stop_id',
+        'minute',
+        'day',
+        'stay_time',
+    ]
+
+    FEATUER_NAMES = {
+        'station': 'Station',
+        'lat': 'Latitude',
+        'lon': 'Longitude',
+        'o': 'Operator',
+        'c': 'Train type',
+        'n': 'Train number',
+        'distance_to_start': 'Distance to start',
+        'distance_to_end': 'Distance to end',
+        'pp': 'Platform',
+        'stop_id': 'Stop number',
+        'minute': 'Minute',
+        'day': 'Day',
+        'stay_time': 'Stay time',
+    }
+
+    FEATURE_DTYPES = {
+        'station': 'int',
+        'lat': 'float',
+        'lon': 'float',
+        'o': 'int',
+        'c': 'int',
+        'n': 'int',
+        'distance_to_start': 'float',
+        'distance_to_end': 'float',
+        'pp': 'int',
+        'stop_id': 'int',
+        'minute': 'int',
+        'day': 'int',
+        'stay_time': 'float',
+    }
 
     def __init__(self, n_models: int = 15):
         self.n_models = n_models
@@ -367,7 +435,7 @@ class Predictor:
         -------
         tuple[pd.DataFrame, pd.DataFrame]
             ar_data, dp_data
-        """        
+        """
         dtypes = {
             'station': 'int',
             'lat': 'float',
@@ -384,21 +452,7 @@ class Predictor:
             'stay_time': 'float',
         }
         ar_data = pd.DataFrame(
-            columns=[
-                'station',
-                'lat',
-                'lon',
-                'o',
-                'c',
-                'n',
-                'distance_to_start',
-                'distance_to_end',
-                'pp',
-                'stop_id',
-                'minute',
-                'day',
-                'stay_time',
-            ],
+            columns=self.FEATURES,
             index=range(len(segments)),
         )
         dp_data = ar_data.copy()
@@ -473,13 +527,16 @@ class Predictor:
             ar_data.at[i, 'stay_time'] = segment['stay_times'][ar_data.at[i, 'stop_id']]
             dp_data.at[i, 'stay_time'] = segment['stay_times'][dp_data.at[i, 'stop_id']]
 
-        return ar_data.astype(dtypes), dp_data.astype(dtypes)
+        return ar_data.astype(self.FEATURE_DTYPES), dp_data.astype(self.FEATURE_DTYPES)
 
 
 if __name__ == "__main__":
     import helpers.bahn_vorhersage
 
     from dask.distributed import Client
+
+    # feature_importance('ar')
+    # feature_importance('dp')
 
     # Setting `threads_per_worker` is very important as Dask will otherwise
     # create as many threads as cpu cores which is to munch for big cpus with small RAM

@@ -16,6 +16,7 @@ import argparse
 from typing import Dict, List, Tuple, Union
 from config import redis_url
 from redis import Redis
+from rtd_crawler.parser_helpers import db_to_datetime, parse_path
 
 engine, Session = sessionfactory()
 
@@ -24,28 +25,6 @@ parser.add_argument('--parse_continues', help='Check for unparsed data every 60 
 parser.add_argument('--parse_all', help='Parse all raw data that is in the database', action="store_true")
 Rtd()
 obstacles = ObstacleOlly(prefer_cache=False)
-
-
-def db_to_datetime(dt: Union[str, None]) -> Union[datetime.datetime, None]:
-    """
-    Convert bahn time in format: '%y%m%d%H%M' to datetime.
-    As it is fastest to directly construct a datetime object from this, no strptime is used.
-
-    Args:
-        dt (str): bahn time format
-
-    Returns:
-        datetime.datetime: converted bahn time
-    """
-    if dt is None:
-        return None
-    return datetime.datetime(int('20' + dt[0:2]), int(dt[2:4]), int(dt[4:6]), int(dt[6:8]), int(dt[8:10]))
-
-
-def parse_path(path: Union[str, None]) -> Union[List[str], None]:
-    if path is None or not path:
-        return None
-    return path.split('|')
 
 
 def parse_stop_plan(hash_id: int, stop: dict) -> dict:
