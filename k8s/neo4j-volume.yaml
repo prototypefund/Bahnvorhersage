@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: neo4j-storage
+spec:
+  capacity:
+    storage: 10G
+  storageClassName: neo4j
+  accessModes:
+    - ReadOnlyMany
+  hostPath:
+    #where the config will be mounted
+    path: "/mnt/neo4j-storage/"
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: neo4j-storage
+  labels:
+    type: local
+spec:
+  storageClassName: neo4j
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 10G
