@@ -1,15 +1,15 @@
-import os
-import sys
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import datetime
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+
+import numpy as np
 import requests
 from pytz import timezone
-from webserver import streckennetz, predictor
-from concurrent.futures import ThreadPoolExecutor
-import datetime
+
 from helpers import ttl_lru_cache
-import numpy as np
+from webserver import predictor, streckennetz
+from webserver.transfer_times import (get_needed_transfer_times,
+                                      shift_predictions_by_transfer_time)
 
 
 @dataclass
@@ -21,27 +21,37 @@ class Prediction:
     transfer_times: list[int]
 
 
-def rate_journey(journey: list[dict]) -> Prediction:
+def rate_journey(iris_journey: list[dict], fptf_journey: list[dict]) -> Prediction:
     """
     Analyses/evaluates/rates a given journey using machine learning
 
     Parameters
     ----------
-    journey : list[dict]
-        The journey to analyze
+    ...
 
     Returns
     -------
     Prediction
         The journey with the evaluation/rating
     """
-    ar_data, dp_data = predictor.get_pred_data(journey, streckennetz)
+    needed_transfer_times = list(get_needed_transfer_times(fptf_journey['legs']))
+
+    ar_data, dp_data = predictor.get_pred_data(iris_journey, streckennetz)
     ar_prediction = predictor.predict_ar(ar_data)
     dp_prediction = predictor.predict_dp(dp_data)
-    transfer_time = np.array([segment['transfer_time'] for segment in journey[:-1]])
-    con_scores = predictor.predict_con(
-        ar_prediction[:-1], dp_prediction[1:], transfer_time
+
+    transfer_time = np.array(
+        [segment['transfer_time'] for segment in iris_journey[:-1]]
     )
+
+    ar_con_prediction, dp_con_prediction = shift_predictions_by_transfer_time(
+        ar_prediction[:-1].copy(),
+        dp_prediction[1:].copy(),
+        transfer_time,
+        needed_transfer_times,
+    )
+
+    con_scores = predictor.predict_con(ar_con_prediction, dp_con_prediction)
 
     return Prediction(
         connection_score=int(round(con_scores.prod() * 100)),
@@ -147,7 +157,7 @@ def get_and_rate_journeys(
         bike=bike,
     )
 
-    for i, prediction in enumerate(map(rate_journey, prediction_data)):
+    for i, prediction in enumerate(map(rate_journey, prediction_data, journeys)):
         journeys[i]['connectionScore'] = prediction.connection_score
 
         # This id is used for vue.js to render the list of connections
@@ -297,7 +307,8 @@ def extract_iris_like(journeys: list[dict], train_trips: dict) -> list[dict]:
 def get_trip_of_train(trip_id: str):
     trip: dict = requests.get(
         'https://db-rest.bahnvorhersage.de/trips/{}'.format(trip_id),
-    ).json()['trip']
+    ).json()
+    trip = trip['trip']
     waypoints = [stopover['stop']['name'] for stopover in trip['stopovers']]
     stay_times = [
         (

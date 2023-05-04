@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Literal
 
-import requests
 import isodate
+import requests
 
 from config import ris_headers
 
@@ -131,12 +131,16 @@ class RisTransferDuration:
     duration: timedelta
     distance: float | None
 
-    def __init__(self, connection_duration: dict | None) -> None:
+    def __init__(
+        self,
+        connection_duration: dict | None,
+        duration: timedelta = None,
+        distance: float = None,
+    ) -> None:
         if connection_duration is None:
-            self.duration = None
-            self.distance = None
+            self.duration = duration
+            self.distance = distance
             return
-
         self.duration = isodate.parse_duration(connection_duration['duration'])
         # Distance does only exist if duration source is INDOOR_ROUTING
         self.distance = connection_duration.get('distance', None)
@@ -191,6 +195,7 @@ def transfer_times_by_eva(eva: int):
 
 
 if __name__ == '__main__':
+    transfer_times_by_eva(8000096)
     print(transfer_times_by_eva(8000001))
     print(transfer_times_by_eva(8000002))
     print(transfer_times_by_eva(8000003))  # Does not exist

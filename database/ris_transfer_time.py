@@ -1,10 +1,13 @@
 from dataclasses import dataclass
-from api.ris import RisTransferDuration, transfer_times_by_eva, RisTransfer
+from datetime import timedelta
 from typing import Literal
+
 from neo4j import GraphDatabase, Session
-from config import NEO4J_URI, NEO4J_AUTH
-from helpers import StationPhillip
 from tqdm import tqdm
+
+from api.ris import RisTransfer, RisTransferDuration, transfer_times_by_eva
+from config import NEO4J_AUTH, NEO4J_URI
+from helpers import StationPhillip
 
 
 @dataclass
@@ -19,7 +22,95 @@ class Connection:
     frequent_traveller: RisTransferDuration
     mobility_impaired: RisTransferDuration
     occasional_traveller: RisTransferDuration
-    source: Literal['RIL420', 'INDOOR_ROUTING', 'EFZ']
+    source: Literal['RIL420', 'INDOOR_ROUTING', 'EFZ', 'FALLBACK']
+
+
+def get_transfer_time(
+    tx: Session, start: Platform, destination: Platform
+) -> Connection:
+    if start.platform is None:
+        start_platform_query = (
+            'MATCH (from:Platform {eva: $from_eva} WHERE from.platform IS NULL)'
+        )
+    else:
+        start_platform_query = (
+            'MATCH (from:Platform {eva: $from_eva, platform: $from_platform})'
+        )
+
+    if destination.platform is None:
+        destination_platform_query = (
+            'MATCH (to:Platform {eva: $to_eva} WHERE to.platform IS NULL)'
+        )
+    else:
+        destination_platform_query = (
+            'MATCH (to:Platform {eva: $to_eva, platform: $to_platform})'
+        )
+
+    query = (
+        start_platform_query
+        + destination_platform_query
+        + 'MATCH (from)-[c:TRANSFER]-(to) '
+        + 'RETURN c.identical_physical_platform, c.frequent_traveller_duration, '
+        + 'c.frequent_traveller_distance, c.mobility_impaired_duration, '
+        + 'c.mobility_impaired_distance, c.occasional_traveller_duration, '
+        + 'c.occasional_traveller_distance, c.source'
+    )
+
+    result = tx.run(
+        query,
+        from_eva=start.eva,
+        from_platform=start.platform,
+        to_eva=destination.eva,
+        to_platform=destination.platform,
+    )
+
+    if result.peek() is None:
+        if start.platform is not None or destination.platform is not None:
+            # Try to find a connection without platform, e.g. RIL420 or EFZ
+            # transfer times.
+            return get_transfer_time(
+                tx, Platform(start.eva, None), Platform(destination.eva, None)
+            )
+        return Connection(
+            False,
+            RisTransferDuration(
+                connection_duration=None, duration=timedelta(minutes=2)
+            ),
+            RisTransferDuration(
+                connection_duration=None, duration=timedelta(minutes=2)
+            ),
+            RisTransferDuration(
+                connection_duration=None, duration=timedelta(minutes=2)
+            ),
+            'FALLBACK',
+        )
+
+    connection = result.peek()
+    return Connection(
+        connection['c.identical_physical_platform'],
+        RisTransferDuration(
+            connection_duration=None,
+            duration=timedelta(
+                seconds=connection['c.frequent_traveller_duration'].seconds
+            ),
+            distance=connection['c.frequent_traveller_distance'],
+        ),
+        RisTransferDuration(
+            connection_duration=None,
+            duration=timedelta(
+                seconds=connection['c.mobility_impaired_duration'].seconds
+            ),
+            distance=connection['c.mobility_impaired_distance'],
+        ),
+        RisTransferDuration(
+            connection_duration=None,
+            duration=timedelta(
+                seconds=connection['c.occasional_traveller_duration'].seconds
+            ),
+            distance=connection['c.occasional_traveller_distance'],
+        ),
+        connection['c.source'],
+    )
 
 
 def add_connection_time(tx: Session, transfer: RisTransfer):
@@ -63,7 +154,7 @@ def add_connection_time(tx: Session, transfer: RisTransfer):
             transfer_attributes += (
                 'mobility_impaired_distance: $mobility_impaired_distance,'
             )
-    
+
     if transfer.occasional_traveller.duration is not None:
         transfer_attributes += (
             'occasional_traveller_duration: $occasional_traveller_duration,'
@@ -72,14 +163,16 @@ def add_connection_time(tx: Session, transfer: RisTransfer):
             transfer_attributes += (
                 'occasional_traveller_distance: $occasional_traveller_distance,'
             )
-    
+
     tx.run(
         from_platform_query
         + to_platform_query
         + '''
         MERGE (from)-[c:TRANSFER { 
             identical_physical_platform: $identical_physical_platform,
-        ''' + transfer_attributes + '''
+        '''
+        + transfer_attributes
+        + '''
             source: $source
         }]-(to)''',
         from_eva=transfer.from_eva,
@@ -97,18 +190,9 @@ def add_connection_time(tx: Session, transfer: RisTransfer):
     )
 
 
-def get_transfer_times():
+def gather_transfer_times():
     stations = StationPhillip()
     evas = set(stations.stations['eva'])
-
-    evas_to_remove = set()
-    for eva in evas:
-        if eva != 8011139:
-            evas_to_remove.add(eva)
-        else:
-            break
-    
-    evas = evas - evas_to_remove
 
     with GraphDatabase.driver(NEO4J_URI, auth=NEO4J_AUTH) as driver:
         with driver.session() as session:
@@ -123,7 +207,8 @@ def get_transfer_times():
 
 
 def main():
-    get_transfer_times()
+    transfer_times_by_eva(8000141)
+    gather_transfer_times()
 
 
 if __name__ == '__main__':
