@@ -72,8 +72,8 @@ def create_app():
     app.logger.info("Done")
 
     limiter = Limiter(
-        app,
-        key_func=get_remote_address,
+        get_remote_address,
+        app=app,
     )
     limiter.limit('2 per minute;60 per day')(api.bp_limited)
 
