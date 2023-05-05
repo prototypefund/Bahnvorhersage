@@ -24,6 +24,15 @@ class Connection:
     occasional_traveller: RisTransferDuration
     source: Literal['RIL420', 'INDOOR_ROUTING', 'EFZ', 'FALLBACK']
 
+    def to_dict(self):
+        return {
+            'identical_physical_platform': self.identical_physical_platform,
+            'frequent_traveller': self.frequent_traveller.to_dict(),
+            'mobility_impaired': self.mobility_impaired.to_dict(),
+            'occasional_traveller': self.occasional_traveller.to_dict(),
+            'source': self.source,
+        }
+
 
 def get_transfer_time(
     tx: Session, start: Platform, destination: Platform
@@ -99,7 +108,9 @@ def get_transfer_time(
             connection_duration=None,
             duration=timedelta(
                 seconds=connection['c.mobility_impaired_duration'].seconds
-            ),
+            )
+            if connection['c.mobility_impaired_duration'] is not None
+            else None,
             distance=connection['c.mobility_impaired_distance'],
         ),
         RisTransferDuration(

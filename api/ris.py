@@ -128,7 +128,7 @@ def stop_place_by_eva(eva: int) -> RisStopPlace | None:
 
 @dataclass
 class RisTransferDuration:
-    duration: timedelta
+    duration: timedelta | None
     distance: float | None
 
     def __init__(
@@ -144,6 +144,14 @@ class RisTransferDuration:
         self.duration = isodate.parse_duration(connection_duration['duration'])
         # Distance does only exist if duration source is INDOOR_ROUTING
         self.distance = connection_duration.get('distance', None)
+
+    def to_dict(self):
+        return {
+            'duration': isodate.duration_isoformat(self.duration)
+            if self.duration is not None
+            else None,
+            'distance': self.distance,
+        }
 
 
 @dataclass

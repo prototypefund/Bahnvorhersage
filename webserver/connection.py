@@ -6,10 +6,13 @@ import numpy as np
 import requests
 from pytz import timezone
 
+from database.ris_transfer_time import Connection
 from helpers import ttl_lru_cache
 from webserver import predictor, streckennetz
-from webserver.transfer_times import (get_needed_transfer_times,
-                                      shift_predictions_by_transfer_time)
+from webserver.transfer_times import (
+    get_needed_transfer_times,
+    shift_predictions_by_transfer_time,
+)
 
 
 @dataclass
@@ -19,6 +22,7 @@ class Prediction:
     ar_predictions: list[float]
     dp_predictions: list[float]
     transfer_times: list[int]
+    needed_transfer_times: list[Connection]
 
 
 def rate_journey(iris_journey: list[dict], fptf_journey: list[dict]) -> Prediction:
@@ -59,6 +63,7 @@ def rate_journey(iris_journey: list[dict], fptf_journey: list[dict]) -> Predicti
         ar_predictions=ar_prediction[:, 0].tolist(),
         dp_predictions=dp_prediction[:, 1].tolist(),
         transfer_times=transfer_time.tolist(),
+        needed_transfer_times=needed_transfer_times,
     )
 
 
@@ -189,6 +194,9 @@ def get_and_rate_journeys(
                 journeys[i]['legs'][leg_index][
                     'transferScore'
                 ] = prediction.transfer_score[leg_index - walking_legs]
+                journeys[i]['legs'][leg_index][
+                    'neededTransferTime'
+                ] = prediction.needed_transfer_times[leg_index - walking_legs].to_dict()
                 journeys[i]['legs'][leg_index][
                     'transferTime'
                 ] = prediction.transfer_times[leg_index - walking_legs]
