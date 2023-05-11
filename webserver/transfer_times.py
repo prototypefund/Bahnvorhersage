@@ -49,7 +49,9 @@ def shift_predictions_by_transfer_time(
 
         total_minutes = math.ceil(transfer_puffer.total_seconds() / 60)
 
-        if transfer_puffer < timedelta():
+        if transfer_puffer == timedelta():
+            continue
+        elif transfer_puffer < timedelta():
             dp_predictions[i] = np.roll(dp_predictions[i], -total_minutes)
             dp_predictions[i, -total_minutes:] = 0
         elif transfer_puffer > timedelta(minutes=14):
