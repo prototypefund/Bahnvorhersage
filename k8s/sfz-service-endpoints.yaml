@@ -242,4 +242,28 @@ subsets:
   ports:
   - name: http
     port: 8009
+    protocol: TCP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: sfz-endstationzukunft
+subsets:
+- addresses:
+  - ip: 192.168.178.24
+  ports:
+  - name: http
+    port: 8030
+    protocol: TCP 
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: sfz-file-dzconnect
+subsets:
+- addresses:
+  - ip: 192.168.178.24
+  ports:
+  - name: http
+    port: 8020
     protocol: TCP 

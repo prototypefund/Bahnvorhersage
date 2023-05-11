@@ -193,6 +193,16 @@ spec:
               name: sfz-dzconnect
               port:
                 number: 80
+  - host: "file.dzconnect.de"
+    http: &file-dzconnect
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-file-dzconnect
+              port:
+                number: 80
   - host: "wohnung-in-esslingen.de"
     http: &wohnung-in-esslingen
       paths:
@@ -201,5 +211,15 @@ spec:
           backend:
             service:
               name: sfz-wohnung-in-esslingen
+              port:
+                number: 80
+  - host: "endstationzukunft.de"
+    http: &endstationzukunft
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-endstationzukunft
               port:
                 number: 80
