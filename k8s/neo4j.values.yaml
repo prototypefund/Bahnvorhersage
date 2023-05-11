@@ -1,0 +1,16 @@
+neo4j:
+  name: neo4j-bahnvorhersage
+  resources:
+    cpu: "2000m"
+    memory: "4Gi"
+
+  # Uncomment to set the initial password
+  password: "enter-password-here"
+
+volumes:
+  data:
+    mode: volume
+    volume:
+      persistentVolumeClaim:
+        claimName: neo4j-storage
+      
