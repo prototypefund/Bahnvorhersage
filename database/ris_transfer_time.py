@@ -26,10 +26,10 @@ class Connection:
 
     def to_dict(self):
         return {
-            'identical_physical_platform': self.identical_physical_platform,
-            'frequent_traveller': self.frequent_traveller.to_dict(),
-            'mobility_impaired': self.mobility_impaired.to_dict(),
-            'occasional_traveller': self.occasional_traveller.to_dict(),
+            'identicalPhysicalPlatform': self.identical_physical_platform,
+            'frequentTraveller': self.frequent_traveller.to_dict(),
+            'mobilityImpaired': self.mobility_impaired.to_dict(),
+            'occasionalTraveller': self.occasional_traveller.to_dict(),
             'source': self.source,
         }
 
