@@ -1,17 +1,16 @@
-import os, sys
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import pickle
-from xgboost import XGBClassifier
-from sklearn.dummy import DummyClassifier
-from helpers import RtdRay, ttl_lru_cache, StreckennetzSteffi
 import datetime
-import pandas as pd
-import dask.dataframe as dd
+import pickle
 from typing import Literal
+
+import dask.dataframe as dd
 import numpy as np
+import pandas as pd
+from sklearn.dummy import DummyClassifier
 from tqdm import tqdm
-from config import JSON_MODEL_PATH, ENCODER_PATH
+from xgboost import XGBClassifier
+
+from config import ENCODER_PATH, JSON_MODEL_PATH
+from helpers import RtdRay, StreckennetzSteffi, ttl_lru_cache
 
 
 def save_model(model: XGBClassifier, minute: int, ar_or_dp: Literal['ar', 'dp']):
@@ -232,8 +231,8 @@ def test_models(n_models=15, **load_parameters):
 
 
 def feature_importance(ar_or_dp: Literal['ar', 'dp']):
-    import seaborn as sns
     import matplotlib.pyplot as plt
+    import seaborn as sns
 
     importances = np.zeros((15, Predictor.model(0, ar_or_dp).n_features_in_))
     for i in range(15):
@@ -360,7 +359,6 @@ class Predictor:
         self,
         ar_prediction: np.ndarray,
         dp_prediction: np.ndarray,
-        transfer_times: np.ndarray,
     ) -> np.ndarray:
         """Calculate connection score based on arrival predictions,
         departure predictions and transfer times.
@@ -371,48 +369,21 @@ class Predictor:
             Arrival predictions
         dp_p : np.ndarray
             Departure predictions
-        transfer_times : np.ndarray
-            Transfer times between arrival and departure
 
         Returns
         -------
         np.ndarray
             Connections scores (0 <= con_score <= 1)
         """
-        con_score = np.ones(len(transfer_times))
+        con_score = np.ones(len(ar_prediction))
 
-        for tra_time in range(self.n_models):
-            # Mask
-            m = transfer_times == tra_time
-            if m.any():
-                # If the transfer time is 5 minutes, the arriving train can be
-                # delayed by up to 3 minutes, if the departing train is on time.
-                # If the transfer time is 1 minute, even if the arriving train
-                # is on time, the departing train musst be delayed by 1 minute.
-                # Note: 0 <= tra_time < self.n_models
-                max_ar_d = max(tra_time - 2, 0)
-                min_dp_d = max(0, 2 - tra_time)
+        con_score = ar_prediction[:, 0] * dp_prediction[:, 0]
 
-                # Calculate probability that the connection is made,
-                # if the departing train is on time.
-                con_score[m] = ar_prediction[m, max_ar_d] * dp_prediction[m, min_dp_d]
-
-                # Calculate extra probability that the connection is made,
-                # if the departing train is delayed
-                con_score[m] = con_score[m] + np.sum(
-                    (
-                        ar_prediction[
-                            m, max_ar_d + 1 : dp_prediction.shape[1] - min_dp_d
-                        ]
-                        - ar_prediction[
-                            m, max_ar_d : dp_prediction.shape[1] - 1 - min_dp_d
-                        ]
-                    )
-                    * dp_prediction[
-                        m, min_dp_d + 1 : dp_prediction.shape[1] + min(2 - tra_time, 0)
-                    ],
-                    axis=1,
-                )
+        con_score = con_score + np.sum(
+            np.maximum(ar_prediction[:, 1:] - ar_prediction[:, :-1], 0)
+            * dp_prediction[:, 1:],
+            axis=1,
+        )
         # Somtimes, due to inaccuracies in the prediction, the connection score
         # can be greater than 1. This is not possible, so we set it to 1.
         return np.minimum(con_score, np.ones(len(con_score)))
@@ -531,13 +502,12 @@ class Predictor:
 
 
 if __name__ == "__main__":
-    import helpers.bahn_vorhersage
-
     from dask.distributed import Client
+
+    import helpers.bahn_vorhersage
 
     # feature_importance('ar')
     # feature_importance('dp')
-
     # Setting `threads_per_worker` is very important as Dask will otherwise
     # create as many threads as cpu cores which is to munch for big cpus with small RAM
     with Client(n_workers=min(10, os.cpu_count() // 4), threads_per_worker=2) as client:

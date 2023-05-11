@@ -1,20 +1,17 @@
-import os
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if os.path.isfile("/mnt/config/config.py"):
-    sys.path.append("/mnt/config/")
-import lxml.etree as etree
-from helpers import StationPhillip
-from rtd_crawler.SimplestDownloader import SimplestDownloader
-from rtd_crawler.hash64 import hash64
-import time
 import datetime
-from redis import Redis
-from config import redis_url
-from database import PlanById, unparsed, sessionfactory
-from rtd_crawler.xml_parser import xml_to_json
-from concurrent.futures import ThreadPoolExecutor
+import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
+
+import lxml.etree as etree
+from redis import Redis
+
+from config import redis_url
+from database import PlanById, sessionfactory, unparsed
+from helpers import StationPhillip
+from rtd_crawler.hash64 import hash64
+from rtd_crawler.SimplestDownloader import SimplestDownloader
+from rtd_crawler.xml_parser import xml_to_json
 
 engine, Session = sessionfactory()
 
@@ -25,7 +22,7 @@ def preparse_plan(plan, station):
     """
     plan = etree.fromstring(plan.encode())
     plan = list(xml_to_json(stop) for stop in plan)
-    plan = {hash64(stop['id']): {**stop, 'station':station} for stop in plan}
+    plan = {hash64(stop['id']): {**stop, 'station': station} for stop in plan}
     return plan
 
 
@@ -43,6 +40,7 @@ def date_in_five_hours() -> int:
 
 if __name__ == '__main__':
     import helpers.bahn_vorhersage
+
     stations = StationPhillip()
     dd = SimplestDownloader()
     hour = hour_in_five_hours() - 1
@@ -61,7 +59,9 @@ if __name__ == '__main__':
             try:
                 with ThreadPoolExecutor(max_workers=4) as executor:
                     print(datetime.datetime.now(), 'getting plan for', date, hour)
-                    plans = list(executor.map(lambda eva: get_plan(eva, str_date, hour), evas))
+                    plans = list(
+                        executor.map(lambda eva: get_plan(eva, str_date, hour), evas)
+                    )
 
                 with Session() as session:
                     plans_by_id = {}

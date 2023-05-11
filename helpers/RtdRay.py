@@ -4,12 +4,12 @@ import pickle
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd
 import dask.dataframe as dd
-from dask.diagnostics import ProgressBar
 import datetime
 from database import DB_CONNECT_STRING, get_engine
 from helpers import StationPhillip
 from config import RTD_CACHE_PATH, ENCODER_PATH, RTD_TABLENAME
 from typing import Optional
+from dask.distributed import Client
 
 
 """
@@ -249,17 +249,16 @@ def _save_encoders(rtd):
 
 
 def _parse(rtd: dd.DataFrame) -> dd.DataFrame:
-    with ProgressBar():
-        if 'ar_pp' in rtd.columns:
-            print('combining platforms')
-            rtd['pp'] = rtd['ar_pp'].fillna(value=rtd['dp_pp'])
-            rtd = rtd.drop(columns=['ar_pp', 'dp_pp'], axis=0)
-        print('categorizing')
-        rtd = _categorize(rtd)
-        print('adding delays')
-        rtd = _get_delays(rtd)
-        print('adding station coordinates')
-        rtd = _add_station_coordinates(rtd)
+    if 'ar_pp' in rtd.columns:
+        print('combining platforms')
+        rtd['pp'] = rtd['ar_pp'].fillna(value=rtd['dp_pp'])
+        rtd = rtd.drop(columns=['ar_pp', 'dp_pp'], axis=0)
+    print('categorizing')
+    rtd = _categorize(rtd)
+    print('adding delays')
+    rtd = _get_delays(rtd)
+    print('adding station coordinates')
+    rtd = _add_station_coordinates(rtd)
     return rtd
 
 
@@ -267,21 +266,20 @@ def download_rtd():
     """
     Pull the RTD_TABLENAME table from db, parse it and save it on disk.
     """
-    with ProgressBar():
-        rtd: dd.DataFrame = dd.read_sql_table(
-            RTD_TABLENAME, DB_CONNECT_STRING, index_col='hash_id', meta=meta
-        )
-        rtd.to_parquet(
-            RTD_CACHE_PATH, engine='pyarrow', write_metadata_file=False, compute=True
-        )
-        rtd = dd.read_parquet(RTD_CACHE_PATH, engine='pyarrow')
+    rtd: dd.DataFrame = dd.read_sql_table(
+        RTD_TABLENAME, DB_CONNECT_STRING, index_col='hash_id', meta=meta
+    )
+    rtd.to_parquet(
+        RTD_CACHE_PATH, engine='pyarrow', write_metadata_file=False, compute=True
+    )
+    rtd = dd.read_parquet(RTD_CACHE_PATH, engine='pyarrow')
 
-        rtd = _parse(rtd)
-        _save_encoders(rtd)
+    rtd = _parse(rtd)
+    _save_encoders(rtd)
 
-        # Save data to parquet. We have to use pyarrow as fastparquet does not support pd.Int64
-        rtd.to_parquet(RTD_CACHE_PATH, engine='pyarrow', write_metadata_file=False)
-        print('Saved to {}'.format(RTD_CACHE_PATH))
+    # Save data to parquet. We have to use pyarrow as fastparquet does not support pd.Int64
+    rtd.to_parquet(RTD_CACHE_PATH, engine='pyarrow', write_metadata_file=False)
+    print('Saved to {}'.format(RTD_CACHE_PATH))
 
 
 def upgrade_rtd():
@@ -558,36 +556,11 @@ def load_for_ml_model(
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--download_rtd", help="download all rtd from database", action="store_true"
-    )
-    parser.add_argument(
-        "--upgrade_rtd",
-        help="download newer rtd from database and append it to rtd cache",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--local_cluster", help="use dask local cluster / client", action="store_true"
-    )
-    args = parser.parse_args()
-
     import helpers.bahn_vorhersage
 
-    if args.local_cluster:
-        from dask.distributed import Client
-
-        # Setting `threads_per_worker` is very important as Dask will otherwise
-        # create as many threads as cpu cores which is to munch for big cpus with small RAM
-        client = Client(n_workers=min(10, os.cpu_count() // 4), threads_per_worker=2)
-
-    if args.download_rtd:
-        download_rtd()
-
-    if args.upgrade_rtd:
-        upgrade_rtd()
+    with Client(n_workers=2, threads_per_worker=1, memory_limit='16GB') as client:
+        rtd = load_data(load_categories=False)
+        rtd = _add_station_coordinates(rtd)
 
     rtd = load_data(columns=['ar_pt'])
 

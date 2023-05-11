@@ -9,3 +9,4 @@ from .ConnectionRay import ConnectionRay
 from .ObstacleOlly import ObstacleOlly, priorities_text, from_hafas_time
 from . import RtdRay
 from . import colormaps
+from .pairwise import pairwise

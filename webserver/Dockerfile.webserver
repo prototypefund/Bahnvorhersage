@@ -73,6 +73,7 @@ COPY ./database/ /usr/src/app/database/
 COPY ./data_analysis/ /usr/src/app/data_analysis
 COPY ./ml_models/ /usr/src/app/ml_models
 COPY ./webserverconfig.py /usr/src/app/webserverconfig.py
+COPY ./api/ /usr/src/app/api/
 
 ## Switch to non-root user
 # for some reason doing this before the copy results in weird permissions # && chmod -R 775 /usr/src/app/
