@@ -1,36 +1,42 @@
 import os, sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import functools
 import geopy.distance
 from helpers import StationPhillip
-from database import cached_table_fetch, cached_table_push, get_engine
+from database import cached_table_fetch #, cached_table_push, get_engine
 import igraph
-import pandas as pd
-import sqlalchemy
-from sqlalchemy import Column, String, INT
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.dialects import postgresql
-import random
-import time
+# import pandas as pd
+# import sqlalchemy
+# from sqlalchemy import Column, String, INT
+# from sqlalchemy.ext.declarative import declarative_base
+# from sqlalchemy.dialects import postgresql
+# import random
+# import time
 import datetime
 
+from functools import lru_cache
+from redis import Redis
+from config import redis_url
 
-Base = declarative_base()
 
+def redis_lru_cache_str_float(name: str, maxsize: int = 128):
+    """
+    """
+    redis_client = Redis.from_url(redis_url)
+    def wrapper(func):
 
-class EdgePathPersistantCache(Base):
-    __tablename__ = "edge_path_persistent_cache"
-    index = Column(String, primary_key=True, autoincrement=False)
-    path = Column(postgresql.ARRAY(INT))
+        @lru_cache(maxsize)
+        def inner(sefl, cache_key: str, *args, **kwargs):
+            result = redis_client.hget(name, cache_key)
+            if result is not None:
+                return float(result)
+            else:
+                result = func(sefl, *args, **kwargs)
+                redis_client.hset(name, cache_key, result)
+                return result
 
-    def __init__(self) -> None:
-        try:
-            engine = get_engine()
-            Base.metadata.create_all(engine)
-            engine.dispose()
-        except sqlalchemy.exc.OperationalError:
-            print(f"database.{EdgePathPersistantCache.__tablename__} running offline!")
+        return inner
+    return wrapper
 
 
 class StreckennetzSteffi(StationPhillip):
@@ -49,9 +55,16 @@ class StreckennetzSteffi(StationPhillip):
         self.persistent_path_cache = None
         self.original_persistent_path_cache_len = None
 
-        nodes = list(set(streckennetz_df['u'].to_list() + streckennetz_df['v'].to_list()))
+        nodes = list(
+            set(streckennetz_df['u'].to_list() + streckennetz_df['v'].to_list())
+        )
         node_ids = dict(zip(nodes, range(len(nodes))))
-        edges = list(zip(streckennetz_df["u"].map(node_ids.get).to_list(), streckennetz_df["v"].map(node_ids.get).to_list()))
+        edges = list(
+            zip(
+                streckennetz_df["u"].map(node_ids.get).to_list(),
+                streckennetz_df["v"].map(node_ids.get).to_list(),
+            )
+        )
         self.streckennetz_igraph = igraph.Graph(
             n=len(nodes),
             edges=edges,
@@ -82,7 +95,12 @@ class StreckennetzSteffi(StationPhillip):
         length = 0
         for i in range(len(waypoints) - 1):
             try:
-                length += self.distance(waypoints[i], waypoints[i + 1], date)
+                length += self.distance(
+                    waypoints[i] + '__' + waypoints[i + 1],
+                    waypoints[i],
+                    waypoints[i + 1],
+                    date,
+                )
             except KeyError:
                 pass
         return length
@@ -118,7 +136,6 @@ class StreckennetzSteffi(StationPhillip):
                 pass
         return length
 
-    @functools.lru_cache(maxsize=None)
     def get_edge_path(self, source, target):
         try:
             return self.streckennetz_igraph.get_shortest_paths(
@@ -127,70 +144,7 @@ class StreckennetzSteffi(StationPhillip):
         except ValueError:
             return None
 
-    def get_edge_path_persistent_cache(self, source, target):
-        # Lazy loading of persistent cache, as many programs will not use it
-        if self.persistent_path_cache is None:
-            self.persistent_path_cache = cached_table_fetch(
-                "edge_path_persistent_cache", index_col="index", **self.kwargs
-            )["path"].to_dict()
-            self.original_persistent_path_cache_len = len(self.persistent_path_cache)
-
-        source, target = sorted((source, target))
-        key = source + "__" + target
-
-        result = self.persistent_path_cache.get(key, -1)
-        if result == -1:
-            result = self.get_edge_path(source, target)
-            self.persistent_path_cache[key] = result
-        return result
-
-    def store_edge_path_persistent_cache(self, engine: sqlalchemy.engine):
-        # Store persistent path cache if 1000 new paths were added and it's worth it
-        n_new_paths = len(self.persistent_path_cache) - self.original_persistent_path_cache_len
-        if n_new_paths > 1000:
-            print("uploading", n_new_paths, "new rows")
-            local_cache_df = pd.DataFrame.from_dict(
-                {
-                    key: [self.persistent_path_cache[key]]
-                    for key in self.persistent_path_cache
-                },
-                orient="index",
-                columns=["path"],
-            )
-            local_cache_df.index.rename("index", inplace=True)
-            while True:
-                try:
-                    db_cache_df = cached_table_fetch("edge_path_persistent_cache", index_col="index")
-                    break
-                except Exception as e:
-                    delay = random.randint(0, 300)
-                    print("Failed to fetch db. Wating", delay, "seconds.")
-                    print('Failed with exception:')
-                    print(e)
-                    time.sleep(delay)
-
-            cache_df = pd.concat([local_cache_df, db_cache_df])
-            cache_df = cache_df.loc[~cache_df.index.duplicated(), :]
-            retry = True
-            while retry:
-                try:
-                    cached_table_push(
-                        cache_df,
-                        tablename="edge_path_persistent_cache",
-                        fast=False,
-                        dtype={"path": postgresql.ARRAY(sqlalchemy.types.INT)}
-                    )
-                    retry = False
-                except sqlalchemy.exc.ProgrammingError:
-                    # Try again after random delay
-                    delay = random.randint(0, 300)
-                    print("Failed to add new paths to db. Wating", delay, "seconds.")
-                    time.sleep(delay)
-
-            self.persistent_path_cache = cache_df["path"].to_dict()
-            self.original_persistent_path_cache_len = len(self.persistent_path_cache)
-
-    @functools.lru_cache(maxsize=None)
+    @redis_lru_cache_str_float(name='station_distance', maxsize=None)
     def distance(self, u: str, v: str, date: datetime.datetime) -> float:
         """
         Calculate approx distance between two stations. Uses the Streckennetz if u and v are part of it,
@@ -210,25 +164,48 @@ class StreckennetzSteffi(StationPhillip):
         float:
             Distance in meters between u and v.
         """
-        # path = self.get_edge_path(u, v)
-        path = self.get_edge_path_persistent_cache(u, v)
+        path = self.get_edge_path(u, v)
         if path is not None:
             return sum(map(self.get_length, path))
         else:
             try:
-                u_coords = self.get_location(name=u, date=date, allow_duplicates='first')
-                v_coords = self.get_location(name=v, date=date, allow_duplicates='first')
+                u_coords = self.get_location(
+                    name=u, date=date, allow_duplicates='first'
+                )
+                v_coords = self.get_location(
+                    name=v, date=date, allow_duplicates='first'
+                )
                 return geopy.distance.distance(u_coords, v_coords).meters
             except KeyError:
                 return 0
 
 
 if __name__ == "__main__":
-    import helpers.fancy_print_tcp
+    import helpers.bahn_vorhersage
 
     streckennetz_steffi = StreckennetzSteffi(prefer_cache=True)
 
-    print("Tübingen Hbf - Altingen(Württ):", streckennetz_steffi.route_length(["Tübingen Hbf", "Altingen(Württ)"], date=datetime.datetime.now()))
-    print("Tübingen Hbf - Reutlingen Hbf:", streckennetz_steffi.route_length(["Tübingen Hbf", "Reutlingen Hbf"], date=datetime.datetime.now()))
-    print("Tübingen Hbf - Stuttgart Hbf:", streckennetz_steffi.route_length(["Tübingen Hbf", "Stuttgart Hbf"], date=datetime.datetime.now()))
-    print("Tübingen Hbf - Ulm Hbf:", streckennetz_steffi.route_length(["Tübingen Hbf", "Ulm Hbf"], date=datetime.datetime.now()))
+    print(
+        "Tübingen Hbf - Altingen(Württ):",
+        streckennetz_steffi.route_length(
+            ["Tübingen Hbf", "Altingen(Württ)"], date=datetime.datetime.now()
+        ),
+    )
+    print(
+        "Tübingen Hbf - Reutlingen Hbf:",
+        streckennetz_steffi.route_length(
+            ["Tübingen Hbf", "Reutlingen Hbf"], date=datetime.datetime.now()
+        ),
+    )
+    print(
+        "Tübingen Hbf - Stuttgart Hbf:",
+        streckennetz_steffi.route_length(
+            ["Tübingen Hbf", "Stuttgart Hbf"], date=datetime.datetime.now()
+        ),
+    )
+    print(
+        "Tübingen Hbf - Ulm Hbf:",
+        streckennetz_steffi.route_length(
+            ["Tübingen Hbf", "Ulm Hbf"], date=datetime.datetime.now()
+        ),
+    )
