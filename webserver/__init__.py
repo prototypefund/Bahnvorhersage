@@ -47,10 +47,10 @@ def create_app():
 
     from webserverconfig import ProductionConfig, DevelopmentConfig
 
-    if app.config["ENV"] == "production":
-        app.config.from_object(ProductionConfig)
-    else:
+    if app.config["DEBUG"]:
         app.config.from_object(DevelopmentConfig)
+    else:
+        app.config.from_object(ProductionConfig)
 
     app.logger.info("DB init...")
     db.init_app(app)
