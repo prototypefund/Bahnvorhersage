@@ -163,6 +163,7 @@ def get_and_rate_journeys(
     )
 
     for i, prediction in enumerate(map(rate_journey, prediction_data, journeys)):
+        prediction: Prediction
         journeys[i]['connectionScore'] = prediction.connection_score
 
         # This id is used for vue.js to render the list of connections
@@ -308,15 +309,21 @@ def extract_iris_like(journeys: list[dict], train_trips: dict) -> list[dict]:
             ).seconds // 60
     return segments
 
+def get_trip(trip_id: str) -> dict:
+    for _ in range(3):
+        r = requests.get(
+            'https://db-rest.bahnvorhersage.de/trips/{}'.format(trip_id),
+        )
+        if r.ok:
+            return r.json()['trip']
+    raise requests.RequestException(r.text)
+
 
 # This information does change over time, so a permanent cache would give
 # wrong results. Thus, we only cache the result for 3 minutes.
 @ttl_lru_cache(seconds_to_live=180, maxsize=500)
 def get_trip_of_train(trip_id: str):
-    trip: dict = requests.get(
-        'https://db-rest.bahnvorhersage.de/trips/{}'.format(trip_id),
-    ).json()
-    trip = trip['trip']
+    trip = get_trip(trip_id)
     waypoints = [stopover['stop']['name'] for stopover in trip['stopovers']]
     stay_times = [
         (
