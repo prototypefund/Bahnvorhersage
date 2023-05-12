@@ -50,7 +50,9 @@ spec:
     - podcast-tech24.de
     - thesilentwave.de
     - dzconnect.de
+    - file.dzconnect.de
     - wohnung-in-esslingen.de
+    - endstationzukunft.de
     secretName: default-tls-secret
   rules:
   - host: "bahnvorhersage.de"

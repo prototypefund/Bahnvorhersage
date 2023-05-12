@@ -245,6 +245,19 @@ subsets:
     protocol: TCP
 ---
 apiVersion: v1
+kind: Service
+metadata:
+  name: sfz-endstationzukunft
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  clusterIP: None
+  type: ClusterIP
+---
+apiVersion: v1
 kind: Endpoints
 metadata:
   name: sfz-endstationzukunft
@@ -255,6 +268,19 @@ subsets:
   - name: http
     port: 8030
     protocol: TCP 
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sfz-file-dzconnect
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  clusterIP: None
+  type: ClusterIP
 ---
 apiVersion: v1
 kind: Endpoints
