@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Literal
+from typing import List, Literal
 
 from neo4j import GraphDatabase, Session
 from tqdm import tqdm
@@ -32,6 +32,39 @@ class Connection:
             'occasionalTraveller': self.occasional_traveller.to_dict(),
             'source': self.source,
         }
+
+
+def neo4j_result_to_connection(result) -> Connection:
+    return Connection(
+        result['c.identical_physical_platform'],
+        RisTransferDuration(
+            connection_duration=None,
+            duration=timedelta(seconds=result['c.frequent_traveller_duration'].seconds),
+            distance=result['c.frequent_traveller_distance'],
+        ),
+        RisTransferDuration(
+            connection_duration=None,
+            duration=timedelta(seconds=result['c.mobility_impaired_duration'].seconds)
+            if result['c.mobility_impaired_duration'] is not None
+            else None,
+            distance=result['c.mobility_impaired_distance'],
+        ),
+        RisTransferDuration(
+            connection_duration=None,
+            duration=timedelta(
+                seconds=result['c.occasional_traveller_duration'].seconds
+            ),
+            distance=result['c.occasional_traveller_distance'],
+        ),
+        result['c.source'],
+    )
+
+
+def fastest_connection(connection: List[Connection]) -> Connection:
+    return min(
+        connection,
+        key=lambda connection: connection.frequent_traveller.duration,
+    )
 
 
 def get_transfer_time(
@@ -94,34 +127,8 @@ def get_transfer_time(
             'FALLBACK',
         )
 
-    connection = result.peek()
-    return Connection(
-        connection['c.identical_physical_platform'],
-        RisTransferDuration(
-            connection_duration=None,
-            duration=timedelta(
-                seconds=connection['c.frequent_traveller_duration'].seconds
-            ),
-            distance=connection['c.frequent_traveller_distance'],
-        ),
-        RisTransferDuration(
-            connection_duration=None,
-            duration=timedelta(
-                seconds=connection['c.mobility_impaired_duration'].seconds
-            )
-            if connection['c.mobility_impaired_duration'] is not None
-            else None,
-            distance=connection['c.mobility_impaired_distance'],
-        ),
-        RisTransferDuration(
-            connection_duration=None,
-            duration=timedelta(
-                seconds=connection['c.occasional_traveller_duration'].seconds
-            ),
-            distance=connection['c.occasional_traveller_distance'],
-        ),
-        connection['c.source'],
-    )
+    connections = [neo4j_result_to_connection(connection) for connection in result]
+    return fastest_connection(connections)
 
 
 def add_connection_time(tx: Session, transfer: RisTransfer):
@@ -218,6 +225,12 @@ def gather_transfer_times():
 
 
 def main():
+    with GraphDatabase.driver(NEO4J_URI, auth=NEO4J_AUTH) as driver:
+        with driver.session() as session:
+            get_transfer_time(
+                session, Platform(8000240, '2a/b'), Platform(8000240, '3a/b')
+            )
+
     transfer_times_by_eva(8000141)
     gather_transfer_times()
 
