@@ -15,7 +15,7 @@ spec:
             - name: station-finder
               image: trainconnectionprediction/bahnvorhersage:latest
               command: ["python3"]
-              args: ["-m", "rtd_crawler.station_finder"]
+              args: ["-m", "python.station_finder"]
               imagePullPolicy: Always
               volumeMounts:
                 - name: tz-berlin # set timezone to CEST
