@@ -1,15 +1,11 @@
-import os, sys
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if os.path.isfile("/mnt/config/config.py"):
-    sys.path.append("/mnt/config/")
-
 import json
-import pandas as pd
-import matplotlib.pyplot as plt
-from helpers import colormaps
 from datetime import datetime
 from typing import Optional
+
+import matplotlib.pyplot as plt
+import pandas as pd
+
+from helpers import colormaps
 
 
 def plot_ar(
@@ -110,6 +106,74 @@ def plot_dp(
         plt.show()
 
 
+def plot_simple_ar(stats: pd.DataFrame, save_as: Optional[str] = None):
+    simple_stats = stats.groupby('ar_minute').mean()
+
+    fig, ax = plt.subplots()
+    simple_stats['ar_accuracy'].plot(
+        kind='line',
+        ax=ax,
+        linewidth=3,
+        label='Modellgenauigkeit',
+    )
+    simple_stats['ar_baseline'].plot(
+        kind='line',
+        ax=ax,
+        linewidth=3,
+        label='Baseline',
+    )
+
+    ax.set_title(f'Ankunft', fontsize=50)
+    ax.tick_params(axis='both', labelsize=20)
+    ax.set_ylabel('Genauigkeit', fontsize=30)
+    ax.set_xlabel('Minute', fontsize=30)
+
+    ax.grid()
+    ax.set_xlim(0, 14)
+    ax.set_ylim(0.5, 1)
+    fig.legend(fontsize=18)
+
+    if save_as is not None:
+        fig.set_size_inches(13.6, 8.5)
+        fig.savefig(save_as, dpi=300, bbox_inches='tight')
+    else:
+        plt.show()
+
+
+def plot_simple_dp(stats: pd.DataFrame, save_as: Optional[str] = None):
+    simple_stats = stats.groupby('dp_minute').mean()
+
+    fig, ax = plt.subplots()
+    simple_stats['dp_accuracy'].plot(
+        kind='line',
+        ax=ax,
+        linewidth=3,
+        label='Modellgenauigkeit',
+    )
+    simple_stats['dp_baseline'].plot(
+        kind='line',
+        ax=ax,
+        linewidth=3,
+        label='Baseline',
+    )
+
+    ax.set_title(f'Abfahrt', fontsize=50)
+    ax.tick_params(axis='both', labelsize=20)
+    ax.set_ylabel('Genauigkeit', fontsize=30)
+    ax.set_xlabel('Minute', fontsize=30)
+
+    ax.grid()
+    ax.set_xlim(0, 14)
+    ax.set_ylim(0.5, 1)
+    fig.legend(fontsize=18)
+
+    if save_as is not None:
+        fig.set_size_inches(13.6, 8.5)
+        fig.savefig(save_as, dpi=300, bbox_inches='tight')
+    else:
+        plt.show()
+
+
 if __name__ == '__main__':
     data = json.load(open("cache/test copy.json", "r"))
     parsed = []
@@ -137,6 +201,9 @@ if __name__ == '__main__':
     # stats = stats.groupby(['ar_minute']).mean(numeric_only=True)
     # stats.drop(columns=['ar_minute'], inplace=True)
     stats.set_index('date', inplace=True)
+
+    plot_simple_ar(stats, save_as='pred_accu_ar_overview.png')
+    plot_simple_dp(stats, save_as='pred_accu_dp_overview.png')
 
     plot_ar(stats, 0, 6, save_as='stats_ar_0_6.png')
     plot_ar(stats, 6, 12, save_as='stats_ar_6_12.png')
