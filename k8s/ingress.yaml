@@ -50,7 +50,7 @@ spec:
     - podcast-tech24.de
     - thesilentwave.de
     - dzconnect.de
-    - file.dzconnect.de
+    - code-load.io
     - wohnung-in-esslingen.de
     - endstationzukunft.de
     secretName: default-tls-secret
@@ -195,7 +195,7 @@ spec:
               name: sfz-dzconnect
               port:
                 number: 80
-  - host: "file.dzconnect.de"
+  - host: "code-load.io"
     http: &file-dzconnect
       paths:
         - path: /
