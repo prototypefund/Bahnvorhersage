@@ -58,15 +58,23 @@ class PerCategoryAnalysis(abc.ABC):
                 .agg(
                     {
                         'ar_delay': ['count', 'mean'],
-                        'ar_happened': ['mean'],
+                        'ar_happened': ['sum'],
                         'dp_delay': ['count', 'mean'],
-                        'dp_happened': ['mean'],
+                        'dp_happened': ['sum'],
                     }
                 )
                 .compute()
             )
 
         data = groupby_index_to_flat(data)
+
+        data['ar_happened_mean'] = (
+                data['ar_happened_sum'] / data['ar_delay_count']
+            )
+
+        data['dp_happened_mean'] = (
+            data['dp_happened_sum'] / data['dp_delay_count']
+        )
 
         return data
 
@@ -100,7 +108,7 @@ class PerCategoryAnalysis(abc.ABC):
         delays = delays[use_trains]
 
         fig, ax = plt.subplots(subplot_kw=dict(aspect="equal"))
-        ax.set_title(f'Verspätung pro {self.category_name}', fontsize=30)
+        ax.set_title(f'Ø Verspätung pro {self.category_name}', fontsize=30)
         ax.axis("off")
 
         type_count = (
@@ -151,8 +159,10 @@ class PerCategoryAnalysis(abc.ABC):
         use_trains = np.logical_not(np.isnan(happened))
         happened = happened[use_trains]
 
+        cancellations = 100 - (happened * 100)
+
         fig, ax = plt.subplots(subplot_kw=dict(aspect="equal"))
-        ax.set_title(f'Ausfälle pro {self.category_name}', fontsize=30)
+        ax.set_title(f'Prozent ausgefallene Züge je {self.category_name}', fontsize=30)
         ax.axis("off")
         type_count = (
             self.data.loc[use_trains, 'ar_delay_count']
@@ -160,7 +170,7 @@ class PerCategoryAnalysis(abc.ABC):
         ).to_numpy()
 
         cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
-            "", ["red", "yellow", "green"]
+            "", ["green", "yellow", "red"]
         )
         bubble_plot = BubbleChart(area=type_count, bubble_spacing=40)
         bubble_plot.collapse(n_iterations=100)
@@ -170,21 +180,21 @@ class PerCategoryAnalysis(abc.ABC):
             labels=self.data.loc[use_trains, :].index,
             colors=[
                 cmap(delay)
-                for delay in (happened - happened.min())
-                / max(happened - happened.min())
+                for delay in (cancellations - cancellations.min())
+                / max(cancellations - cancellations.min())
             ],
         )
 
         # scatter in order to set colorbar
         scatter = ax.scatter(
-            np.zeros(len(happened)), np.zeros(len(happened)), s=0, c=happened, cmap=cmap
+            np.zeros(len(cancellations)), np.zeros(len(cancellations)), s=0, c=cancellations, cmap=cmap
         )
         colorbar = fig.colorbar(scatter)
         colorbar.solids.set_edgecolor("face")
         colorbar.outline.set_linewidth(0)
         colorbar.ax.get_yaxis().labelpad = 15
         colorbar.ax.set_ylabel(
-            "Anteil der tatsächlich stattgefundenen Halte", rotation=270
+            "Prozent ausgefallene Züge", rotation=270
         )
 
         ax.relim()
