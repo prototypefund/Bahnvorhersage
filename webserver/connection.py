@@ -1,6 +1,7 @@
 import datetime
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from typing import Dict, List
 
 import numpy as np
 import requests
@@ -9,10 +10,8 @@ from pytz import timezone
 from database.ris_transfer_time import Connection
 from helpers import ttl_lru_cache
 from webserver import predictor, streckennetz
-from webserver.transfer_times import (
-    get_needed_transfer_times,
-    shift_predictions_by_transfer_time,
-)
+from webserver.transfer_times import (get_needed_transfer_times,
+                                      shift_predictions_by_transfer_time)
 
 
 @dataclass
@@ -75,6 +74,16 @@ def from_utc(utc_time: str) -> datetime.datetime:
     )
 
 
+def get_journey(request_data: Dict) -> List[Dict]:
+    for _ in range(3):
+        r = requests.get(
+            'https://db-rest.bahnvorhersage.de/journeys', params=request_data
+        )
+        if r.ok:
+            return r.json()['journeys']
+    raise requests.RequestException(r.text)
+
+
 def get_journeys(
     start: str,
     destination: str,
@@ -128,9 +137,7 @@ def get_journeys(
     else:
         request_data['departure'] = date.replace(tzinfo=timezone("CET")).isoformat()
 
-    journeys: list[dict] = requests.get(
-        'https://db-rest.bahnvorhersage.de/journeys', params=request_data
-    ).json()['journeys']
+    journeys = get_journey(request_data)
 
     trip_ids = extract_trip_ids(journeys)
     train_trips = get_trips_of_trains(trip_ids)
