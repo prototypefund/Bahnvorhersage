@@ -81,7 +81,7 @@ def get_journeys(
     date: datetime.datetime,
     max_changes: int = -1,
     transfer_time: int = 0,
-    search_for_departure: bool = True,
+    search_for_arrival: bool = False,
     only_regional: bool = False,
     bike: bool = False,
 ) -> tuple[list[dict], list[list[dict]]]:
@@ -100,8 +100,8 @@ def get_journeys(
         Maximum number of allowed changes, by default -1
     transfer_time : int, optional
         Minimal transfer time, by default 0
-    search_for_departure : bool, optional
-        False = time == arrival time, by default True
+    search_for_arrival : bool, optional
+        True = time == arrival time, by default True
     only_regional : bool, optional
         True = only search for regional connections, by default False
     bike : bool, optional
@@ -123,10 +123,10 @@ def get_journeys(
         'national': False if only_regional else True,
     }
 
-    if search_for_departure:
-        request_data['departure'] = date.replace(tzinfo=timezone("CET")).isoformat()
-    else:
+    if search_for_arrival:
         request_data['arrival'] = date.replace(tzinfo=timezone("CET")).isoformat()
+    else:
+        request_data['departure'] = date.replace(tzinfo=timezone("CET")).isoformat()
 
     journeys: list[dict] = requests.get(
         'https://db-rest.bahnvorhersage.de/journeys', params=request_data
@@ -149,7 +149,7 @@ def get_and_rate_journeys(
     start: str,
     destination: str,
     date: datetime.datetime,
-    search_for_departure: bool = True,
+    search_for_arrival: bool = False,
     only_regional: bool = False,
     bike: bool = False,
 ) -> list[dict]:
@@ -157,7 +157,7 @@ def get_and_rate_journeys(
         start=start,
         destination=destination,
         date=date,
-        search_for_departure=search_for_departure,
+        search_for_arrival=search_for_arrival,
         only_regional=only_regional,
         bike=bike,
     )

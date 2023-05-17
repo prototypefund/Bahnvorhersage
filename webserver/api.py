@@ -105,10 +105,10 @@ def trip():
     date = datetime.strptime(request.json['date'], "%d.%m.%Y %H:%M")
 
     # optional:
-    search_for_departure = (
-        request.json['search_for_departure']
-        if 'search_for_departure' in request.json
-        else True
+    search_for_arrival = (
+        request.json['search_for_arrival']
+        if 'search_for_arrival' in request.json
+        else False
     )
     only_regional = (
         request.json['only_regional'] if 'only_regional' in request.json else False
@@ -120,7 +120,7 @@ def trip():
     )
 
     journeys = get_and_rate_journeys(
-        start, destination, date, search_for_departure, only_regional, bike
+        start, destination, date, search_for_arrival, only_regional, bike
     )
     resp = jsonify(journeys)
     resp.headers.add("Access-Control-Allow-Origin", "*")

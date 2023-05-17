@@ -92,9 +92,9 @@ def create_base_plot(
         colors = {
             'background': '#ffffff',
             'land': (240 / 256, 240 / 256, 220 / 256),
-            'land_edge': 'gray',
-            'states': (240 / 256, 240 / 256, 220 / 256),
-            'state_borders': 'gray',
+            'land_edge': '#adb5bd',
+            'states': 'lightgray',
+            'state_borders': '#adb5bd',
         }
     else:
         raise ValueError(f"Unknown color scheme {color_scheme}")
@@ -455,6 +455,14 @@ class PerStationOverTime(StationPhillip):
 
 if __name__ == "__main__":
     import helpers.bahn_vorhersage
+
+    per_station_time = PerStationOverTime(generate=False, prefer_cache=True)
+    per_station_time.generate_plot(
+        datetime.datetime(2022, 6, 1), datetime.datetime(2022, 8, 31)
+    )
+    per_station_time.generate_plot(
+        datetime.datetime(2022, 1, 1), datetime.datetime(2022, 5, 30)
+    )
 
     rtd_df = RtdRay.load_data(
         columns=[
