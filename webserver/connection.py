@@ -132,10 +132,14 @@ def get_journeys(
         'national': False if only_regional else True,
     }
 
+    # Convert to local timezone for API request
+    local_timezone = timezone("Europe/Berlin")
+    date_with_timezone = local_timezone.localize(date)
+
     if search_for_arrival:
-        request_data['arrival'] = date.replace(tzinfo=timezone("CET")).isoformat()
+        request_data['arrival'] = date_with_timezone.isoformat()
     else:
-        request_data['departure'] = date.replace(tzinfo=timezone("CET")).isoformat()
+        request_data['departure'] = date_with_timezone.isoformat()
 
     journeys = get_journey(request_data)
 
@@ -315,6 +319,7 @@ def extract_iris_like(journeys: list[dict], train_trips: dict) -> list[dict]:
                 segments[leg + 1]['dp_ct'] - segments[leg]['ar_ct']
             ).seconds // 60
     return segments
+
 
 def get_trip(trip_id: str) -> dict:
     for _ in range(3):
