@@ -11,6 +11,7 @@ import concurrent.futures
 from tqdm import tqdm
 from config import CACHE_PATH, n_dask_workers, ENCODER_PATH
 import pickle
+import random
 
 from dask.distributed import Client
 
@@ -78,6 +79,9 @@ def get_connecting_trains(df):
         ar.index = new_index
         dp.index = new_index
 
+        ar = ar.astype(df.dtypes)
+        dp = dp.astype(df.dtypes)
+
         if len(ar) != len(dp):
             raise ValueError('ar and dp not of equal length')
 
@@ -100,6 +104,8 @@ def save_connecting_trains(station_name: str, part: int):
             ar.to_parquet(ar_path, engine='pyarrow')
             dp.to_parquet(dp_path, engine='pyarrow')
         print(f"Saved {station_name}")
+    except FileNotFoundError:
+        pass
     except Exception as e:
         print(e)
 
@@ -139,15 +145,27 @@ if __name__ == "__main__":
     stations = StationPhillip()
     # save_connecting_trains(stations.sta_list[100], 100)
 
-    # with concurrent.futures.ProcessPoolExecutor(max_workers=14) as executor:
-    #     for _ in tqdm(
-    #         executor.map(
-    #             save_connecting_trains, stations, range(len(stations))
-    #         ),
-    #         desc='Finding connecting trains',
-    #         total=len(stations),
-    #     ):
-    #         pass
+    with concurrent.futures.ProcessPoolExecutor(max_workers=5) as executor:
+        # Put the stations in a random order, so that there are less groups of
+        # big stations with similar names (München Hbf, München Pasing, ...)
+        random_stations = stations.sta_list
+        random.shuffle(random_stations)
+        futures = {
+            executor.submit(save_connecting_trains, station, i)
+            for i, station in enumerate((random_stations))
+        }
+        for _ in tqdm(
+            concurrent.futures.as_completed(futures),
+            desc='Finding connecting trains',
+            total=len(stations),
+        ):
+            pass
+        # for _ in tqdm(
+        #     executor.map(save_connecting_trains, stations, range(len(stations))),
+        #     desc='Finding connecting trains',
+        #     total=len(stations),
+        # ):
+        #     pass
 
     # ar = dd.read_parquet(
     #     CACHE_PATH + '/connecting_trains_ar', engine='pyarrow'
