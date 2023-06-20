@@ -119,7 +119,7 @@ async def monitor_website():
             'start': 'Tübingen Hbf',
             'destination': 'Köln Hbf',
             'date': (datetime.datetime.now() + datetime.timedelta(hours=1)).strftime('%d.%m.%Y %H:%M'),
-            'search_for_departure': True
+            'search_for_arrival': False
         }
         trip = requests.post('https://bahnvorhersage.de/api/trip', json=search)
         if trip.ok:

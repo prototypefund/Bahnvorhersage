@@ -1,51 +1,35 @@
-import os
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if os.path.isfile("/mnt/config/config.py"):
-    sys.path.append("/mnt/config/")
-import pandas as pd
-import datetime
-from tqdm import tqdm
-import traceback
-from database import Change, PlanById, unparsed, Rtd, sessionfactory, session_scope
-from helpers import ObstacleOlly
-import time
+import argparse
 import concurrent.futures
 import multiprocessing as mp
-import argparse
-from typing import Dict, List, Tuple, Union
-from config import redis_url
+import time
+import traceback
+from typing import Dict, List, Tuple
+
+import pandas as pd
 from redis import Redis
+from tqdm import tqdm
+
+from config import redis_url
+from database import (Change, PlanById, Rtd, session_scope, sessionfactory,
+                      unparsed)
+from helpers import StreckennetzSteffi
+from rtd_crawler.parser_helpers import db_to_datetime, parse_path
 
 engine, Session = sessionfactory()
 
 parser = argparse.ArgumentParser(description='Parse train delay data')
-parser.add_argument('--parse_continues', help='Check for unparsed data every 60 seconds and parse it', action="store_true")
-parser.add_argument('--parse_all', help='Parse all raw data that is in the database', action="store_true")
+parser.add_argument(
+    '--parse_continues',
+    help='Check for unparsed data every 60 seconds and parse it',
+    action="store_true",
+)
+parser.add_argument(
+    '--parse_all',
+    help='Parse all raw data that is in the database',
+    action="store_true",
+)
 Rtd()
-obstacles = ObstacleOlly(prefer_cache=False)
-
-
-def db_to_datetime(dt: Union[str, None]) -> Union[datetime.datetime, None]:
-    """
-    Convert bahn time in format: '%y%m%d%H%M' to datetime.
-    As it is fastest to directly construct a datetime object from this, no strptime is used.
-
-    Args:
-        dt (str): bahn time format
-
-    Returns:
-        datetime.datetime: converted bahn time
-    """
-    if dt is None:
-        return None
-    return datetime.datetime(int('20' + dt[0:2]), int(dt[2:4]), int(dt[4:6]), int(dt[6:8]), int(dt[8:10]))
-
-
-def parse_path(path: Union[str, None]) -> Union[List[str], None]:
-    if path is None or not path:
-        return None
-    return path.split('|')
+streckennetz = StreckennetzSteffi(prefer_cache=False)
 
 
 def parse_stop_plan(hash_id: int, stop: dict) -> dict:
@@ -57,7 +41,7 @@ def parse_stop_plan(hash_id: int, stop: dict) -> dict:
         'dayly_id': int(id_parts[0]),
         'date_id': db_to_datetime(id_parts[1]),
         'stop_id': int(id_parts[2]),
-        'station': stop['station']
+        'station': stop['station'],
     }
 
     if 'tl' in stop:
@@ -72,7 +56,7 @@ def parse_stop_plan(hash_id: int, stop: dict) -> dict:
         parsed['n'] = None
         parsed['o'] = None
         parsed['c'] = None
-    
+
     if 'ar' in stop:
         parsed['ar_pt'] = db_to_datetime(stop['ar'][0].get('pt'))
         parsed['ar_ppth'] = parse_path(stop['ar'][0].get('ppth'))
@@ -127,7 +111,7 @@ def add_change(stop: dict, change: dict) -> dict:
         stop['ar_cpth'] = stop['ar_ppth']
         stop['ar_cs'] = stop['ar_ps']
         stop['ar_cp'] = stop['ar_pp']
-    
+
     if 'dp' in change:
         stop['dp_ct'] = db_to_datetime(change['dp'][0].get('ct')) or stop['dp_pt']
         stop['dp_clt'] = db_to_datetime(change['dp'][0].get('clt'))
@@ -145,16 +129,20 @@ def add_change(stop: dict, change: dict) -> dict:
 
 def add_route_info(stop: dict) -> dict:
     if stop['ar_cpth'] is not None:
-        stop['distance_to_last'] = obstacles.route_length([stop['ar_cpth'][-1]] + [stop['station']], date=stop['date_id'])
-        stop['distance_to_start'] = obstacles.route_length(stop['ar_cpth'] + [stop['station']], date=stop['date_id'])
+        stop['distance_to_last'] = streckennetz.route_length(
+            [stop['ar_cpth'][-1]] + [stop['station']], date=stop['date_id']
+        )
+        stop['distance_to_start'] = streckennetz.route_length(
+            stop['ar_cpth'] + [stop['station']], date=stop['date_id']
+        )
 
-        path_obstacles = obstacles.obstacles_of_path(stop['ar_cpth'] + [stop['station']], stop['ar_pt'])
-        stop['obstacles_priority_24'] = path_obstacles['priority_24']
-        stop['obstacles_priority_37'] = path_obstacles['priority_37']
-        stop['obstacles_priority_63'] = path_obstacles['priority_63']
-        stop['obstacles_priority_65'] = path_obstacles['priority_65']
-        stop['obstacles_priority_70'] = path_obstacles['priority_70']
-        stop['obstacles_priority_80'] = path_obstacles['priority_80']
+        # path_obstacles = streckennetz.obstacles_of_path(stop['ar_cpth'] + [stop['station']], stop['ar_pt'])
+        stop['obstacles_priority_24'] = 0
+        stop['obstacles_priority_37'] = 0
+        stop['obstacles_priority_63'] = 0
+        stop['obstacles_priority_65'] = 0
+        stop['obstacles_priority_70'] = 0
+        stop['obstacles_priority_80'] = 0
     else:
         stop['distance_to_last'] = 0
         stop['distance_to_start'] = 0
@@ -167,8 +155,12 @@ def add_route_info(stop: dict) -> dict:
         stop['obstacles_priority_80'] = 0
 
     if stop['dp_cpth'] is not None:
-        stop['distance_to_next'] = obstacles.route_length([stop['station']] + [stop['dp_cpth'][0]], date=stop['date_id'])
-        stop['distance_to_end'] = obstacles.route_length([stop['station']] + stop['dp_cpth'], date=stop['date_id'])
+        stop['distance_to_next'] = streckennetz.route_length(
+            [stop['station']] + [stop['dp_cpth'][0]], date=stop['date_id']
+        )
+        stop['distance_to_end'] = streckennetz.route_length(
+            [stop['station']] + stop['dp_cpth'], date=stop['date_id']
+        )
     else:
         stop['distance_to_next'] = 0
         stop['distance_to_end'] = 0
@@ -233,26 +225,26 @@ def parse_chunk(chunk_limits: Tuple[int, int]):
     with session_scope(Session) as session:
         stops = PlanById.get_stops_from_chunk(session, chunk_limits)
     parse_batch(stops.keys(), stops)
-    obstacles.store_edge_path_persistent_cache(engine)
 
 
 def parse_all():
-    """Parse all raw data there is
-    """
+    """Parse all raw data there is"""
     with session_scope(Session) as session:
         chunk_limits = PlanById.get_chunk_limits(session)
 
     # # Non-concurrent code for debugging
     # for chunk in tqdm(chunk_limits, total=len(chunk_limits)):
     #     parse_chunk(chunk)
-            
-    with concurrent.futures.ProcessPoolExecutor(min(32, os.cpu_count()), mp_context=mp.get_context('spawn')) as executor:
+
+    with concurrent.futures.ProcessPoolExecutor(
+        min(16, os.cpu_count()), mp_context=mp.get_context('spawn')
+    ) as executor:
         parser_tasks = {
-            executor.submit(parse_chunk, chunk): chunk
-            for chunk
-            in chunk_limits
+            executor.submit(parse_chunk, chunk): chunk for chunk in chunk_limits
         }
-        for future in tqdm(concurrent.futures.as_completed(parser_tasks), total=len(chunk_limits)):
+        for future in tqdm(
+            concurrent.futures.as_completed(parser_tasks), total=len(chunk_limits)
+        ):
             future.result()
 
 
@@ -267,4 +259,3 @@ if __name__ == "__main__":
     if args.parse_continues:
         print('Starting continues parser')
         parse_unparsed_continues()
-

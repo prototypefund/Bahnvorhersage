@@ -1,15 +1,17 @@
-import os
-import sys
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import datetime
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from typing import Dict, List
+
+import numpy as np
 import requests
 from pytz import timezone
-from webserver import streckennetz, predictor
-from concurrent.futures import ThreadPoolExecutor
-import datetime
+
+from database.ris_transfer_time import Connection
 from helpers import ttl_lru_cache
-import numpy as np
+from webserver import predictor, streckennetz
+from webserver.transfer_times import (get_needed_transfer_times,
+                                      shift_predictions_by_transfer_time)
 
 
 @dataclass
@@ -19,29 +21,40 @@ class Prediction:
     ar_predictions: list[float]
     dp_predictions: list[float]
     transfer_times: list[int]
+    needed_transfer_times: list[Connection]
 
 
-def rate_journey(journey: list[dict]) -> Prediction:
+def rate_journey(iris_journey: list[dict], fptf_journey: list[dict]) -> Prediction:
     """
     Analyses/evaluates/rates a given journey using machine learning
 
     Parameters
     ----------
-    journey : list[dict]
-        The journey to analyze
+    ...
 
     Returns
     -------
     Prediction
         The journey with the evaluation/rating
     """
-    ar_data, dp_data = predictor.get_pred_data(journey, streckennetz)
+    needed_transfer_times = list(get_needed_transfer_times(fptf_journey['legs']))
+
+    ar_data, dp_data = predictor.get_pred_data(iris_journey, streckennetz)
     ar_prediction = predictor.predict_ar(ar_data)
     dp_prediction = predictor.predict_dp(dp_data)
-    transfer_time = np.array([segment['transfer_time'] for segment in journey[:-1]])
-    con_scores = predictor.predict_con(
-        ar_prediction[:-1], dp_prediction[1:], transfer_time
+
+    transfer_time = np.array(
+        [segment['transfer_time'] for segment in iris_journey[:-1]]
     )
+
+    ar_con_prediction, dp_con_prediction = shift_predictions_by_transfer_time(
+        ar_prediction[:-1].copy(),
+        dp_prediction[1:].copy(),
+        transfer_time,
+        needed_transfer_times,
+    )
+
+    con_scores = predictor.predict_con(ar_con_prediction, dp_con_prediction)
 
     return Prediction(
         connection_score=int(round(con_scores.prod() * 100)),
@@ -49,6 +62,7 @@ def rate_journey(journey: list[dict]) -> Prediction:
         ar_predictions=ar_prediction[:, 0].tolist(),
         dp_predictions=dp_prediction[:, 1].tolist(),
         transfer_times=transfer_time.tolist(),
+        needed_transfer_times=needed_transfer_times,
     )
 
 
@@ -60,13 +74,23 @@ def from_utc(utc_time: str) -> datetime.datetime:
     )
 
 
+def get_journey(request_data: Dict) -> List[Dict]:
+    for _ in range(3):
+        r = requests.get(
+            'https://db-rest.bahnvorhersage.de/journeys', params=request_data
+        )
+        if r.ok:
+            return r.json()['journeys']
+    raise requests.RequestException(r.text)
+
+
 def get_journeys(
     start: str,
     destination: str,
     date: datetime.datetime,
     max_changes: int = -1,
     transfer_time: int = 0,
-    search_for_departure: bool = True,
+    search_for_arrival: bool = False,
     only_regional: bool = False,
     bike: bool = False,
 ) -> tuple[list[dict], list[list[dict]]]:
@@ -85,8 +109,8 @@ def get_journeys(
         Maximum number of allowed changes, by default -1
     transfer_time : int, optional
         Minimal transfer time, by default 0
-    search_for_departure : bool, optional
-        False = time == arrival time, by default True
+    search_for_arrival : bool, optional
+        True = time == arrival time, by default True
     only_regional : bool, optional
         True = only search for regional connections, by default False
     bike : bool, optional
@@ -108,14 +132,16 @@ def get_journeys(
         'national': False if only_regional else True,
     }
 
-    if search_for_departure:
-        request_data['departure'] = date.replace(tzinfo=timezone("CET")).isoformat()
-    else:
-        request_data['arrival'] = date.replace(tzinfo=timezone("CET")).isoformat()
+    # Convert to local timezone for API request
+    local_timezone = timezone("Europe/Berlin")
+    date_with_timezone = local_timezone.localize(date)
 
-    journeys: list[dict] = requests.get(
-        'https://db-rest.bahnvorhersage.de/journeys', params=request_data
-    ).json()['journeys']
+    if search_for_arrival:
+        request_data['arrival'] = date_with_timezone.isoformat()
+    else:
+        request_data['departure'] = date_with_timezone.isoformat()
+
+    journeys = get_journey(request_data)
 
     trip_ids = extract_trip_ids(journeys)
     train_trips = get_trips_of_trains(trip_ids)
@@ -134,7 +160,7 @@ def get_and_rate_journeys(
     start: str,
     destination: str,
     date: datetime.datetime,
-    search_for_departure: bool = True,
+    search_for_arrival: bool = False,
     only_regional: bool = False,
     bike: bool = False,
 ) -> list[dict]:
@@ -142,12 +168,13 @@ def get_and_rate_journeys(
         start=start,
         destination=destination,
         date=date,
-        search_for_departure=search_for_departure,
+        search_for_arrival=search_for_arrival,
         only_regional=only_regional,
         bike=bike,
     )
 
-    for i, prediction in enumerate(map(rate_journey, prediction_data)):
+    for i, prediction in enumerate(map(rate_journey, prediction_data, journeys)):
+        prediction: Prediction
         journeys[i]['connectionScore'] = prediction.connection_score
 
         # This id is used for vue.js to render the list of connections
@@ -179,6 +206,9 @@ def get_and_rate_journeys(
                 journeys[i]['legs'][leg_index][
                     'transferScore'
                 ] = prediction.transfer_score[leg_index - walking_legs]
+                journeys[i]['legs'][leg_index][
+                    'neededTransferTime'
+                ] = prediction.needed_transfer_times[leg_index - walking_legs].to_dict()
                 journeys[i]['legs'][leg_index][
                     'transferTime'
                 ] = prediction.transfer_times[leg_index - walking_legs]
@@ -291,13 +321,21 @@ def extract_iris_like(journeys: list[dict], train_trips: dict) -> list[dict]:
     return segments
 
 
+def get_trip(trip_id: str) -> dict:
+    for _ in range(3):
+        r = requests.get(
+            'https://db-rest.bahnvorhersage.de/trips/{}'.format(trip_id),
+        )
+        if r.ok:
+            return r.json()['trip']
+    raise requests.RequestException(r.text)
+
+
 # This information does change over time, so a permanent cache would give
 # wrong results. Thus, we only cache the result for 3 minutes.
 @ttl_lru_cache(seconds_to_live=180, maxsize=500)
 def get_trip_of_train(trip_id: str):
-    trip: dict = requests.get(
-        'https://db-rest.bahnvorhersage.de/trips/{}'.format(trip_id),
-    ).json()['trip']
+    trip = get_trip(trip_id)
     waypoints = [stopover['stop']['name'] for stopover in trip['stopovers']]
     stay_times = [
         (

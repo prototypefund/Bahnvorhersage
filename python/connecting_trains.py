@@ -19,24 +19,34 @@ from dask.distributed import Client
 def seperate_station(station_name: str, station_code: int):
     with Client(n_workers=14, threads_per_worker=1) as client:
         rtd = RtdRay.load_for_ml_model(label_encode=True, return_times=True)
-        station_rtd = rtd.loc[rtd['station'] == station_code, :].compute()
-        station_rtd.to_parquet(
-            CACHE_PATH + '/station_rtd/' + station_name + '.parquet',
-            engine='pyarrow',
-        )
+        # TODO: this is not tested, but should be way more efficient
+        station_rtd = rtd.set_index('station')
+        station_rtd.to_parquet(CACHE_PATH + '/station_rtd/', engine='pyarrow')
+
+        # station_rtd = rtd.loc[rtd['station'] == station_code, :].compute()
+        # station_rtd.to_parquet(
+        #     CACHE_PATH + '/station_rtd/' + station_name + '.parquet',
+        #     engine='pyarrow',
+        # )
 
 
 def separate_stations():
-    station_encoder = pickle.loads(
-        open(ENCODER_PATH.format(encoder='station'), 'rb').read()
-    )
+    with Client(n_workers=14, threads_per_worker=1) as client:
+        rtd = RtdRay.load_for_ml_model(label_encode=True, return_times=True)
+        # TODO: this is not tested, but should be way more efficient
+        station_rtd = rtd.set_index('station')
+        station_rtd.to_parquet(CACHE_PATH + '/station_rtd/', engine='pyarrow')
 
-    stations = StationPhillip()
-    for station_name in tqdm(stations.sta_list[177:], desc='separating stations'):
-        try:
-            seperate_station(station_name, station_encoder[station_name])
-        except Exception as e:
-            print(e)
+    # station_encoder = pickle.loads(
+    #     open(ENCODER_PATH.format(encoder='station'), 'rb').read()
+    # )
+
+    # stations = StationPhillip()
+    # for station_name in tqdm(stations.sta_list[177:], desc='separating stations'):
+    #     try:
+    #         seperate_station(station_name, station_encoder[station_name])
+    #     except Exception as e:
+    #         print(e)
 
 
 def get_connecting_trains(df):
@@ -130,7 +140,7 @@ def repartition():
 if __name__ == "__main__":
     import helpers.bahn_vorhersage
 
-    # separate_stations()
+    separate_stations()
 
     # station_rtd = pd.read_parquet(CACHE_PATH + '/station_rtd/part.0.parquet')
     # get_connecting_trains(station_rtd)

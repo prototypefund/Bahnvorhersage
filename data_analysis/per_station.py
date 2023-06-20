@@ -61,7 +61,9 @@ BBOX_GERMANY = (MIN_LON, MAX_LON, MIN_LAT, MAX_LAT)
 
 
 def create_base_plot(
-    crs: cartopy.crs.CRS, bbox: tuple[float, float, float, float]
+    crs: cartopy.crs.CRS,
+    bbox: tuple[float, float, float, float],
+    color_scheme: str = 'dark',
 ) -> tuple[plt.Figure, plt.Axes]:
     """Create pretty geo base plot with given crs and bbox.
 
@@ -78,6 +80,25 @@ def create_base_plot(
     plt.Figure, plt.Axes
         Figure and axes of the plot.
     """
+    if color_scheme == 'dark':
+        colors = {
+            'background': '#191a1a',
+            'land': '#343332',
+            'land_edge': '#5c5b5b',
+            'states': '#444444',
+            'state_borders': '#5c5b5b',
+        }
+    elif color_scheme == 'light':
+        colors = {
+            'background': '#ffffff',
+            'land': (240 / 256, 240 / 256, 220 / 256),
+            'land_edge': '#adb5bd',
+            'states': 'lightgray',
+            'state_borders': '#adb5bd',
+        }
+    else:
+        raise ValueError(f"Unknown color scheme {color_scheme}")
+
     fig, ax = plt.subplots(subplot_kw={'projection': crs})
 
     ax.set_extent(bbox, crs=ccrs.Geodetic())
@@ -86,31 +107,23 @@ def create_base_plot(
     # because it doesn't support shape clipping and therefore is way slower.
     # https://stackoverflow.com/questions/61157293/speeding-up-high-res-coastline-plotting-with-cartopy
 
-    # ax.add_feature(cartopy.feature.OCEAN, facecolor='#191a1a')
-    # ocean = cartopy.feature.NaturalEarthFeature('physical', 'ocean', '50m')
-    # ocean = [clip_by_rect(geom, *bbox) for geom in ocean.geometries() if geom is not None]
     ax.add_geometries(
-        [shapely.geometry.box(*bbox)], crs=ccrs.PlateCarree(), facecolor='#191a1a'
+        [shapely.geometry.box(*bbox)],
+        crs=ccrs.PlateCarree(),
+        facecolor=colors['background'],
     )
 
-    # ax.add_feature(cartopy.feature.LAND, facecolor='#343332', edgecolor='#5c5b5b')
+    # ax.add_feature(cartopy.feature.LAND, facecolor=colors['land'], edgecolor=colors['land_edge'])
     land = cartopy.feature.NaturalEarthFeature('physical', 'land', '10m')
     land = [clip_by_rect(geom, *bbox) for geom in land.geometries() if geom is not None]
     ax.add_geometries(
-        land, crs=ccrs.PlateCarree(), facecolor='#343332', edgecolor='#5c5b5b'
+        land,
+        crs=ccrs.PlateCarree(),
+        facecolor=colors['land'],
+        edgecolor=colors['land_edge'],
     )
 
-    # # ax.add_feature(cartopy.feature.LAKES, facecolor='#191a1a', edgecolor='#5c5b5b')
-    # lakes = cartopy.feature.NaturalEarthFeature('physical', 'lakes', '50m')
-    # lakes = [clip_by_rect(geom, *bbox) for geom in lakes.geometries() if geom is not None]
-    # ax.add_geometries(lakes, crs=ccrs.PlateCarree(), facecolor='#191a1a', edgecolor='#5c5b5b')
-
-    # # ax.add_feature(cartopy.feature.RIVERS, edgecolor='#343332')
-    # rivers = cartopy.feature.NaturalEarthFeature('physical', 'rivers_lake_centerlines', '50m')
-    # rivers = [clip_by_rect(geom, *bbox) for geom in rivers.geometries() if geom is not None]
-    # ax.add_geometries(rivers, crs=ccrs.PlateCarree(), edgecolor='#343332')
-
-    # ax.add_feature(cartopy.feature.STATES, edgecolor='#444444')
+    # ax.add_feature(cartopy.feature.STATES, edgecolor=colors['states'])
     states = cartopy.feature.NaturalEarthFeature(
         'cultural', 'admin_1_states_provinces_lakes', '10m'
     )
@@ -118,10 +131,13 @@ def create_base_plot(
         clip_by_rect(geom, *bbox) for geom in states.geometries() if geom is not None
     ]
     ax.add_geometries(
-        states, crs=ccrs.PlateCarree(), facecolor='#343332', edgecolor='#444444'
+        states,
+        crs=ccrs.PlateCarree(),
+        facecolor=colors['land'],
+        edgecolor=colors['states'],
     )
 
-    # ax.add_feature(cartopy.feature.BORDERS, edgecolor='#5c5b5b')
+    # ax.add_feature(cartopy.feature.BORDERS, edgecolor=colors['land_edge'])
     borders = cartopy.feature.NaturalEarthFeature(
         'cultural', 'admin_0_boundary_lines_land', '10m'
     )
@@ -129,7 +145,10 @@ def create_base_plot(
         clip_by_rect(geom, *bbox) for geom in borders.geometries() if geom is not None
     ]
     ax.add_geometries(
-        borders, crs=ccrs.PlateCarree(), facecolor='#343332', edgecolor='#5c5b5b'
+        borders,
+        crs=ccrs.PlateCarree(),
+        facecolor=colors['land'],
+        edgecolor=colors['land_edge'],
     )
 
     ax.set_axis_off()
@@ -143,7 +162,7 @@ class PerStationOverTime(StationPhillip):
         min_latitude=MIN_LAT,
         max_latitude=MAX_LAT,
     )
-    PLOTS_DIR =  f"{CACHE_PATH}/plots/"
+    PLOTS_DIR = f"{CACHE_PATH}/plots/"
     PLOT_PATH = os.path.join(PLOTS_DIR, '{version}_{title}.webp')
 
     version: str
@@ -277,7 +296,6 @@ class PerStationOverTime(StationPhillip):
 
         self.limits.max = self.data["stop_hour"].max()
         self.limits.min = self.data["stop_hour"].min()
-
 
     def aggregate_preagregated_data(
         self, start_time: datetime.datetime, end_time: datetime.datetime
@@ -437,6 +455,14 @@ class PerStationOverTime(StationPhillip):
 
 if __name__ == "__main__":
     import helpers.bahn_vorhersage
+
+    per_station_time = PerStationOverTime(generate=False, prefer_cache=True)
+    per_station_time.generate_plot(
+        datetime.datetime(2022, 6, 1), datetime.datetime(2022, 8, 31)
+    )
+    per_station_time.generate_plot(
+        datetime.datetime(2022, 1, 1), datetime.datetime(2022, 5, 30)
+    )
 
     rtd_df = RtdRay.load_data(
         columns=[

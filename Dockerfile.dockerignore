@@ -2,13 +2,19 @@
 *
 
 #Except
-!webserver/
-!ml_models/
+!data_analysis/
 !database/
 !helpers/
-!data_analysis/
+!ml_models/
+!model_analysis/
+!python/
+!rtd_crawler/
+!tests/
+!update_butler/
+!webserver/
+!__init__.py
 !webserverconfig.py
-!api/
+!requirements.txt
 
 # Ignore unnecessary files inside allowed directories
 # This should go after the allowed directories

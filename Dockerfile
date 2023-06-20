@@ -1,15 +1,13 @@
-# In order for this to work please set the BUILDKIT env variable using "export DOCKER_BUILDKIT=1"
-# To test the container locally you can run:
-# DOCKER_BUILDKIT=1 docker build -f webserver/Dockerfile.webserver . -t webserver
-# docker run -p 5000:5000 -v $(pwd)/config.py:/mnt/config/config.py -v $(pwd)/cache:/usr/src/app/cache webserver
-# Though I would suggest that you have a separate config for docker
-# If not so replace -v $(pwd)/config_docker.py:/mnt/config/config.py with -v $(pwd)/config.py:/mnt/config/config.py
+# This Dockerfile should replace many other dockerfiles
+# in this project by building an base that can run all
+# python scripts in this repo
 
-# This build file is from https://www.rockyourcode.com/create-a-multi-stage-docker-build-for-python-flask-and-postgres/
+# DOCKER_BUILDKIT=1 docker build . -t bahnvorhersage
+# docker run -v $(pwd)/config.py:/usr/src/app/config.py -v $(pwd)/cache:/usr/src/app/cache bahnvorhersage python3 python/station_finder.py
+
 FROM osgeo/proj:9.2.0 as proj
+# This is needed as cartopy dependency
 
-
-## Base image
 FROM python:3.11 AS compile-image
 
 # Install dependencies (libgeos in order for cartopy to work)
@@ -31,9 +29,8 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN pip install --upgrade pip 
 # Install shapely without binary in order to link to the correct geos lib
 # RUN pip install shapely cartopy --no-binary shapely --no-binary cartopy
-#==1.8.4
 RUN pip install shapely --no-binary shapely
-COPY ./webserver/requirements.txt requirements.txt
+COPY requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 
 ## runtime-image
@@ -55,7 +52,8 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 ## Copy Python dependencies from build image
 COPY --from=compile-image /opt/venv /opt/venv
-# It seems to be overkill to reinstall shapely here, but this fixed the docker build just randomly crashing withour any error
+# It seems to be overkill to reinstall shapely here, but this
+# fixed the docker build just randomly crashing withour any error
 RUN pip install shapely --no-binary shapely --force
 
 ## set working directory
@@ -67,13 +65,18 @@ WORKDIR /usr/src/app
 # RUN addgroup --system --gid 420 tcp && adduser --system --no-create-home --uid 420 --gid 420 tcp
 
 ## Add webserver and librays
-COPY ./webserver/ /usr/src/app/webserver/
-COPY ./helpers/ /usr/src/app/helpers/
+COPY ./data_analysis/ /usr/src/app/data_analysis/
 COPY ./database/ /usr/src/app/database/
-COPY ./data_analysis/ /usr/src/app/data_analysis
-COPY ./ml_models/ /usr/src/app/ml_models
+COPY ./helpers/ /usr/src/app/helpers/
+COPY ./ml_models/ /usr/src/app/ml_models/
+COPY ./model_analysis/ /usr/src/app/model_analysis/
+COPY ./python/ /usr/src/app/python/
+COPY ./rtd_crawler/ /usr/src/app/rtd_crawler/
+COPY ./tests/ /usr/src/app/tests/
+COPY ./update_butler/ /usr/src/app/update_butler/
+COPY ./webserver/ /usr/src/app/webserver/
+COPY __init__.py /usr/src/app/__init__.py
 COPY ./webserverconfig.py /usr/src/app/webserverconfig.py
-COPY ./api/ /usr/src/app/api/
 
 ## Switch to non-root user
 # for some reason doing this before the copy results in weird permissions # && chmod -R 775 /usr/src/app/
@@ -85,8 +88,6 @@ USER tcp
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 ENV PATH="/opt/venv/bin:$PATH"
-ENV MPLCONFIGDIR="/usr/src/app/cache"
+ENV MPLCONFIGDIR="/tmp/matplotlib"
 
-EXPOSE 5000
 
-CMD ["gunicorn","-b 0.0.0.0:5000", "webserver:create_app()", "-t 800"]

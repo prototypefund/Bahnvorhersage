@@ -1,0 +1,295 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: sfz-silentwave
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  clusterIP: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: sfz-silentwave
+subsets:
+- addresses:
+  - ip: 192.168.178.24
+  ports:
+  - name: http
+    port: 8060
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sfz-podcast
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  clusterIP: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: sfz-podcast
+subsets:
+- addresses:
+  - ip: 192.168.178.24
+  ports:
+  - name: http
+    port: 8050
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sfz-overleaf
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  clusterIP: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: sfz-overleaf
+subsets:
+- addresses:
+  - ip: 192.168.178.24
+  ports:
+  - name: http
+    port: 8070
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sfz-nextcloud
+spec:
+  ports:
+  - port: 443
+    targetPort: 8080
+  clusterIP: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: sfz-nextcloud
+subsets:
+- addresses:
+  - ip: 192.168.178.24
+  ports:
+  - port: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sfz-gitlab
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  clusterIP: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: sfz-gitlab
+subsets:
+- addresses:
+  - ip: 192.168.178.24
+  ports:
+  - name: http
+    port: 9080
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sfz-focalboard
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  clusterIP: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: sfz-focalboard
+subsets:
+- addresses:
+  - ip: 192.168.178.24
+  ports:
+  - name: http
+    port: 8100
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sfz-deny-access
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  clusterIP: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: sfz-deny-access
+subsets:
+- addresses:
+  - ip: 192.168.178.24
+  ports:
+  - name: http
+    port: 29384
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sfz-dashboard
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  clusterIP: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: sfz-dashboard
+subsets:
+- addresses:
+  - ip: 192.168.178.24
+  ports:
+  - name: http
+    port: 5555
+    protocol: TCP    
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sfz-dzconnect
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  clusterIP: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: sfz-dzconnect
+subsets:
+- addresses:
+  - ip: 192.168.178.24
+  ports:
+  - name: http
+    port: 8008
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sfz-wohnung-in-esslingen
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  clusterIP: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: sfz-wohnung-in-esslingen
+subsets:
+- addresses:
+  - ip: 192.168.178.24
+  ports:
+  - name: http
+    port: 8009
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sfz-endstationzukunft
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  clusterIP: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: sfz-endstationzukunft
+subsets:
+- addresses:
+  - ip: 192.168.178.24
+  ports:
+  - name: http
+    port: 8030
+    protocol: TCP 
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sfz-file-dzconnect
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  clusterIP: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: sfz-file-dzconnect
+subsets:
+- addresses:
+  - ip: 192.168.178.24
+  ports:
+  - name: http
+    port: 8020
+    protocol: TCP 

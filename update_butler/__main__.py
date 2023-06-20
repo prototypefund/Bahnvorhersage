@@ -17,8 +17,7 @@ if __name__ == '__main__':
 
     print("Init")
 
-    with Client(n_workers=2, threads_per_worker=1, memory_limit='16GB') as client:
-
+    with Client(n_workers=4, threads_per_worker=1, memory_limit='16GB') as client:
         print("Done")
 
         print("Refreshing local Cache...")

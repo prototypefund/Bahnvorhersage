@@ -2,8 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: realtimeparser
-  name: realtimeparser
+    app: plan-crawler
+  name: plan-crawler
   namespace: default
 spec:
   progressDeadlineSeconds: 600
@@ -11,16 +11,16 @@ spec:
   revisionHistoryLimit: 0
   selector:
     matchLabels:
-      app: realtimeparser
+      app: plan-crawler
   template:
     metadata:
       labels:
-        app: realtimeparser
+        app: plan-crawler
     spec:
       containers:
       - image: trainconnectionprediction/bahnvorhersage:latest
         command: ["python3"]
-        args: ["-m", "rtd_crawler.realtimeparser", "--parse_continues"]
+        args: ["-m", "rtd_crawler.plan_crawler"]
         imagePullPolicy: Always
         name: tcp
         resources: {}

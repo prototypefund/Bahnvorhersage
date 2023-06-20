@@ -1,15 +1,12 @@
-import os
-import sys
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from flask import request, jsonify, current_app, Blueprint, make_response
-from flask.helpers import send_file
 from datetime import datetime
-from webserver.connection import get_and_rate_journeys
-from webserver import streckennetz, per_station_time
-from webserver.db_logger import log_activity
+
+from flask import Blueprint, current_app, jsonify, make_response, request
+from flask.helpers import send_file
+
 from data_analysis import data_stats
+from webserver import per_station_time, streckennetz
+from webserver.connection import get_and_rate_journeys
+from webserver.db_logger import log_activity
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 bp_limited = Blueprint("api_rate_limited", __name__, url_prefix='/api')
@@ -105,10 +102,10 @@ def trip():
     date = datetime.strptime(request.json['date'], "%d.%m.%Y %H:%M")
 
     # optional:
-    search_for_departure = (
-        request.json['search_for_departure']
-        if 'search_for_departure' in request.json
-        else True
+    search_for_arrival = (
+        request.json['search_for_arrival']
+        if 'search_for_arrival' in request.json
+        else False
     )
     only_regional = (
         request.json['only_regional'] if 'only_regional' in request.json else False
@@ -120,7 +117,7 @@ def trip():
     )
 
     journeys = get_and_rate_journeys(
-        start, destination, date, search_for_departure, only_regional, bike
+        start, destination, date, search_for_arrival, only_regional, bike
     )
     resp = jsonify(journeys)
     resp.headers.add("Access-Control-Allow-Origin", "*")

@@ -1,6 +1,7 @@
 import os
 import sys
 import abc
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd
 import numpy as np
@@ -10,13 +11,72 @@ from data_analysis.packed_bubbles import BubbleChart
 from helpers import RtdRay, groupby_index_to_flat
 from database import cached_table_fetch
 import dask.dataframe as dd
+from config import n_dask_workers
 
 
 class PerCategoryAnalysis(abc.ABC):
-    @staticmethod
-    @abc.abstractmethod
-    def generate_data(rtd: dd.DataFrame) -> pd.DataFrame:
-        pass
+    def __init__(self, **kwargs):
+        self.data = cached_table_fetch(
+            self.tablename,
+            index_col=self.category_col,
+            table_generator=lambda: self.generate_data(),
+            push=True,
+            **kwargs,
+        )
+
+        self.data = self.group_uncommon(self.data)
+
+    def generate_data(self) -> pd.DataFrame:
+        from dask.distributed import Client
+
+        with Client(n_workers=n_dask_workers, threads_per_worker=2) as client:
+            rtd = RtdRay.load_data(
+                columns=[
+                    'c',
+                    'o',
+                    'f',
+                    't',
+                    'n',
+                    'pp',
+                    'ar_pt',
+                    'dp_pt',
+                    'ar_delay',
+                    'ar_happened',
+                    'dp_delay',
+                    'dp_happened',
+                ]
+            )
+            rtd['c'] = rtd['c'].astype(str)
+            rtd['o'] = rtd['o'].astype(str)
+            rtd['f'] = rtd['f'].astype(str)
+            rtd['t'] = rtd['t'].astype(str)
+            rtd['n'] = rtd['n'].astype(str)
+            rtd['pp'] = rtd['pp'].astype(str)
+
+            data = (
+                rtd.groupby(self.category_col, sort=False)
+                .agg(
+                    {
+                        'ar_delay': ['count', 'mean'],
+                        'ar_happened': ['sum'],
+                        'dp_delay': ['count', 'mean'],
+                        'dp_happened': ['sum'],
+                    }
+                )
+                .compute()
+            )
+
+        data = groupby_index_to_flat(data)
+
+        data['ar_happened_mean'] = (
+                data['ar_happened_sum'] / data['ar_delay_count']
+            )
+
+        data['dp_happened_mean'] = (
+            data['dp_happened_sum'] / data['dp_delay_count']
+        )
+
+        return data
 
     @staticmethod
     @abc.abstractmethod
@@ -28,16 +88,33 @@ class PerCategoryAnalysis(abc.ABC):
     def category_name(self) -> str:
         pass
 
-    def plot_type_delay(self):
-        delays = ((self.data['ar_delay_mean'] + self.data['dp_delay_mean']) / 2).to_numpy().astype(float)
+    @property
+    @abc.abstractmethod
+    def category_col(self) -> str:
+        pass
+
+    @property
+    @abc.abstractmethod
+    def tablename(self) -> str:
+        pass
+
+    def plot_type_delay(self, save_as=None):
+        delays = (
+            ((self.data['ar_delay_mean'] + self.data['dp_delay_mean']) / 2)
+            .to_numpy()
+            .astype(float)
+        )
         use_trains = np.logical_not(np.isnan(delays))
         delays = delays[use_trains]
 
         fig, ax = plt.subplots(subplot_kw=dict(aspect="equal"))
-        ax.set_title(f'Verspätung pro {self.category_name}')
+        ax.set_title(f'Ø Verspätung pro {self.category_name}', fontsize=30)
         ax.axis("off")
 
-        type_count = (self.data.loc[use_trains, 'ar_delay_count'] + self.data.loc[use_trains, 'dp_delay_count']).to_numpy()
+        type_count = (
+            self.data.loc[use_trains, 'ar_delay_count']
+            + self.data.loc[use_trains, 'dp_delay_count']
+        ).to_numpy()
 
         cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
             "", ["green", "yellow", "red"]
@@ -47,11 +124,16 @@ class PerCategoryAnalysis(abc.ABC):
         bubble_plot.plot(
             ax,
             labels=self.data.loc[use_trains, :].index,
-            colors=[cmap(delay) for delay in (delays - delays.min()) / max(delays - delays.min())]
+            colors=[
+                cmap(delay)
+                for delay in (delays - delays.min()) / max(delays - delays.min())
+            ],
         )
 
         # scatter in order to set colorbar
-        scatter = ax.scatter(np.zeros(len(delays)), np.zeros(len(delays)), s=0, c=delays, cmap=cmap)
+        scatter = ax.scatter(
+            np.zeros(len(delays)), np.zeros(len(delays)), s=0, c=delays, cmap=cmap
+        )
         colorbar = fig.colorbar(scatter)
         colorbar.solids.set_edgecolor("face")
         colorbar.outline.set_linewidth(0)
@@ -60,20 +142,35 @@ class PerCategoryAnalysis(abc.ABC):
 
         ax.relim()
         ax.autoscale_view()
-        plt.show()
+        # plt.show()
 
-    def plot_type_cancellations(self):
-        happened = ((self.data['ar_happened_mean'] + self.data['dp_happened_mean']) / 2).to_numpy().astype(float)
+        if save_as:
+            fig.set_size_inches(13.6, 8.5)
+            fig.savefig(save_as, dpi=300, bbox_inches='tight')
+        else:
+            plt.show()
+
+    def plot_type_cancellations(self, save_as=None):
+        happened = (
+            ((self.data['ar_happened_mean'] + self.data['dp_happened_mean']) / 2)
+            .to_numpy()
+            .astype(float)
+        )
         use_trains = np.logical_not(np.isnan(happened))
         happened = happened[use_trains]
 
+        cancellations = 100 - (happened * 100)
+
         fig, ax = plt.subplots(subplot_kw=dict(aspect="equal"))
-        ax.set_title(f'Ausfälle pro {self.category_name}')
+        ax.set_title(f'Prozent ausgefallene Züge je {self.category_name}', fontsize=30)
         ax.axis("off")
-        type_count = (self.data.loc[use_trains, 'ar_delay_count'] + self.data.loc[use_trains, 'dp_delay_count']).to_numpy()
+        type_count = (
+            self.data.loc[use_trains, 'ar_delay_count']
+            + self.data.loc[use_trains, 'dp_delay_count']
+        ).to_numpy()
 
         cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
-            "", ["red", "yellow", "green"]
+            "", ["green", "yellow", "red"]
         )
         bubble_plot = BubbleChart(area=type_count, bubble_spacing=40)
         bubble_plot.collapse(n_iterations=100)
@@ -81,55 +178,47 @@ class PerCategoryAnalysis(abc.ABC):
         bubble_plot.plot(
             ax,
             labels=self.data.loc[use_trains, :].index,
-            colors=[cmap(delay) for delay in (happened - happened.min()) / max(happened - happened.min())]
+            colors=[
+                cmap(delay)
+                for delay in (cancellations - cancellations.min())
+                / max(cancellations - cancellations.min())
+            ],
         )
 
         # scatter in order to set colorbar
-        scatter = ax.scatter(np.zeros(len(happened)), np.zeros(len(happened)), s=0, c=happened, cmap=cmap)
+        scatter = ax.scatter(
+            np.zeros(len(cancellations)), np.zeros(len(cancellations)), s=0, c=cancellations, cmap=cmap
+        )
         colorbar = fig.colorbar(scatter)
         colorbar.solids.set_edgecolor("face")
         colorbar.outline.set_linewidth(0)
         colorbar.ax.get_yaxis().labelpad = 15
-        colorbar.ax.set_ylabel("Anteil der tatsächlich stattgefundenen Halte", rotation=270)
+        colorbar.ax.set_ylabel(
+            "Prozent ausgefallene Züge", rotation=270
+        )
 
         ax.relim()
         ax.autoscale_view()
-        plt.show()
+        # plt.show()
+
+        if save_as:
+            fig.set_size_inches(13.6, 8.5)
+            fig.savefig(save_as, dpi=300, bbox_inches='tight')
+        else:
+            plt.show()
 
 
 class TrainTypeAnalysis(PerCategoryAnalysis):
 
     category_name = 'Zugtyp'
-
-    def __init__(self, rtd, **kwargs):
-        self.data = cached_table_fetch(
-            'per_train_type',
-            index_col='c',
-            table_generator=lambda: self.generate_data(rtd),
-            push=True,
-            **kwargs
-        )
-
-        self.data = self.group_uncommon(self.data)
-
-    @staticmethod
-    def generate_data(rtd: dd.DataFrame) -> pd.DataFrame:
-        data = rtd.groupby('c', sort=False).agg({
-            'ar_delay': ['count', 'mean'],
-            'ar_happened': ['mean'],
-            'dp_delay': ['count', 'mean'],
-            'dp_happened': ['mean'],
-        }).compute()
-
-        data = groupby_index_to_flat(data)
-
-        return data
+    category_col = 'c'
+    tablename = 'per_train_type'
 
     @staticmethod
     def group_uncommon(data: pd.DataFrame) -> pd.DataFrame:
         # group train types that are uncommon under 'other'
         count = data[('ar_delay_count')] + data[('dp_delay_count')]
-        cutoff = count.nsmallest(50).max()
+        cutoff = count.nsmallest(80).max()
         combine_mask = count <= cutoff
         groups_to_combine = data.loc[combine_mask, :]
         other = data.iloc[0, :].copy()
@@ -139,7 +228,9 @@ class TrainTypeAnalysis(PerCategoryAnalysis):
                 count = groups_to_combine[col].sum()
                 other.loc[col] = count
             else:
-                other.loc[col] = (groups_to_combine[col] * groups_to_combine[count_col]).sum() / count
+                other.loc[col] = (
+                    groups_to_combine[col] * groups_to_combine[count_col]
+                ).sum() / count
         data = data.loc[~combine_mask, :].copy()
         data.loc['other', :] = other
 
@@ -156,19 +247,25 @@ class OperatorAnalysis(PerCategoryAnalysis):
             index_col='o',
             table_generator=lambda: self.generate_data(rtd),
             push=True,
-            **kwargs
+            **kwargs,
         )
 
         self.data = self.group_uncommon(self.data)
 
     @staticmethod
     def generate_data(rtd: dd.DataFrame) -> pd.DataFrame:
-        data = rtd.groupby('o', sort=False).agg({
-            'ar_delay': ['count', 'mean'],
-            'ar_happened': ['mean'],
-            'dp_delay': ['count', 'mean'],
-            'dp_happened': ['mean'],
-        }).compute()
+        data = (
+            rtd.groupby('o', sort=False)
+            .agg(
+                {
+                    'ar_delay': ['count', 'mean'],
+                    'ar_happened': ['mean'],
+                    'dp_delay': ['count', 'mean'],
+                    'dp_happened': ['mean'],
+                }
+            )
+            .compute()
+        )
 
         data = groupby_index_to_flat(data)
 
@@ -188,11 +285,14 @@ class OperatorAnalysis(PerCategoryAnalysis):
                 count = groups_to_combine[col].sum()
                 other.loc[col] = count
             else:
-                other.loc[col] = (groups_to_combine[col] * groups_to_combine[count_col]).sum() / count
+                other.loc[col] = (
+                    groups_to_combine[col] * groups_to_combine[count_col]
+                ).sum() / count
         data = data.loc[~combine_mask, :].copy()
         data.loc['other', :] = other
 
         return data
+
 
 class fAnalysis(PerCategoryAnalysis):
 
@@ -203,19 +303,25 @@ class fAnalysis(PerCategoryAnalysis):
             'per_f',
             table_generator=lambda: self.generate_data(rtd),
             push=True,
-            **kwargs
+            **kwargs,
         )
 
         self.data = self.group_uncommon(self.data)
 
     @staticmethod
     def generate_data(rtd: dd.DataFrame) -> pd.DataFrame:
-        data = rtd.groupby('f', sort=False).agg({
-            'ar_delay': ['count', 'mean'],
-            'ar_happened': ['mean'],
-            'dp_delay': ['count', 'mean'],
-            'dp_happened': ['mean'],
-        }).compute()
+        data = (
+            rtd.groupby('f', sort=False)
+            .agg(
+                {
+                    'ar_delay': ['count', 'mean'],
+                    'ar_happened': ['mean'],
+                    'dp_delay': ['count', 'mean'],
+                    'dp_happened': ['mean'],
+                }
+            )
+            .compute()
+        )
 
         data = groupby_index_to_flat(data)
 
@@ -224,6 +330,7 @@ class fAnalysis(PerCategoryAnalysis):
     @staticmethod
     def group_uncommon(data: pd.DataFrame) -> pd.DataFrame:
         return data
+
 
 class tAnalysis(PerCategoryAnalysis):
 
@@ -234,19 +341,25 @@ class tAnalysis(PerCategoryAnalysis):
             'per_t',
             table_generator=lambda: self.generate_data(rtd),
             push=True,
-            **kwargs
+            **kwargs,
         )
 
         self.data = self.group_uncommon(self.data)
 
     @staticmethod
     def generate_data(rtd: dd.DataFrame) -> pd.DataFrame:
-        data = rtd.groupby('t', sort=False).agg({
-            'ar_delay': ['count', 'mean'],
-            'ar_happened': ['mean'],
-            'dp_delay': ['count', 'mean'],
-            'dp_happened': ['mean'],
-        }).compute()
+        data = (
+            rtd.groupby('t', sort=False)
+            .agg(
+                {
+                    'ar_delay': ['count', 'mean'],
+                    'ar_happened': ['mean'],
+                    'dp_delay': ['count', 'mean'],
+                    'dp_happened': ['mean'],
+                }
+            )
+            .compute()
+        )
 
         data = groupby_index_to_flat(data)
 
@@ -255,6 +368,7 @@ class tAnalysis(PerCategoryAnalysis):
     @staticmethod
     def group_uncommon(data: pd.DataFrame) -> pd.DataFrame:
         return data
+
 
 class TrainNumberAnalysis(PerCategoryAnalysis):
 
@@ -265,19 +379,25 @@ class TrainNumberAnalysis(PerCategoryAnalysis):
             'per_train_number',
             table_generator=lambda: self.generate_data(rtd),
             push=True,
-            **kwargs
+            **kwargs,
         )
 
         self.data = self.group_uncommon(self.data)
 
     @staticmethod
     def generate_data(rtd: dd.DataFrame) -> pd.DataFrame:
-        data = rtd.groupby('n', sort=False).agg({
-            'ar_delay': ['count', 'mean'],
-            'ar_happened': ['mean'],
-            'dp_delay': ['count', 'mean'],
-            'dp_happened': ['mean'],
-        }).compute()
+        data = (
+            rtd.groupby('n', sort=False)
+            .agg(
+                {
+                    'ar_delay': ['count', 'mean'],
+                    'ar_happened': ['mean'],
+                    'dp_delay': ['count', 'mean'],
+                    'dp_happened': ['mean'],
+                }
+            )
+            .compute()
+        )
 
         data = groupby_index_to_flat(data)
 
@@ -286,6 +406,7 @@ class TrainNumberAnalysis(PerCategoryAnalysis):
     @staticmethod
     def group_uncommon(data: pd.DataFrame) -> pd.DataFrame:
         return data
+
 
 class PlatformAnalysis(PerCategoryAnalysis):
 
@@ -296,19 +417,25 @@ class PlatformAnalysis(PerCategoryAnalysis):
             'per_platform',
             table_generator=lambda: self.generate_data(rtd),
             push=True,
-            **kwargs
+            **kwargs,
         )
 
         self.data = self.group_uncommon(self.data)
 
     @staticmethod
     def generate_data(rtd: dd.DataFrame) -> pd.DataFrame:
-        data = rtd.groupby('pp', sort=False).agg({
-            'ar_delay': ['count', 'mean'],
-            'ar_happened': ['mean'],
-            'dp_delay': ['count', 'mean'],
-            'dp_happened': ['mean'],
-        }).compute()
+        data = (
+            rtd.groupby('pp', sort=False)
+            .agg(
+                {
+                    'ar_delay': ['count', 'mean'],
+                    'ar_happened': ['mean'],
+                    'dp_delay': ['count', 'mean'],
+                    'dp_happened': ['mean'],
+                }
+            )
+            .compute()
+        )
 
         data = groupby_index_to_flat(data)
 
@@ -320,31 +447,11 @@ class PlatformAnalysis(PerCategoryAnalysis):
 
 
 if __name__ == '__main__':
-    import helpers.fancy_print_tcp
-    rtd = RtdRay.load_data(columns=[
-        'c',
-        'o',
-        'f',
-        't',
-        'n',
-        'pp',
-        'ar_pt',
-        'dp_pt',
-        'ar_delay',
-        'ar_happened',
-        'dp_delay',
-        'dp_happened',
-    ])
-    rtd['c'] = rtd['c'].astype(str)
-    rtd['o'] = rtd['o'].astype(str)
-    rtd['f'] = rtd['f'].astype(str)
-    rtd['t'] = rtd['t'].astype(str)
-    rtd['n'] = rtd['n'].astype(str)
-    rtd['pp'] = rtd['pp'].astype(str)
+    import helpers.bahn_vorhersage
 
-    # tta = TrainTypeAnalysis(rtd=rtd, generate=False, prefer_cahce=True)
-    # tta.plot_type_delay()
-    # tta.plot_type_cancellations()
+    tta = TrainTypeAnalysis(generate=False, prefer_cahce=True)
+    tta.plot_type_delay(save_as='delay_per_train_type.png')
+    tta.plot_type_cancellations(save_as='cancellations_per_train_type.png')
 
     # oa = OperatorAnalysis(rtd=rtd, generate=False, prefer_cahce=True)
     # oa.plot_type_delay()
@@ -362,6 +469,6 @@ if __name__ == '__main__':
     # # tna.plot_type_delay()
     # # tna.plot_type_cancellations()
 
-    pa = PlatformAnalysis(rtd=rtd, generate=False, prefer_cahce=True)
-    pa.plot_type_delay()
-    pa.plot_type_cancellations()
+    # pa = PlatformAnalysis(generate=False, prefer_cahce=True)
+    # pa.plot_type_delay()
+    # pa.plot_type_cancellations()

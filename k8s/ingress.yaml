@@ -49,6 +49,11 @@ spec:
     - focalboard.marcpanse.de
     - podcast-tech24.de
     - thesilentwave.de
+    - dzconnect.de
+    - code-load.io
+    - wohnung-in-esslingen.de
+    - endstationzukunft.de
+    - holiday.bahnvorhersage.de
     secretName: default-tls-secret
   rules:
   - host: "bahnvorhersage.de"
@@ -181,3 +186,53 @@ spec:
               name: sfz-silentwave
               port:
                 number: 80
+  - host: "dzconnect.de"
+    http: &dzconnect
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-dzconnect
+              port:
+                number: 80
+  - host: "code-load.io"
+    http: &file-dzconnect
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-file-dzconnect
+              port:
+                number: 80
+  - host: "wohnung-in-esslingen.de"
+    http: &wohnung-in-esslingen
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-wohnung-in-esslingen
+              port:
+                number: 80
+  - host: "endstationzukunft.de"
+    http: &endstationzukunft
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-endstationzukunft
+              port:
+                number: 80
+  - host: "holiday.bahnvorhersage.de"
+    http:
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: holiday-challenge-service
+              port:
+                number: 3000

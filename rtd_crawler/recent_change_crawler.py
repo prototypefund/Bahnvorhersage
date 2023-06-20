@@ -1,26 +1,25 @@
-import os
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if os.path.isfile("/mnt/config/config.py"):
-    sys.path.append("/mnt/config/")
-import lxml.etree as etree
-import time
 import concurrent.futures
-from itertools import chain
 import datetime
-from helpers import StationPhillip
-from rtd_crawler.SimplestDownloader import SimplestDownloader
-from rtd_crawler.hash64 import hash64
-from database import Change, unparsed, sessionfactory
-from rtd_crawler.xml_parser import xml_to_json
-from config import station_to_monitor_per_thread, redis_url
+import time
+from itertools import chain
+
+import lxml.etree as etree
 from redis import Redis
+
+from config import redis_url, station_to_monitor_per_thread
+from database import Change, sessionfactory, unparsed
+from helpers import StationPhillip
+from rtd_crawler.hash64 import hash64
+from rtd_crawler.SimplestDownloader import SimplestDownloader
+from rtd_crawler.xml_parser import xml_to_json
 
 
 def preparse_changes(changes):
     changes = etree.fromstring(changes.encode())
     changes = list(xml_to_json(change) for change in changes)
-    changes = {hash64(change['id']): change for change in changes if not 'from' in change}
+    changes = {
+        hash64(change['id']): change for change in changes if not 'from' in change
+    }
     return changes
 
 
@@ -45,9 +44,8 @@ if __name__ == '__main__':
     redis_client = Redis.from_url(redis_url)
     eva_list = stations.stations['eva'].unique().tolist()
     eva_list = [
-        eva_list[i:i + station_to_monitor_per_thread]
-        for i
-        in range(0, len(eva_list), station_to_monitor_per_thread)
+        eva_list[i : i + station_to_monitor_per_thread]
+        for i in range(0, len(eva_list), station_to_monitor_per_thread)
     ]
 
     while True:
@@ -60,14 +58,20 @@ if __name__ == '__main__':
         while (time.time() - stats_time) < 3600:
             download_start = time.time()
             try:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=len(eva_list)) as executor:
-                    new_changes = list(executor.map(monitor_recent_change, eva_list, timeout=60 * 4))
-                    
+                with concurrent.futures.ThreadPoolExecutor(
+                    max_workers=len(eva_list)
+                ) as executor:
+                    new_changes = list(
+                        executor.map(monitor_recent_change, eva_list, timeout=60 * 4)
+                    )
+
                     stats['download_time'] += time.time() - download_start
 
                     upload_start = time.time()
                     # Concat list of dicts to single dict
-                    new_changes = dict(chain.from_iterable(d.items() for d in new_changes))
+                    new_changes = dict(
+                        chain.from_iterable(d.items() for d in new_changes)
+                    )
                     with Session() as session:
                         Change.add_changes(session, new_changes)
                         session.commit()
@@ -80,7 +84,12 @@ if __name__ == '__main__':
             except concurrent.futures.TimeoutError:
                 pass
 
-        print(datetime.datetime.now(),
-              'count:', stats['count'],
-              'download_time:', stats['download_time'] / stats['count'],
-              'upload_time:', stats['upload_time'] / stats['count'])
+        print(
+            datetime.datetime.now(),
+            'count:',
+            stats['count'],
+            'download_time:',
+            stats['download_time'] / stats['count'],
+            'upload_time:',
+            stats['upload_time'] / stats['count'],
+        )
