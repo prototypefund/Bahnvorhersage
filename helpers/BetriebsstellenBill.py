@@ -1,8 +1,8 @@
-import os, sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import pandas as pd
+from typing import Any, Optional, Tuple, Union
+
 import numpy as np
-from typing import Optional, Union, Any, Tuple
+import pandas as pd
+
 from database import cached_table_fetch
 
 
@@ -12,10 +12,16 @@ class NoLocationError(Exception):
 
 class BetriebsstellenBill:
     def __init__(self, **kwargs):
-        self.name_index_betriebsstellen = cached_table_fetch('betriebstellen', index_col='name', **kwargs)
+        self.name_index_betriebsstellen = cached_table_fetch(
+            'betriebstellen', index_col='name', **kwargs
+        )
 
-        self.ds100_index_betriebsstellen = self.name_index_betriebsstellen.reset_index().set_index('ds100')
-        self.betriebsstellen_list = self.name_index_betriebsstellen.dropna(subset=['lat', 'lon']).index.to_list()
+        self.ds100_index_betriebsstellen = (
+            self.name_index_betriebsstellen.reset_index().set_index('ds100')
+        )
+        self.betriebsstellen_list = self.name_index_betriebsstellen.dropna(
+            subset=['lat', 'lon']
+        ).index.to_list()
         self.NoLocationError = NoLocationError
 
     def __len__(self):
@@ -42,12 +48,17 @@ class BetriebsstellenBill:
             Betriebsstellen with coordinates as geometry for geopandas.GeoDataFrame.
         """
         import geopandas as gpd
+
         # Not all of the betriebsstellen have geo information. A GeoDataFrame without geo
         # is kind of useless, so we drop these betriebsstellen
-        betriebsstellen_with_location = self.name_index_betriebsstellen.dropna(subset=['lon', 'lat'])
+        betriebsstellen_with_location = self.name_index_betriebsstellen.dropna(
+            subset=['lon', 'lat']
+        )
         return gpd.GeoDataFrame(
-            betriebsstellen_with_location, 
-            geometry=gpd.points_from_xy(betriebsstellen_with_location.lon, betriebsstellen_with_location.lat)
+            betriebsstellen_with_location,
+            geometry=gpd.points_from_xy(
+                betriebsstellen_with_location.lon, betriebsstellen_with_location.lat
+            ),
         ).set_crs("EPSG:4326")
 
     def get_name(self, ds100: Union[str, Any]) -> Union[str, pd.Series]:
@@ -82,8 +93,8 @@ class BetriebsstellenBill:
 
     def get_location(
         self,
-        name: Optional[Union[str, Any]]=None,
-        ds100: Optional[Union[str, Any]]=None
+        name: Optional[Union[str, Any]] = None,
+        ds100: Optional[Union[str, Any]] = None,
     ) -> Union[Tuple[float, float], pd.DataFrame]:
         """
         Get the location (lon, lat) of a Betriebsstelle or multiple Betriebsstellen
@@ -118,7 +129,9 @@ class BetriebsstellenBill:
                     return (lon, lat)
             else:
                 locations = pd.DataFrame(index=name, columns=['lon', 'lat'])
-                locations.loc[:, ['lon', 'lat']] = self.name_index_betriebsstellen.loc[:, ['lon', 'lat']]
+                locations.loc[:, ['lon', 'lat']] = self.name_index_betriebsstellen.loc[
+                    :, ['lon', 'lat']
+                ]
                 return locations
 
 

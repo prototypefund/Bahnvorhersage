@@ -1,6 +1,6 @@
 import cProfile
-import tempfile
 import pstats
+import tempfile
 
 
 def profile(sort='tottime', lines=50, strip_dirs=False):
