@@ -2,6 +2,8 @@ import itertools
 import math
 from typing import Dict, Iterable, List, Tuple
 
+from helpers import pairwise
+
 import geopandas as gpd
 import geopy.distance
 import matplotlib.pyplot as plt
@@ -58,28 +60,28 @@ EPSG_PROJECTED = 'EPSG:3857'
 
 
 def _convert_node(element, useful_tags):
-    node = {"y": element["lat"], "x": element["lon"]}
-    if "tags" in element:
+    node = {'y': element['lat'], 'x': element['lon']}
+    if 'tags' in element:
         for useful_tag in useful_tags:
-            if useful_tag in element["tags"]:
-                node[useful_tag] = element["tags"][useful_tag]
-    return element["id"], node
+            if useful_tag in element['tags']:
+                node[useful_tag] = element['tags'][useful_tag]
+    return element['id'], node
 
 
 def _convert_path(element: Dict, useful_tags: Iterable[str]) -> List[Dict]:
     tags = {}
 
     # remove any consecutive duplicate elements in the list of nodes
-    nodes = [group[0] for group in itertools.groupby(element["nodes"])]
+    nodes = [group[0] for group in itertools.groupby(element['nodes'])]
 
-    if "tags" in element:
+    if 'tags' in element:
         for useful_tag in useful_tags:
-            if useful_tag in element["tags"]:
-                tags[useful_tag] = element["tags"][useful_tag]
+            if useful_tag in element['tags']:
+                tags[useful_tag] = element['tags'][useful_tag]
 
     edges = []
     for u, v in pairwise(nodes):
-        edges.append({"u": u, "v": v, **tags})
+        edges.append({'u': u, 'v': v, **tags})
 
     return edges
 
@@ -159,13 +161,6 @@ def angle_three_points(a, b, c):
 
 
 flatten = itertools.chain.from_iterable
-
-
-def pairwise(iterable):
-    """s -> (s0,s1), (s1,s2), (s2, s3), ..."""
-    a, b = itertools.tee(iterable)
-    next(b, None)
-    return zip(a, b)
 
 
 def _add_length_to_gdf(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -638,6 +633,8 @@ def download_and_process_streckennetz():
 
     stations_gdf = stations_gdf.to_crs(EPSG_PROJECTED)
     nodes = nodes.to_crs(EPSG_PROJECTED)
+    nodes['x'] = nodes['geometry'].x
+    nodes['y'] = nodes['geometry'].y
     edges = edges.to_crs(EPSG_PROJECTED)
 
     replace_edges = set()
@@ -706,13 +703,13 @@ def download_and_process_streckennetz():
 
 
 def main():
-    # download_and_process_streckennetz()
+    download_and_process_streckennetz()
 
     nodes = cached_table_fetch_postgis(
-        'streckennetz_zwei_null_nodes', prefer_cache=True
+        'streckennetz_zwei_null_nodes', prefer_cache=False
     )
     edges = cached_table_fetch_postgis(
-        'streckennetz_zwei_null_edges', prefer_cache=True
+        'streckennetz_zwei_null_edges', prefer_cache=False
     )
 
     nodes, edges = simplify(nodes, edges)
