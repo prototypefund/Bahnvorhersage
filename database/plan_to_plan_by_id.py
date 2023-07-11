@@ -3,7 +3,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tqdm import tqdm
 from database import PlanById, sessionfactory, Plan
-from helpers import StationPhillip
+from helpers.StationPhillip import StationPhillip
 import sqlalchemy
 from typing import Dict
 import concurrent.futures
