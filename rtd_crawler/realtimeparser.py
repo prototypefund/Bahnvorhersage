@@ -240,15 +240,15 @@ def parse_chunk(chunk_limits: Tuple[int, int]):
 
 def parse_all():
     """Parse all raw data there is"""
-    # with session_scope(Session) as session:
-    #     chunk_limits = PlanById.get_chunk_limits(session)
+    with session_scope(Session) as session:
+        chunk_limits = PlanById.get_chunk_limits(session)
     
-    import pickle
-    chunk_limits = pickle.load(open('chunk_limits.pickle', 'rb'))
+    # import pickle
+    # chunk_limits = pickle.load(open('chunk_limits.pickle', 'rb'))
 
-    # Non-concurrent code for debugging
-    for chunk in tqdm(chunk_limits, total=len(chunk_limits)):
-        parse_chunk(chunk)
+    # # Non-concurrent code for debugging
+    # for chunk in tqdm(chunk_limits, total=len(chunk_limits)):
+    #     parse_chunk(chunk)
 
     with concurrent.futures.ProcessPoolExecutor(
         min(16, os.cpu_count()), mp_context=mp.get_context('spawn')
@@ -266,7 +266,7 @@ if __name__ == "__main__":
     import helpers.bahn_vorhersage
 
     args = parser.parse_args()
-    args.parse_all = True
+    # args.parse_all = True
     if args.parse_all:
         print('Parsing all the data')
         Rtd()
