@@ -1,76 +1,160 @@
-import os
-import sys
-
-from shapely.geometry.point import Point
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import osmnx as ox
-import networkx as nx
-import shapely
-from shapely.geometry import LineString, MultiLineString, MultiPoint, Polygon
-import numpy as np
-import geopy.distance
 import itertools
 import math
-import pandas as pd
+from typing import Dict, Iterable, List, Tuple
+
 import geopandas as gpd
-from helpers import StationPhillip, BetriebsstellenBill
+import geopy.distance
 import matplotlib.pyplot as plt
-import pickle
-from concurrent.futures import ProcessPoolExecutor
+import numpy as np
+import osmnx as ox
+import pandas as pd
+import shapely
+from osmnx import _downloader, settings
+from shapely.geometry import LineString, MultiPoint, Point, Polygon, MultiLineString
 from tqdm import tqdm
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import igraph as ig
+from cityhash import CityHash32
+import sqlalchemy
+import geoalchemy2
 
 
-def get_streckennetz_from_osm(point_cloud=None, place=None, cache=True) -> nx.MultiGraph:
-    """
-    Load Streckennetz from OpenStreetMap.
+from database import get_engine, cached_table_fetch_postgis
+from helpers.StationPhillip import StationPhillip
 
-    Returns
-    -------
-    nx.Graph:
-        Streckennetz without stations.
-    """
-    if place is None and point_cloud is None:
-        raise ValueError("Must either supply point_cloud or place, not none")
-    if place is not None and point_cloud is not None:
-        raise ValueError("Must either supply point_cloud or place, not both")
-    try:
-        if not cache:
-            raise FileNotFoundError
-        streckennetz = nx.read_gpickle("cache/original_osm_rail_graph.gpickle")
-        print('Using chached streckennetz insted of downloading new one from osm')
-    except FileNotFoundError:
-        rail_filter = '["railway"~"rail|tram|narrow_gauge|light_rail"]'
-        if place:
-            streckennetz = ox.graph_from_place(
-                place,
-                simplify=True,
-                network_type='none',
-                truncate_by_edge=False,
-                custom_filter=rail_filter
-            )
-        else:
-            plt.plot(point_cloud[:,0], point_cloud[:,1], 'o')
-            plt.plot(*MultiPoint(point_cloud).convex_hull.exterior.xy)
-            plt.gca().set_aspect('equal', 'datalim')
-            plt.show()
-            streckennetz = ox.graph_from_polygon(
-                MultiPoint(point_cloud).convex_hull,
-                simplify=True,
-                network_type='none',
-                truncate_by_edge=False,
-                custom_filter=rail_filter
-            )
-        print('projecting streckennetz')
-        streckennetz = ox.project_graph(streckennetz, to_crs='EPSG:3857')
-        # Convert to non directional graph which only has half the number of edges and is way faster to compute
-        streckennetz = nx.MultiGraph(streckennetz)
-        nx.write_gpickle(streckennetz, "cache/original_osm_rail_graph.gpickle")
-    return streckennetz
+RAIL_FILTER = (
+    f'["railway"~"rail|tram|narrow_gauge|light_rail|subway"]'
+    f'["railway"!~"proposed|construction|disused|abandoned|razed|miniature"]'
+    f'["service"!~"yard|spur"]'
+    f'["gauge"~"750|760|800|900|1000|1435|1445|1450|1458|1520|1524|1620|1668|750;1435|1435;750|760;1435|1435;760|1000;1435|1435;1000|1435;1520|1520;1435|1435;1668"]'
+)
+
+USEFUL_TAGS_RAIL_WAYS = [
+    'usage',
+    'highspeed',
+    'electrified',
+    'gauge',
+    'maxspeed',
+    'service',
+    'railway:preferred_direction',
+    'railway:etcs',
+    'railway:kvb',
+    'railway:lzb',
+    'railway:pzb',
+    'bridge',
+    'tunnel',
+]
+
+USEFUL_TAGS_RAIL_NODES = [
+    'railway',
+    'crossing:barrier',
+    'crossing:light',
+    'name',
+]
+
+SPLITTER_LINE_LENGTH = 100
+BBOX_HALF_SIZE = 100
+EPSG_PROJECTED = 'EPSG:3857'
+
+
+def _convert_node(element, useful_tags):
+    node = {"y": element["lat"], "x": element["lon"]}
+    if "tags" in element:
+        for useful_tag in useful_tags:
+            if useful_tag in element["tags"]:
+                node[useful_tag] = element["tags"][useful_tag]
+    return element["id"], node
+
+
+def _convert_path(element: Dict, useful_tags: Iterable[str]) -> List[Dict]:
+    tags = {}
+
+    # remove any consecutive duplicate elements in the list of nodes
+    nodes = [group[0] for group in itertools.groupby(element["nodes"])]
+
+    if "tags" in element:
+        for useful_tag in useful_tags:
+            if useful_tag in element["tags"]:
+                tags[useful_tag] = element["tags"][useful_tag]
+
+    edges = []
+    for u, v in pairwise(nodes):
+        edges.append({"u": u, "v": v, **tags})
+
+    return edges
+
+
+def _add_geometry_to_edges(edges: List[Dict], nodes: Dict[int, Dict]):
+    for edge in edges:
+        edge['geometry'] = LineString(
+            [
+                (nodes[edge['u']]['x'], nodes[edge['u']]['y']),
+                (nodes[edge['v']]['x'], nodes[edge['v']]['y']),
+            ]
+        )
+        edge['length'] = length_of_line(edge['geometry'])
+
+    return edges
+
+
+def _parse_osm_nodes_paths(response_json: Dict) -> Tuple[Dict[int, Dict], List[Dict]]:
+    nodes = {}
+    edges = []
+    for element in response_json['elements']:
+        if element['type'] == 'node':
+            osmid, node = _convert_node(element, USEFUL_TAGS_RAIL_NODES)
+            nodes[osmid] = node
+        elif element['type'] == 'way':
+            paths = _convert_path(element, USEFUL_TAGS_RAIL_WAYS)
+            edges.extend(paths)
+    edges = _add_geometry_to_edges(edges, nodes)
+
+    return nodes, edges
+
+
+def get_gdf_from_osm(polygon: Polygon) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+    # download the network data from OSM within buffered polygon
+    response_jsons = _downloader._osm_network_download(
+        polygon=polygon, network_type=None, custom_filter=RAIL_FILTER
+    )
+
+    nodes = {}
+    edges = []
+
+    # Non concurrent version for debugging
+    # for response_json in response_jsons:
+    #     current_nodes, current_edges = _parse_osm_nodes_paths(response_json)
+    #     nodes.update(current_nodes)
+    #     edges.extend(current_edges)
+
+    with ProcessPoolExecutor() as executor:
+        tasks = [
+            executor.submit(_parse_osm_nodes_paths, response_json)
+            for response_json in response_jsons
+        ]
+        for task in tqdm(as_completed(tasks), total=len(tasks)):
+            current_nodes, current_edges = task.result()
+            nodes.update(current_nodes)
+            edges.extend(current_edges)
+
+    nodes = pd.DataFrame.from_dict(nodes, orient='index')
+    nodes = gpd.GeoDataFrame(
+        nodes, geometry=gpd.points_from_xy(nodes.x, nodes.y), crs='EPSG:4326'
+    )
+    nodes = nodes[~nodes.index.duplicated(keep='first')]
+
+    edges = pd.DataFrame(edges)
+    edges = gpd.GeoDataFrame(edges, geometry=edges['geometry'], crs='EPSG:4326')
+    edges.drop_duplicates(subset=['u', 'v'], inplace=True)
+
+    return nodes, edges
 
 
 def angle_three_points(a, b, c):
     """Calculate the smallest angle β from the points abc"""
-    β = math.degrees(math.atan2(c[1]-b[1], c[0]-b[0]) - math.atan2(a[1]-b[1], a[0]-b[0]))
+    β = math.degrees(
+        math.atan2(c[1] - b[1], c[0] - b[0]) - math.atan2(a[1] - b[1], a[0] - b[0])
+    )
     return (β + 360 if β < 0 else β) % 180
 
 
@@ -84,14 +168,22 @@ def pairwise(iterable):
     return zip(a, b)
 
 
-def length_of_line(line) -> float:
+def _add_length_to_gdf(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    original_crs = gdf.crs
+    gdf = gdf.to_crs('EPSG:4326')
+    gdf['length'] = gdf['geometry'].apply(length_of_line)
+    gdf = gdf.to_crs(original_crs)
+    return gdf
+
+
+def length_of_line(line: LineString) -> float:
     """
     Calculate length of line in meters.
 
     Parameters
     ----------
     line: LineString
-        Line to calculate length of. Must be EPSG:4326 (lat/lon in degre)
+        Line to calculate length of. Must be EPSG:4326 (lat/lon in degree)
 
     Returns
     -------
@@ -99,91 +191,96 @@ def length_of_line(line) -> float:
         Length of line.
     """
     if line is not None:
-        return sum((geopy.distance.distance(p1, p2).meters for p1, p2 in pairwise(tuple(zip(line.xy[0], line.xy[1])))))
+        return sum(
+            (
+                geopy.distance.distance(p1, p2).meters
+                for p1, p2 in pairwise(tuple(zip(line.xy[0], line.xy[1])))
+            )
+        )
     else:
         return None
 
 
-def simplify(streckennetz: nx.MultiGraph) -> nx.MultiGraph:
-    print('simplifying...')
-    
-    # Remove the shorter edge of two parallel edges
-    edges_to_remove = []
-    for edges_index in streckennetz.edges():
-        edges = streckennetz[edges_index[0]][edges_index[1]]
-        if len(edges) > 1:
-            min_length = edges[0]['length']
-            min_length_index = 0
-            for i in edges:
-                if edges[i]['length'] < min_length:
-                    min_length = edges[i]['length']
-                    min_length_index = i
-            edges_to_remove.append(list(edges_index) + [min_length_index])
-    print('found', len(edges_to_remove), 'parallel edges')
-    streckennetz.remove_edges_from(edges_to_remove)
+def edges_mergeable(edge1: ig.Edge, edge2: ig.Edge) -> bool:
+    attributes1 = edge1.attributes()
+    attributes2 = edge2.attributes()
 
-    # Remove nodes, that only have a single edge
-    while True:
-        nodes_to_remove = []
-        for node in streckennetz.nodes():
-            if streckennetz.degree(node) < 2 and 'type' not in streckennetz.nodes[node]:
-                nodes_to_remove.append(node)
-        if nodes_to_remove:
-            print('found', len(nodes_to_remove), 'deadend nodes')
-            streckennetz.remove_nodes_from(nodes_to_remove)
-            nodes_to_remove = []
-        else:
-            break
+    # Remove attributes that are not useful for comparison
+    for key in ['length', 'geometry']:
+        attributes1.pop(key, None)
+        attributes2.pop(key, None)
 
-    # Concat edges of nodes that have a degree of 2
+    return attributes1 == attributes2
+
+
+def simplify(nodes, edges) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+    replace_ids = {key: i for i, key in enumerate(nodes['index'])}
+    edges['u'] = edges['u'].map(replace_ids.get)
+    edges['v'] = edges['v'].map(replace_ids.get)
+    nodes['index'] = nodes['index'].map(replace_ids.get)
+    # nodes.set_index('index', inplace=True, drop=True)
+
+    streckennetz = ig.Graph.DataFrame(edges, directed=False, vertices=nodes)
+
     while True:
+        node_indices_to_touch = set()
         nodes_to_remove = []
         edges_to_add = []
-        for node in streckennetz.nodes():
-            if streckennetz.degree(node) == 2 and 'type' not in streckennetz.nodes[node]:
-                u, v = streckennetz.neighbors(node)
-                if u not in nodes_to_remove and v not in nodes_to_remove:
-                    nodes_to_remove.append(node)
-                    edges_to_add.append[(
-                        u, v, {
-                            'length': list(streckennetz[node][v].values())[0]['length'] + list(streckennetz[node][v].values())[0]['length'],
-                            'geometry': shapely.ops.linemerge([list(streckennetz[node][v].values())[0]['geometry'], list(streckennetz[node][v].values())[0]['geometry']])
-                        }
-                    )]
-        if nodes_to_remove:
-            print(f'found {len(nodes_to_remove) * 2} edges that can be merged')
-            streckennetz.remove_nodes_from(nodes_to_remove)
-            nodes_to_remove = []
-            streckennetz.add_edges_from(edges_to_add)
-            edges_to_add = []
+        edge_attributes_to_add = []
+        # Remove all nodes with degree 2, that are not stations and whose edges have the same attributes
+        for node in tqdm(streckennetz.vs, desc='Simplifying Streckennetz'):
+            if node.degree() == 2 and node['railway'] not in [
+                'station',
+                'stop',
+                'halt',
+            ]:
+                # Do not simplify nodes that will already be simplified
+                if (node.index in node_indices_to_touch):
+                    continue
+                if edges_mergeable(node.all_edges()[0], node.all_edges()[1]):
+                    node_indices_to_touch.add(node.index)
+                    node_indices_to_touch.add(node.neighbors()[0].index)
+                    node_indices_to_touch.add(node.neighbors()[1].index)
+
+                    # new_geometry = MultiLineString(
+                    #     [
+                    #         node.all_edges()[0]['geometry'],
+                    #         node.all_edges()[1]['geometry'],
+                    #     ]
+                    # )
+                    # new_geometry = shapely.line_merge(new_geometry)
+                    # TODO: Contact linestring correctly
+                    new_geometry = LineString()
+
+                    new_edge = node.all_edges()[0].attributes()
+                    new_edge['geometry'] = new_geometry
+                    new_edge['length'] = (
+                        node.all_edges()[0]['length'] + node.all_edges()[1]['length']
+                    )
+
+                    edges_to_add.append(
+                        (node.neighbors()[0].index, node.neighbors()[1].index)
+                    )
+                    edge_attributes_to_add.append(new_edge)
+
+                    nodes_to_remove.append(node.index)
+        if edges_to_add:
+            # Reorient attributes
+            edge_attributes_to_add = pd.DataFrame.from_records(
+                edge_attributes_to_add
+            ).to_dict(orient='list')
+            streckennetz.add_edges(edges_to_add, edge_attributes_to_add)
+            streckennetz.delete_vertices(nodes_to_remove)
         else:
             break
 
-    return streckennetz
+    nodes, edges = streckennetz.to_dict_list()
+    nodes = gpd.GeoDataFrame(pd.DataFrame.from_records(nodes), crs='EPSG:4326')
+    edges = gpd.GeoDataFrame(pd.DataFrame.from_records(edges), crs='EPSG:4326')
+    return nodes, edges
 
 
-
-def upload_minimal(streckennetz):
-    """
-    Upload edges of Streckennetz without attributes except edge length to database.
-
-    Parameters
-    ----------
-    streckennetz: nx.Graph
-        Graph of the Streckennetz
-    """
-    from database import DB_CONNECT_STRING
-    streckennetz = ox.graph_to_gdfs(streckennetz, nodes=False)
-    u_v_key = pd.DataFrame(streckennetz.index.to_numpy().tolist(), columns=streckennetz.index.names)
-    u_v_key = u_v_key.set_index(['u', 'v', 'key'], drop=False)
-    streckennetz['u'] = u_v_key['u']
-    streckennetz['v'] = u_v_key['v']
-    streckennetz = pd.DataFrame(streckennetz[['u', 'v', 'length']])
-    streckennetz = streckennetz.reset_index(drop=True)
-    streckennetz.to_sql('minimal_streckennetz', if_exists='replace', method='multi', con=DB_CONNECT_STRING)
-
-
-def upload_full(nodes, edges):
+def to_postgis(nodes: gpd.GeoDataFrame, edges: gpd.GeoDataFrame, table_name: str):
     """
     Upload Streckennetz, including edge attributes, to database
 
@@ -193,22 +290,66 @@ def upload_full(nodes, edges):
         GeoDataFrame of nodes
     edges : gpd.GeoDataFrame
         GeoDataFrame of edges
-    """    
-    from database import DB_CONNECT_STRING
-    # streckennetz_nodes, streckennetz_edges = ox.graph_to_gdfs(streckennetz, nodes=True)
-    # Function to generate WKB hex
-    def wkb_hexer(line):
-        return line.wkb_hex
+    table_name : str
+        Name of the table to upload to
+    """
 
-    # Convert `'geometry'` column in GeoDataFrame `gdf` to hex
-    # Note that following this step, the GeoDataFrame is just a regular DataFrame
-    # because it does not have a geometry column anymore. Also note that
-    # it is assumed the `'geometry'` column is correctly datatyped.
-    edges['geometry'] = edges['geometry'].apply(wkb_hexer)
-    edges.to_sql('full_streckennetz', if_exists='replace', method='multi', con=DB_CONNECT_STRING)
+    # dtypes used for sqlalchemy
+    edges_dtypes = {
+        'u': sqlalchemy.BIGINT,
+        'v': sqlalchemy.BIGINT,
+        'usage': sqlalchemy.String,
+        'highspeed': sqlalchemy.String,
+        'electrified': sqlalchemy.String,
+        'gauge': sqlalchemy.String,
+        'maxspeed': sqlalchemy.String,
+        'service': sqlalchemy.String,
+        'railway:preferred_direction': sqlalchemy.String,
+        'railway:etcs': sqlalchemy.String,
+        'railway:kvb': sqlalchemy.String,
+        'railway:lzb': sqlalchemy.String,
+        'railway:pzb': sqlalchemy.String,
+        'bridge': sqlalchemy.String,
+        'tunnel': sqlalchemy.String,
+        'length': sqlalchemy.Float,
+        'geometry': geoalchemy2.Geometry('LINESTRING'),
+    }
 
-    nodes['geometry'] = nodes['geometry'].apply(wkb_hexer)
-    nodes.to_sql('full_streckennetz_nodes', if_exists='replace', method='multi', con=DB_CONNECT_STRING)
+    nodes_dtypes = {
+        'index': sqlalchemy.BIGINT,
+        'name': sqlalchemy.String,
+        'railway': sqlalchemy.String,
+        'crossing:barrier': sqlalchemy.String,
+        'crossing:light': sqlalchemy.String,
+        'x': sqlalchemy.Float,
+        'y': sqlalchemy.Float,
+        'geometry': geoalchemy2.Geometry('POINT'),
+    }
+
+    if nodes.crs is None:
+        nodes.set_crs(EPSG_PROJECTED, inplace=True)
+    nodes.to_crs('EPSG:4326', inplace=True)
+    nodes.reset_index(inplace=True)
+
+    if edges.crs is None:
+        edges.set_crs(EPSG_PROJECTED, inplace=True)
+    edges.to_crs('EPSG:4326', inplace=True)
+
+    nodes.to_postgis(
+        f'{table_name}_nodes',
+        if_exists='replace',
+        con=get_engine(),
+        chunksize=10_000,
+        dtype=nodes_dtypes,
+    )
+
+    edges.to_postgis(
+        f'{table_name}_edges',
+        if_exists='replace',
+        con=get_engine(),
+        chunksize=10_000,
+        dtype=edges_dtypes,
+    )
 
 
 def plot_algorithm(
@@ -224,11 +365,12 @@ def plot_algorithm(
     v=None,
     splitted=None,
     closest_edge=None,
+    more_plots: List[Tuple] = None,
 ):
     fig, ax = plt.subplots()
     ax.set_aspect('equal', 'datalim')
     ax.set_title(name)
-    
+
     for index, edge in close_edges.iterrows():
         ax.plot(*edge['geometry'].xy, color='black')
 
@@ -257,54 +399,73 @@ def plot_algorithm(
         ax.scatter(*v.xy, color='orange', zorder=3)
 
     if splitted:
-        ax.plot(*splitted[0].xy, color='green')
-        ax.plot(*splitted[1].xy, color='orange')
+        # Plot splitted edges. Note: there can be 1 or 2 splitted edges
+        for geom, color in zip(splitted.geoms, ['green', 'orange']):
+            ax.plot(*geom.xy, color=color)
 
     if closest_edge:
         ax.plot(*closest_edge.xy, color='brown')
 
+    if more_plots:
+        for plot in more_plots:
+            if hasattr(plot[0], 'geoms'):
+                for geom in plot[0].geoms:
+                    ax.plot(*geom.xy, color=plot[1])
+            else:
+                ax.plot(*plot[0].xy, color=plot[1])
+
     plt.show()
 
 
-def split_geom(geom, line, line_exterior):
+def split_geom(
+    geom,
+    line,
+) -> Point | None:
     if geom.intersects(line):
         intersection = geom.intersection(line)
-        try:
-            cut = shapely.ops.split(geom, line_exterior)[1]
-            angle = angle_three_points(
-                cut.representative_point().coords[0],
-                intersection.coords[0],
-                line.representative_point().coords[0],
-            )
-        except IndexError:
-            angle = 0
-        except NotImplementedError:
-            angle = 0
+        angle = angle_three_points(
+            geom.representative_point().coords[0],
+            intersection.coords[0],
+            line.representative_point().coords[0],
+        )
         if 70 < angle < 110:
-            return {
-                'intersection': intersection,
-                'splitted': shapely.ops.split(geom, line)
-            }
-        else:
-            return None
+            return intersection
+
+
+def create_new_edges(
+    name: str, edge: pd.Series, nodes: gpd.GeoDataFrame, intersection: Point
+) -> gpd.GeoDataFrame:
+    name_hash = CityHash32(name)
+    v = nodes.loc[edge['v']]
+    u = nodes.loc[edge['u']]
+
+    v_edge = edge.copy()
+    v_edge['v'] = name_hash
+    v_edge['geometry'] = LineString([v['geometry'], intersection])
+
+    u_edge = edge.copy()
+    u_edge['u'] = name_hash
+    u_edge['geometry'] = LineString([intersection, u['geometry']])
+
+    add = gpd.GeoDataFrame([v_edge, u_edge], crs=EPSG_PROJECTED)
+    return _add_length_to_gdf(add)
 
 
 def split_edge(
-    index: tuple,
+    index: int,
     name: str,
-    edge: gpd.GeoSeries,
+    edge: pd.Series,
+    nodes: gpd.GeoDataFrame,
     close_edges: gpd.GeoDataFrame,
     line: LineString,
-    line_exterior: MultiLineString,
     orth_line: LineString,
-    orth_line_exterior: MultiLineString,
-    plot: bool=False,
-):
+    plot: bool = False,
+) -> Dict | None:
     """Split the geometry of an edge.
 
     Parameters
     ----------
-    index : tuple
+    index : int
         Index of the edge to split
     name : str
         Name of the station where the edge is split
@@ -314,238 +475,254 @@ def split_edge(
         GeoDataFrame of this and other edges close to the station
     line : LineString
         Line, with the station as center and orthogonal to the nearest edge
-    line_exterior : MultiLineString
-        Two lines, parallel to line, but with +/- a small offset. Used
-        to calculate the cut angle between edge and orth_line
     orth_line : LineString
         Line, with the station as center and orthogonal to line
-    orth_line_exterior : MultiLineString
-        Two lines, parallel to orth_line, bit with +/- a small offset. Used
-        to calculate the cut angle between edge and orth_line
     plot : bool, optional
         Whether to plot the process or not, by default False
-
-    Returns
-    -------
-    list or None
-        [description]
     """
     # split by first line
-    splitted = split_geom(edge['geometry'], line, line_exterior)
-    if splitted is None:
+    intersection = split_geom(edge['geometry'], line)
+    if intersection is None:
         # split by orthogonal line if split by line did not result in a split
-        splitted = split_geom(edge['geometry'], orth_line, orth_line_exterior)
+        intersection = split_geom(edge['geometry'], orth_line)
 
-    if splitted is not None:
+    if intersection is not None:
         if plot:
             plot_algorithm(
                 name,
                 close_edges,
                 line,
                 orth_line,
-                splitted=splitted['splitted'],
-                u=nodes.loc[index[0], 'geometry'],
-                v=nodes.loc[index[1], 'geometry'],
             )
-        
-        return [
-            [index],
-            [(index[0], name, 0), (name, index[1], 0)],
-            [*splitted['splitted']],
-            [splitted['intersection']],
-        ]
+
+        add = create_new_edges(name, edge, nodes, intersection)
+
+        return {
+            'drop': index,
+            'add': add,
+            'intersection': intersection,
+        }
+
     else:
         return None
 
-def insert_station(name, station, edges, nodes, plot=False):
-    # Get edges close to station using r-tree indexing (this is way faster than using GeoDataFrame.cx[])
+
+def insert_station(
+    name: str,
+    station: gpd.GeoSeries,
+    edges: gpd.GeoDataFrame,
+    nodes: gpd.GeoDataFrame,
+    plot=False,
+):
+    # Get edges close to station using r-tree indexing
+    # (this is way faster than using GeoDataFrame.cx[])
     bbox = shapely.geometry.box(
-        station['geometry'].x - 100,
-        station['geometry'].y - 100,
-        station['geometry'].x + 100,
-        station['geometry'].y + 100
+        station['geometry'].x - BBOX_HALF_SIZE,
+        station['geometry'].y - BBOX_HALF_SIZE,
+        station['geometry'].x + BBOX_HALF_SIZE,
+        station['geometry'].y + BBOX_HALF_SIZE,
     )
     close_edges = edges.iloc[list(edges.sindex.intersection(bbox.bounds))]
 
     if not close_edges.empty:
         multipoint = close_edges['geometry'].unary_union
-        for i in range(2):
-            if i == 1:
-                # Move station close to closest edge in order to get a split
-                station.at['geometry'] = Point(np.array(points[1].xy).flatten() - (10 * bhf_vec))
-                # plot = True
 
-            points = shapely.ops.nearest_points(
-                station['geometry'],
-                multipoint
+        points = shapely.ops.nearest_points(station['geometry'], multipoint)
+        # Calculate vector from station nearest point
+        bhf_vec = np.array([points[0].x - points[1].x, points[0].y - points[1].y])
+        # Shorten vector to have a length of 1
+        bhf_vec = bhf_vec / np.sqrt(bhf_vec.dot(bhf_vec))
+        # Create a vector orthogonal to bhf_vec
+        bhf_orth_vec = np.array([bhf_vec[1], -bhf_vec[0]])
+
+        station_coords = np.array(station['geometry'].xy).flatten()
+
+        # line and orth_line make a cross on the station
+        line = LineString(
+            [
+                station_coords - (SPLITTER_LINE_LENGTH * bhf_vec),
+                station_coords + (SPLITTER_LINE_LENGTH * bhf_vec),
+            ]
+        )
+        orth_line = LineString(
+            [
+                station_coords - (SPLITTER_LINE_LENGTH * bhf_orth_vec),
+                station_coords + (SPLITTER_LINE_LENGTH * bhf_orth_vec),
+            ]
+        )
+
+        # split edges either with line or orth_line
+        changes = {
+            'drop': [],
+            'add': [],
+            'intersection': [],
+        }
+        for index, edge in close_edges.iterrows():
+            current_changes = split_edge(
+                index=index,
+                name=name,
+                edge=edge,
+                close_edges=close_edges,
+                nodes=nodes,
+                line=line,
+                orth_line=orth_line,
+                plot=plot,
             )
-            # Calculate vector from station nearest point
-            bhf_vec = np.array([points[0].x - points[1].x, points[0].y - points[1].y])
-            # Shorten vector to have a length of 1
-            bhf_vec = bhf_vec / np.sqrt(bhf_vec.dot(bhf_vec))
-            # Create a vector orthogonal to bhf_vec
-            bhf_orth_vec = np.array([bhf_vec[1], -bhf_vec[0]])
-
-            # line and orth_line make a cross on the station
-            line = LineString([
-                np.array(station['geometry'].xy).flatten() - (100 * bhf_vec),
-                np.array(station['geometry'].xy).flatten() + (100 * bhf_vec)
-            ])
-            orth_line = LineString([
-                np.array(station['geometry'].xy).flatten() - (100 * bhf_orth_vec),
-                np.array(station['geometry'].xy).flatten() + (100 * bhf_orth_vec)
-            ])
-
-            # Exterior lines are used to cut edges in order to calculate cut angle
-            line_exterior = MultiLineString([
-                (np.array(station['geometry'].xy).flatten() - (200 * bhf_vec) - (2 * bhf_orth_vec),
-                np.array(station['geometry'].xy).flatten() + (200 * bhf_vec) - (2 * bhf_orth_vec)),
-                (np.array(station['geometry'].xy).flatten() - (200 * bhf_vec) + (2 * bhf_orth_vec),
-                np.array(station['geometry'].xy).flatten() + (200 * bhf_vec) + (2 * bhf_orth_vec))
-            ])
-            orth_line_exterior = MultiLineString([
-                (np.array(station['geometry'].xy).flatten() - (200 * bhf_orth_vec) - (2 * bhf_vec),
-                np.array(station['geometry'].xy).flatten() + (200 * bhf_orth_vec) - (2 * bhf_vec)),
-                (np.array(station['geometry'].xy).flatten() - (200 * bhf_orth_vec) + (2 * bhf_vec),
-                np.array(station['geometry'].xy).flatten() + (200 * bhf_orth_vec) + (2 * bhf_vec))
-            ])
-
-            # split edges either with line or orth_line
-            new_edges = []
-            for index, edge in close_edges.iterrows():
-                new_edges.append(split_edge(
-                    index,
-                    name,
-                    edge,
-                    close_edges,
-                    line,
-                    line_exterior,
-                    orth_line,
-                    orth_line_exterior,
-                    plot=plot,
-                ))
-            if plot:
-                plot_algorithm(
-                    name,
-                    close_edges,
-                    line,
-                    orth_line,
-                    points=points,
-                    # closest_edge=station['nearest_edge'],
-                )
-            try:
-                # Save and return the splits made
-                drop, add, geom, intersections = list(zip(*[new_edge for new_edge in new_edges if new_edge is not None]))
-                drop = list(flatten(drop))
-                add = list(flatten(add))
-                geom = list(flatten(geom))
-                intersections = list(flatten(intersections))
-
-                return drop, add, geom, intersections
-            except ValueError:
-                pass
+            if current_changes is not None:
+                changes['drop'].append(current_changes['drop'])
+                changes['add'].append(current_changes['add'])
+                changes['intersection'].append(current_changes['intersection'])
+        if plot:
+            plot_algorithm(
+                name=name,
+                close_edges=close_edges,
+                line=line,
+                orth_line=orth_line,
+                points=points,
+            )
+        if changes['drop']:
+            return changes
         else:
-            print('could not split', name)
+            return None
     else:
         print('there are no edges close to', name)
-    # If nothing was split at all, return Nones instead
-    return [None] * 4
+    # If nothing was split at all, return None instead
+    return None
 
 
-if __name__ == '__main__':
-    import helpers.fancy_print_tcp
+def station_already_exists(
+    name: str,
+    station: pd.Series,
+    nodes: gpd.GeoDataFrame,
+) -> bool:
+    bbox = shapely.geometry.box(
+        station['geometry'].x - 100,
+        station['geometry'].y - 100,
+        station['geometry'].x + 100,
+        station['geometry'].y + 100,
+    )
 
+    close_nodes = nodes.iloc[list(nodes.sindex.intersection(bbox.bounds))]
+    if not close_nodes.empty:
+        if (
+            (close_nodes['name'] == name)
+            & (close_nodes['railway'].isin(['stop', 'station', 'halt']))
+        ).any():
+            return True
+    return False
+
+
+def download_and_process_streckennetz():
     stations = StationPhillip(prefer_cache=False)
-    betriebsstellen = BetriebsstellenBill(prefer_cache=False)
 
-    stations_gdf = stations.to_gpd()
-    stations_gdf['type'] = 'station'
-    betriebsstellen_gdf = betriebsstellen.to_gdf()
-    betriebsstellen_gdf['type'] = 'betriebsstelle'
-
-    # Merge stations and betriebsstellen
-    stations_gdf = pd.concat([stations_gdf, betriebsstellen_gdf])
+    stations_gdf = stations.to_gdf(date='latest', index_cols=['name'])
     stations_gdf = stations_gdf.loc[~stations_gdf.index.duplicated(keep='first')]
 
-    stations_gdf['x'] = stations_gdf.geometry.x
-    stations_gdf['y'] = stations_gdf.geometry.y
-
-    ox.config(log_console=True, use_cache=True)
-    streckennetz = get_streckennetz_from_osm(
-        point_cloud=np.array(list(zip(stations_gdf['geometry'].x, stations_gdf['geometry'].y))),
-        cache=True,
+    station_point_cloud = np.array(
+        list(zip(stations_gdf['geometry'].x, stations_gdf['geometry'].y))
     )
-    nodes, edges = ox.graph_to_gdfs(streckennetz, fill_edge_geometry=True)
 
-    stations_gdf = stations_gdf.to_crs('EPSG:3857')
+    settings.log_console = False
+    settings.use_cache = True
+    settings.cache_folder = 'cache/ox_cache'
 
-    pickle.dump(stations_gdf, open("cache/stations_gdf.pkl", "wb"))
-    stations_gdf = pickle.load(open("cache/stations_gdf.pkl", "rb"))
+    try:
+        nodes = gpd.read_parquet('cache/nodes.parquet')
+        edges = gpd.read_parquet('cache/edges.parquet')
+        print('Using cached streckennetz instead of downloading new one from osm')
+    except FileNotFoundError:
+        nodes, edges = get_gdf_from_osm(MultiPoint(station_point_cloud).convex_hull)
 
-    replace_edges = []
-    add_edges = {'index': [], 'geometry': []}
+        nodes.to_parquet('cache/nodes.parquet')
+        edges.to_parquet('cache/edges.parquet')
+
+    stations_gdf = stations_gdf.to_crs(EPSG_PROJECTED)
+    nodes = nodes.to_crs(EPSG_PROJECTED)
+    edges = edges.to_crs(EPSG_PROJECTED)
+
+    replace_edges = set()
+    add_edges = []
     add_nodes = {}
     recompute = []
     stations_to_insert = stations_gdf.index.to_list()
-    # stations_to_insert=['Sand (Niederbay) Hafen', 'Königstein (Sächs Schweiz) Hp', 'Limmritz (Sachs)']
     while stations_to_insert:
         print('inserting', len(stations_to_insert), 'stations')
         # rebuild r-tree index for fast spatial indexing
         edges.sindex
+        nodes.sindex
         for name in tqdm(stations_to_insert):
-            drop, add, geom, intersections = insert_station(name, stations_gdf.loc[name], edges, nodes, plot=False)
-            if drop is not None:
-                # test whether one of the spitted egdes was already split for 
+            if station_already_exists(name, stations_gdf.loc[name], nodes):
+                # print(name, ' already exists')
+                continue
+
+            changes = insert_station(
+                name=name,
+                station=stations_gdf.loc[name],
+                edges=edges,
+                nodes=nodes,
+                plot=False,
+            )
+            if changes is not None:
+                # test whether one of the spitted edges was already split for
                 # another station
-                for i in range(len(drop)):
-                    if drop[i] in replace_edges:
+                for index in changes['drop']:
+                    if index in replace_edges:
                         # save the station to be recomputed in the next run
                         recompute.append(name)
                         break
                 else:
                     # save changes that should be made in order to insert this station
-                    replace_edges.extend(drop)
-                    for i in range(len(add)):
-                        add_edges['index'].append(add[i])
-                        add_edges['geometry'].append(geom[i])
-                    add_nodes[name] = {
-                        'geometry': MultiPoint(intersections),
-                        'type': stations_gdf.loc[name, 'type'],
-                        'x': stations_gdf.loc[name, 'x'],
-                        'y': stations_gdf.loc[name, 'y']
+                    replace_edges.update(changes['drop'])
+                    add_edges.append(changes['add'])
+
+                    add_nodes[CityHash32(name)] = {
+                        'geometry': stations_gdf.loc[name, 'geometry'],
+                        'name': name,
+                        'railway': 'stop',
+                        'x': stations_gdf.loc[name, 'geometry'].x,
+                        'y': stations_gdf.loc[name, 'geometry'].y,
                     }
             else:
                 pass
                 # print('there are no edges close to', name)
                 # insert_station(name, stations_gdf.loc[name], edges, nodes, plot=True)
         # remove splitted edges, append new edges and nodes
-        add_edges = pd.DataFrame(add_edges).set_index('index')
+        add_edges = pd.concat(flatten(add_edges), ignore_index=True)
         add_nodes = pd.DataFrame().from_dict(add_nodes, orient='index')
         edges = edges.drop(replace_edges)
-        edges = edges.append(add_edges)
-        nodes = nodes.append(add_nodes)
+        edges = pd.concat([edges, add_edges], ignore_index=True)
+        nodes = pd.concat([nodes, add_nodes])
 
         # reset variables to store splitting results
-        replace_edges = []
-        add_edges = {'index': [], 'geometry': []}
+        replace_edges = set()
+        replace_edges = set()
+        add_edges = []
         add_nodes = {}
         stations_to_insert = recompute
         recompute = []
 
-
-    # Add length of geometry to edge (osmnx calculates distance from node to node)
-    edges = edges.set_crs("EPSG:3857").to_crs("EPSG:4326")
-    nodes = nodes.set_crs("EPSG:3857").to_crs("EPSG:4326")
-    print('Adding more precise lengths')
-    with ProcessPoolExecutor() as executor:
-        edges['length'] = list(tqdm(executor.map(length_of_line, edges['geometry']), total=len(edges['geometry'])))
-    # edges['length'] = lengths
-
-    streckennetz = nx.MultiGraph(ox.graph_from_gdfs(nodes, edges))
-    streckennetz = simplify(streckennetz)
-    nodes, edges = ox.graph_to_gdfs(streckennetz, fill_edge_geometry=True)
-
-    print('Uploading minimal')
-    upload_minimal(streckennetz)
     print('Uploading full')
-    upload_full(nodes, edges)
+    to_postgis(nodes, edges, 'streckennetz_zwei_null')
+
+
+def main():
+    # download_and_process_streckennetz()
+
+    nodes = cached_table_fetch_postgis(
+        'streckennetz_zwei_null_nodes', prefer_cache=True
+    )
+    edges = cached_table_fetch_postgis(
+        'streckennetz_zwei_null_edges', prefer_cache=True
+    )
+
+    nodes, edges = simplify(nodes, edges)
+
+    to_postgis(nodes, edges, 'streckennetz_zwei_null_simplified')
+
+    # download_and_process_streckennetz()
+
+
+if __name__ == '__main__':
+    import helpers.bahn_vorhersage
+
+    main()
