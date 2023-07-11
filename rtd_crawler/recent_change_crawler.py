@@ -8,7 +8,7 @@ from redis import Redis
 
 from config import redis_url, station_to_monitor_per_thread
 from database import Change, sessionfactory, unparsed
-from helpers import StationPhillip
+from helpers.StationPhillip import StationPhillip
 from rtd_crawler.hash64 import hash64
 from rtd_crawler.SimplestDownloader import SimplestDownloader
 from rtd_crawler.xml_parser import xml_to_json
