@@ -1,6 +1,7 @@
 import datetime
 from typing import List, Literal, Optional, Tuple, Union
 
+import geopy.distance
 import pandas as pd
 
 from config import CACHE_TIMEOUT_SECONDS
@@ -96,6 +97,9 @@ class StationPhillip:
         if index_cols is None:
             index_cols = ('name', 'eva', 'ds100', 'date')
 
+        for level in index_cols:
+            if level not in stations.index.names:
+                stations.set_index(level, append=True, inplace=True)
         for level in stations.index.names:
             if level not in index_cols:
                 stations = stations.droplevel(level=level)
@@ -443,6 +447,17 @@ class StationPhillip:
             location = (location['lon'].item(), location['lat'].item())
 
         return location
+
+    def geographic_distance(
+        self,
+        name1: str,
+        name2: str,
+        date: DateSelector = None,
+    ) -> float:
+        coords_1 = self.get_location(name=name1, date=date, allow_duplicates='first')
+        coords_2 = self.get_location(name=name2, date=date, allow_duplicates='first')
+
+        return geopy.distance.distance(coords_1, coords_2).meters
 
     def add_number_of_events(self):
         # TODO: This function does not work anymore. Switch to PerStationOverTime
