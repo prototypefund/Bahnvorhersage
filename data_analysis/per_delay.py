@@ -1,15 +1,13 @@
-import os
-import sys
+from typing import Optional
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import matplotlib.pyplot as plt
-from helpers import RtdRay, groupby_index_to_flat
-from config import n_dask_workers
-from database import cached_table_fetch
+import matplotlib.ticker as ticker
 import seaborn as sns
 from matplotlib.colors import ListedColormap
-import matplotlib.ticker as ticker
-from typing import Optional
+
+from config import n_dask_workers
+from database import cached_table_fetch
+from helpers import RtdRay, groupby_index_to_flat
 
 
 class DelayAnalysis:
@@ -17,7 +15,6 @@ class DelayAnalysis:
         self.data = cached_table_fetch(
             self.tablename,
             table_generator=self.generate_data,
-            push=True,
             index_col='index',
             **kwargs,
         )

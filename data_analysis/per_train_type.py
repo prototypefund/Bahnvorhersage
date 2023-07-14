@@ -1,17 +1,15 @@
-import os
-import sys
 import abc
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib
-from data_analysis.packed_bubbles import BubbleChart
-from helpers import RtdRay, groupby_index_to_flat
-from database import cached_table_fetch
 import dask.dataframe as dd
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
 from config import n_dask_workers
+from data_analysis.packed_bubbles import BubbleChart
+from database import cached_table_fetch
+from helpers import RtdRay, groupby_index_to_flat
 
 
 class PerCategoryAnalysis(abc.ABC):
@@ -20,7 +18,6 @@ class PerCategoryAnalysis(abc.ABC):
             self.tablename,
             index_col=self.category_col,
             table_generator=lambda: self.generate_data(),
-            push=True,
             **kwargs,
         )
 
@@ -68,13 +65,9 @@ class PerCategoryAnalysis(abc.ABC):
 
         data = groupby_index_to_flat(data)
 
-        data['ar_happened_mean'] = (
-                data['ar_happened_sum'] / data['ar_delay_count']
-            )
+        data['ar_happened_mean'] = data['ar_happened_sum'] / data['ar_delay_count']
 
-        data['dp_happened_mean'] = (
-            data['dp_happened_sum'] / data['dp_delay_count']
-        )
+        data['dp_happened_mean'] = data['dp_happened_sum'] / data['dp_delay_count']
 
         return data
 
@@ -187,15 +180,17 @@ class PerCategoryAnalysis(abc.ABC):
 
         # scatter in order to set colorbar
         scatter = ax.scatter(
-            np.zeros(len(cancellations)), np.zeros(len(cancellations)), s=0, c=cancellations, cmap=cmap
+            np.zeros(len(cancellations)),
+            np.zeros(len(cancellations)),
+            s=0,
+            c=cancellations,
+            cmap=cmap,
         )
         colorbar = fig.colorbar(scatter)
         colorbar.solids.set_edgecolor("face")
         colorbar.outline.set_linewidth(0)
         colorbar.ax.get_yaxis().labelpad = 15
-        colorbar.ax.set_ylabel(
-            "Prozent ausgefallene Züge", rotation=270
-        )
+        colorbar.ax.set_ylabel("Prozent ausgefallene Züge", rotation=270)
 
         ax.relim()
         ax.autoscale_view()
@@ -209,7 +204,6 @@ class PerCategoryAnalysis(abc.ABC):
 
 
 class TrainTypeAnalysis(PerCategoryAnalysis):
-
     category_name = 'Zugtyp'
     category_col = 'c'
     tablename = 'per_train_type'
@@ -238,7 +232,6 @@ class TrainTypeAnalysis(PerCategoryAnalysis):
 
 
 class OperatorAnalysis(PerCategoryAnalysis):
-
     category_name = 'Beteiber'
 
     def __init__(self, rtd, **kwargs):
@@ -246,7 +239,6 @@ class OperatorAnalysis(PerCategoryAnalysis):
             'per_operator',
             index_col='o',
             table_generator=lambda: self.generate_data(rtd),
-            push=True,
             **kwargs,
         )
 
@@ -295,14 +287,12 @@ class OperatorAnalysis(PerCategoryAnalysis):
 
 
 class fAnalysis(PerCategoryAnalysis):
-
     category_name = 'f'
 
     def __init__(self, rtd, **kwargs):
         self.data = cached_table_fetch(
             'per_f',
             table_generator=lambda: self.generate_data(rtd),
-            push=True,
             **kwargs,
         )
 
@@ -333,14 +323,12 @@ class fAnalysis(PerCategoryAnalysis):
 
 
 class tAnalysis(PerCategoryAnalysis):
-
     category_name = 't'
 
     def __init__(self, rtd, **kwargs):
         self.data = cached_table_fetch(
             'per_t',
             table_generator=lambda: self.generate_data(rtd),
-            push=True,
             **kwargs,
         )
 
@@ -371,14 +359,12 @@ class tAnalysis(PerCategoryAnalysis):
 
 
 class TrainNumberAnalysis(PerCategoryAnalysis):
-
     category_name = 'Zugnummer'
 
     def __init__(self, rtd, **kwargs):
         self.data = cached_table_fetch(
             'per_train_number',
             table_generator=lambda: self.generate_data(rtd),
-            push=True,
             **kwargs,
         )
 
@@ -409,14 +395,12 @@ class TrainNumberAnalysis(PerCategoryAnalysis):
 
 
 class PlatformAnalysis(PerCategoryAnalysis):
-
     category_name = 'Gleis'
 
     def __init__(self, rtd, **kwargs):
         self.data = cached_table_fetch(
             'per_platform',
             table_generator=lambda: self.generate_data(rtd),
-            push=True,
             **kwargs,
         )
 

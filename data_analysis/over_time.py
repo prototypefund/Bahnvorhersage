@@ -1,18 +1,16 @@
-import os, sys
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from abc import ABCMeta, abstractmethod
-import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-import matplotlib.ticker
 import datetime
+from abc import ABCMeta, abstractmethod
+from typing import Literal, Optional
+
 import dask.dataframe as dd
-from helpers import RtdRay
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
+import matplotlib.ticker
+import pandas as pd
+
 from config import n_dask_workers
 from database import cached_table_fetch
-from helpers import groupby_index_to_flat
-from typing import Literal, Optional
+from helpers import RtdRay, groupby_index_to_flat
 
 
 def add_rolling_mean(df: pd.DataFrame, columns: list, window=3) -> pd.DataFrame:
@@ -62,7 +60,6 @@ class OverTime(metaclass=ABCMeta):
         self.data = cached_table_fetch(
             self.tablename,
             table_generator=self.generate_data,
-            push=True,
             index_col='index',
             **kwargs,
         )

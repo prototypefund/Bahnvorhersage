@@ -1,7 +1,4 @@
 import os
-import sys
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd
 import dask.dataframe as dd
 import io
@@ -31,7 +28,8 @@ if os.path.isdir("/usr/src/app/cache"):
 # Install proj from source
 # sudo ldconfig
 
-from helpers import StationPhillip, RtdRay, groupby_index_to_flat, ttl_lru_cache
+from helpers import RtdRay, groupby_index_to_flat, ttl_lru_cache
+from helpers.StationPhillip import StationPhillip
 from database import cached_table_fetch
 from config import CACHE_PATH, n_dask_workers
 
@@ -283,7 +281,6 @@ class PerStationOverTime(StationPhillip):
         self.data = cached_table_fetch(
             'per_station_over_time',
             table_generator=lambda: self.data_generator(self.rtd),
-            push=True,
             **self.kwargs,
         )
 
