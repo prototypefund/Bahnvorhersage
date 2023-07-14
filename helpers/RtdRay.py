@@ -1,16 +1,14 @@
-import os, sys
-import pickle
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import pandas as pd
-import dask.dataframe as dd
 import datetime
-from database import DB_CONNECT_STRING, get_engine
-from helpers import StationPhillip
-from config import RTD_CACHE_PATH, ENCODER_PATH, RTD_TABLENAME
+import pickle
 from typing import Optional
+
+import dask.dataframe as dd
+import pandas as pd
 from dask.distributed import Client
 
+from config import ENCODER_PATH, RTD_CACHE_PATH, RTD_TABLENAME
+from database import DB_CONNECT_STRING, get_engine
+from helpers.StationPhillip import StationPhillip
 
 """
 Table "public.recent_change_rtd"
@@ -173,14 +171,14 @@ def _get_delays(rtd: dd.DataFrame) -> dd.DataFrame:
         'Int16'
     )
     rtd['ar_happened'] = (rtd['ar_cs'] != 'c') & ~rtd['ar_delay'].isna()
-    rtd['ar_cacelled'] = rtd['ar_cs'] == 'c'
+    rtd['ar_cancelled'] = rtd['ar_cs'] == 'c'
 
     # rtd['dp_cancellation_time_delta'] = (((rtd['dp_clt'] - rtd['dp_pt']).dt.total_seconds()) // 60).astype('Int16')
     rtd['dp_delay'] = (((rtd['dp_ct'] - rtd['dp_pt']).dt.total_seconds()) // 60).astype(
         'Int16'
     )
     rtd['dp_happened'] = (rtd['dp_cs'] != 'c') & ~rtd['dp_delay'].isna()
-    rtd['dp_cacelled'] = rtd['dp_cs'] == 'c'
+    rtd['dp_cancelled'] = rtd['dp_cs'] == 'c'
 
     # Everything with less departure delay than -1 is definitly a bug of IRIS
     rtd['ar_delay'] = rtd['ar_delay'].where(rtd['dp_delay'] >= -1, 0)
@@ -205,8 +203,9 @@ def _add_station_coordinates(rtd: dd.DataFrame) -> dd.DataFrame:
     """
     stations = StationPhillip()
 
-    unique_stations = rtd['station'].unique().compute().tolist()
-    coordinates = stations.get_location(name=unique_stations, date='latest')
+    unique_station_names = stations.stations['name'].unique()
+
+    coordinates = stations.get_location(name=unique_station_names, date='latest')
     coordinates = coordinates.droplevel('date')
     replace_lon = coordinates['lon'].to_dict()
     replace_lat = coordinates['lat'].to_dict()
@@ -270,16 +269,18 @@ def download_rtd():
         RTD_TABLENAME, DB_CONNECT_STRING, index_col='hash_id', meta=meta
     )
     rtd.to_parquet(
-        RTD_CACHE_PATH, engine='pyarrow', write_metadata_file=False, compute=True
+        RTD_CACHE_PATH,
+        engine='pyarrow',
+        overwrite=True,
     )
-    rtd = dd.read_parquet(RTD_CACHE_PATH, engine='pyarrow')
+    # rtd = dd.read_parquet(RTD_CACHE_PATH, engine='pyarrow')
 
-    rtd = _parse(rtd)
-    _save_encoders(rtd)
+    # rtd = _parse(rtd)
+    # _save_encoders(rtd)
 
-    # Save data to parquet. We have to use pyarrow as fastparquet does not support pd.Int64
-    rtd.to_parquet(RTD_CACHE_PATH, engine='pyarrow', write_metadata_file=False)
-    print('Saved to {}'.format(RTD_CACHE_PATH))
+    # # Save data to parquet. We have to use pyarrow as fastparquet does not support pd.Int64
+    # rtd.to_parquet(RTD_CACHE_PATH, engine='pyarrow', write_metadata_file=False)
+    # print('Saved to {}'.format(RTD_CACHE_PATH))
 
 
 def upgrade_rtd():
@@ -294,8 +295,7 @@ def upgrade_rtd():
     max_date = max_date.to_pydatetime()
     print('getting data added since', max_date)
 
-    from sqlalchemy import Column, DateTime
-    from sqlalchemy import sql
+    from sqlalchemy import Column, DateTime, sql
     from sqlalchemy.dialects import postgresql
 
     with get_engine().connect() as connection:
@@ -345,7 +345,7 @@ def upgrade_rtd():
     print('Rows after getting new data:', len_end)
     print('Got', len_end - len_beginning, 'new rows')
     print(
-        'Number of dublicate indicies',
+        'Number of duplicate indices',
         rtd.index.compute().duplicated(keep='last').sum(),
     )
 
@@ -557,10 +557,6 @@ def load_for_ml_model(
 
 if __name__ == "__main__":
     import helpers.bahn_vorhersage
-
-    with Client(n_workers=2, threads_per_worker=1, memory_limit='16GB') as client:
-        rtd = load_data(load_categories=False)
-        rtd = _add_station_coordinates(rtd)
 
     rtd = load_data(columns=['ar_pt'])
 
