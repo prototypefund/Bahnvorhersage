@@ -1,17 +1,14 @@
-import os
-import sys
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import shapely
-import geopandas as gpd
-from helpers import StationPhillip, BetriebsstellenBill, ObstacleOlly
-import matplotlib.pyplot as plt
-import matplotlib.pyplot as plt
-from database import cached_table_fetch
 import cartopy.crs as ccrs
-import cartopy
+import geopandas as gpd
 import matplotlib
+import matplotlib.pyplot as plt
+import shapely
+
 from data_analysis.per_station import create_base_plot
+from database import cached_table_fetch
+from helpers.BetriebsstellenBill import BetriebsstellenBill
+from helpers.ObstacleOlly import ObstacleOlly
+from helpers.StationPhillip import StationPhillip
 
 matplotlib.use('TkAgg')
 

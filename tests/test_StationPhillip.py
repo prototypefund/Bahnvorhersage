@@ -3,7 +3,7 @@ import datetime
 import numpy as np
 import pandas as pd
 
-from helpers import StationPhillip
+from helpers.StationPhillip import StationPhillip
 
 stations = StationPhillip(prefer_cache=False)
 

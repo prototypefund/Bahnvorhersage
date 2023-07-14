@@ -11,7 +11,8 @@ from tqdm import tqdm
 from xgboost import XGBClassifier
 
 from config import ENCODER_PATH, JSON_MODEL_PATH
-from helpers import RtdRay, StreckennetzSteffi, ttl_lru_cache
+from helpers import RtdRay, ttl_lru_cache
+from helpers.StreckennetzSteffi import StreckennetzSteffi
 
 
 def save_model(model: XGBClassifier, minute: int, ar_or_dp: Literal['ar', 'dp']):

@@ -1,18 +1,17 @@
-import os
-import sys
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import pandas as pd
-import datetime
-from tqdm import tqdm
-from rtd_crawler.hash64 import hash64
-from database import RtdManager, sql_types, RtdArrays, DBManager
-from helpers import ObstacleOlly
-import json
-import re
-import concurrent.futures
-import numpy as np
 import argparse
+import concurrent.futures
+import datetime
+import json
+import os
+import re
+
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
+
+from database import DBManager, RtdArrays, RtdManager, sql_types
+from helpers.ObstacleOlly import ObstacleOlly
+from rtd_crawler.hash64 import hash64
 
 parser = argparse.ArgumentParser(description='Parse train delay data')
 parser.add_argument('--parse_all', help='Parse the full data and not only new one')
