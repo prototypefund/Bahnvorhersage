@@ -54,6 +54,8 @@ spec:
     - wohnung-in-esslingen.de
     - endstationzukunft.de
     - holiday.bahnvorhersage.de
+    - validation.marcpanse.de
+    - studywatch.de
     secretName: default-tls-secret
   rules:
   - host: "bahnvorhersage.de"
@@ -224,6 +226,26 @@ spec:
           backend:
             service:
               name: sfz-endstationzukunft
+              port:
+                number: 80
+  - host: "validation.marcpanse.de"
+    http: &validation
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-validation
+              port:
+                number: 80
+  - host: "studywatch.de"
+    http: &studywatch
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-studywatch
               port:
                 number: 80
   - host: "holiday.bahnvorhersage.de"
