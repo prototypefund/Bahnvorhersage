@@ -142,13 +142,16 @@ class OverDistance:
         plot_data = plot_data.loc[plot_data['stop_count'] > 100, :]
 
         fig, ax = plt.subplots()
-
         count_ax = ax.twinx()
-        count_ax.plot(
+
+        ax.set_zorder(1)  # default zorder is 0 for ax1 and ax2
+        ax.patch.set_visible(False)  # prevents ax1 from hiding ax2
+
+        count_ax.stackplot(
             plot_data['distance_to_start'],
             plot_data['ar_delay_count'],
-            label='Stop count',
-            color='darkgrey',
+            labels=['Stop count'],
+            color='lightgray',
         )
 
         for y_col in self.plot_args[plot_type]['y_col']:
@@ -213,20 +216,27 @@ def main():
     ]
 
     for train_categories in train_category_groups:
-        correlation(train_categories)
+        # correlation(train_categories)
         over_distance = OverDistance(generate=False, train_categories=train_categories)
-        over_distance.plot(
-            plot_type='delay',
-            save_as=f'plots/over_distance/delay_{categories_to_str(train_categories)}.png',
-        )
-        over_distance.plot(
-            plot_type='delay_var',
-            save_as=f'plots/over_distance/delay_var_{categories_to_str(train_categories)}.png',
-        )
-        over_distance.plot(
-            plot_type='cancellation',
-            save_as=f'plots/over_distance/cancellation_{categories_to_str(train_categories)}.png',
-        )
+
+        data = over_distance.data[['ar_happened_sum', 'ar_canceled_sum']]
+        data['ar_canceled_sum'] = data['ar_canceled_sum'] * 20
+        data.plot()
+
+        plt.show()
+
+        # over_distance.plot(
+        #     plot_type='delay',
+        #     save_as=f'plots/over_distance/delay_{categories_to_str(train_categories)}.png',
+        # )
+        # over_distance.plot(
+        #     plot_type='delay_var',
+        #     save_as=f'plots/over_distance/delay_var_{categories_to_str(train_categories)}.png',
+        # )
+        # over_distance.plot(
+        #     plot_type='cancellation',
+        #     save_as=f'plots/over_distance/cancellation_{categories_to_str(train_categories)}.png',
+        # )
 
 
 if __name__ == '__main__':
