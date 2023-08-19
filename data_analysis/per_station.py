@@ -180,17 +180,13 @@ class PerStationOverTime(StationPhillip):
 
     limits = Limits(freq_hours=int(24 * 7))
 
-    def __init__(self, rtd=None, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
         if not os.path.exists(self.PLOTS_DIR):
             os.mkdir(self.PLOTS_DIR)
 
-        self.rtd = rtd
         self.kwargs = kwargs
-
-        if self.kwargs.get('generate') and self.rtd is None:
-            raise ValueError('Cannot generate over time aggregation if rtd is None')
 
         self.data_loader()
 
@@ -223,7 +219,22 @@ class PerStationOverTime(StationPhillip):
         self.colorbar.ax.get_yaxis().labelpad = 15
         self.colorbar.ax.set_ylabel("Ø Verspätung in Minuten", rotation=270)
 
-    def data_generator(self, rtd: dd.DataFrame) -> pd.DataFrame:
+    def data_generator(self) -> pd.DataFrame:
+        rtd = RtdRay.load_data(
+        columns=[
+            "ar_pt",
+            "dp_pt",
+            "station",
+            "ar_delay",
+            "ar_happened",
+            "dp_delay",
+            "dp_happened",
+            "lat",
+            "lon",
+        ],
+        min_date=datetime.datetime(2021, 9, 1),
+    )
+
         # Use dask Client to do groupby as the groupby is complex and scales well on local cluster.
         from dask.distributed import Client
 
@@ -270,8 +281,8 @@ class PerStationOverTime(StationPhillip):
             'dp_happened_sum': 'int32',
             'stop_hour': 'datetime64[ns]',
             'station': 'int16',
-            'lat': 'float16',
-            'lon': 'float16',
+            'lat': 'float64',
+            'lon': 'float64',
         }
         data = data.astype(data_types)
         return data
@@ -280,7 +291,7 @@ class PerStationOverTime(StationPhillip):
     def data_loader(self):
         self.data = cached_table_fetch(
             'per_station_over_time',
-            table_generator=lambda: self.data_generator(self.rtd),
+            table_generator=self.data_generator,
             **self.kwargs,
         )
 
@@ -453,34 +464,29 @@ class PerStationOverTime(StationPhillip):
 if __name__ == "__main__":
     import helpers.bahn_vorhersage
 
-    per_station_time = PerStationOverTime(generate=False, prefer_cache=True)
-    per_station_time.generate_plot(
-        datetime.datetime(2022, 6, 1), datetime.datetime(2022, 8, 31)
-    )
-    per_station_time.generate_plot(
-        datetime.datetime(2022, 1, 1), datetime.datetime(2022, 5, 30)
-    )
-
-    rtd_df = RtdRay.load_data(
-        columns=[
-            "ar_pt",
-            "dp_pt",
-            "station",
-            "ar_delay",
-            "ar_happened",
-            "dp_delay",
-            "dp_happened",
-            "lat",
-            "lon",
-        ],
-        min_date=datetime.datetime(2021, 3, 1),
-    )
+    # per_station_time = PerStationOverTime(generate=False, prefer_cache=True)
+    # per_station_time.generate_plot(
+    #     datetime.datetime(2022, 6, 1), datetime.datetime(2022, 8, 31)
+    # )
+    # per_station_time.generate_plot(
+    #     datetime.datetime(2022, 1, 1), datetime.datetime(2022, 5, 30)
+    # )
 
     import time
 
     start = time.time()
-    per_station_time = PerStationOverTime(rtd=rtd_df, generate=False, prefer_cache=True)
-    per_station_time.generate_plot(
-        datetime.datetime(2021, 3, 1, hour=0), datetime.datetime(2021, 3, 10, hour=0)
+    per_station_time = PerStationOverTime(generate=True, prefer_cache=True)
+    data = per_station_time.aggregate_preagregated_data(datetime.datetime(2022, 1, 1), datetime.datetime(2022, 12, 31))
+    import geopandas as gpd 
+
+    gdf = gpd.GeoDataFrame(
+        data,
+        geometry=gpd.points_from_xy(data.lon, data.lat),
+        crs="EPSG:4326",
     )
-    print('took:', time.time() - start)
+    gdf.to_file('stations_2022.gpkg', driver='GPKG', layer='stations') 
+
+    # per_station_time.generate_plot(
+    #     datetime.datetime(2021, 3, 1, hour=0), datetime.datetime(2021, 3, 10, hour=0)
+    # )
+    # print('took:', time.time() - start)
