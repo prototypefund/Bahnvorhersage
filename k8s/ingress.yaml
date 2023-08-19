@@ -53,7 +53,7 @@ spec:
     - code-load.io
     - wohnung-in-esslingen.de
     - endstationzukunft.de
-    - holiday.bahnvorhersage.de
+    - holiday.unexcellent.com
     secretName: default-tls-secret
   rules:
   - host: "bahnvorhersage.de"
@@ -226,7 +226,7 @@ spec:
               name: sfz-endstationzukunft
               port:
                 number: 80
-  - host: "holiday.bahnvorhersage.de"
+  - host: "holiday.unexcellent.com"
     http:
       paths:
         - path: /
