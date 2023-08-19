@@ -10,7 +10,7 @@ from api.iris import IrisStation, search_iris_multiple, stations_equal
 from api.ris import stop_place_by_eva
 from config import redis_url
 from database import cached_table_push
-from helpers import StationPhillip
+from helpers.StationPhillip import StationPhillip
 
 
 def get_found_iris_stations() -> Iterator[Union[IrisStation, None]]:
@@ -38,9 +38,9 @@ def get_found_iris_stations() -> Iterator[Union[IrisStation, None]]:
     yield from search_iris_multiple(station_names)
 
 
-def add_iris_stations_to_station_phillip(
+def update_stations(
     iris_stations: Set[IrisStation],
-) -> pd.DataFrame:
+):
     """
     Add IRIS stations to StationPhillip. This function is complicated,
     because stations change over time and we want to keep track of the
@@ -50,11 +50,6 @@ def add_iris_stations_to_station_phillip(
     ----------
     iris_stations : Set[IrisStation]
         IRIS stations to add to StationPhillip
-
-    Returns
-    -------
-    pd.DataFrame
-        Station df from StationPhillip with the added IRIS stations.
     """
     stations = StationPhillip()
     modified_stations = stations.stations.copy()
@@ -116,8 +111,10 @@ def add_iris_stations_to_station_phillip(
     # location of some stations might have changed, so we update all the
     # location data.
     modified_stations = add_ris_info(
-        modified_stations, only_update_missing_locations=True
+        modified_stations, only_update_missing_locations=False
     )
+
+    modified_stations.drop_duplicates(subset=['name', 'eva', 'ds100'], inplace=True)
 
     print(
         f'{len(modified_stations) - len(stations.stations)} stations were added or changed'
@@ -125,6 +122,8 @@ def add_iris_stations_to_station_phillip(
     if input('Do you want to upload these to the database? [y/N] ') == 'y':
         modified_stations = modified_stations.drop(columns=['index'])
         cached_table_push(modified_stations, 'stations', fast=False)
+
+    return modified_stations
 
 
 def add_ris_info(
@@ -144,7 +143,7 @@ def add_ris_info(
     -------
     pd.DataFrame
         stations DataFrame with added RIS info
-    """    
+    """
     if 'available_transports' not in stations.columns:
         stations['available_transports'] = None
     if 'transport_associations' not in stations.columns:
@@ -187,8 +186,7 @@ def add_ris_info(
 
 def main():
     iris_stations = get_found_iris_stations()
-    add_iris_stations_to_station_phillip(iris_stations)
-    print(iris_stations)
+    update_stations(iris_stations)
 
 
 if __name__ == '__main__':

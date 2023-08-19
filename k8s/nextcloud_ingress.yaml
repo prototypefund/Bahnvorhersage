@@ -4,7 +4,7 @@ metadata:
   name: nextcloud-ingress-https
   annotations:
     ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-body-size:  50m
+    nginx.ingress.kubernetes.io/proxy-body-size:  "0"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
 
 spec:
@@ -26,3 +26,13 @@ spec:
     http: *nextcloud
   - host: "paralox-nextcloud.de"
     http: *nextcloud
+  - host: "quicksharebox.de"
+    http: &file-dzconnect
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-file-dzconnect
+              port:
+                number: 80

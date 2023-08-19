@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from api.ris import RisTransfer, RisTransferDuration, transfer_times_by_eva
 from config import NEO4J_AUTH, NEO4J_URI
-from helpers import StationPhillip
+from helpers.StationPhillip import StationPhillip
 
 
 @dataclass

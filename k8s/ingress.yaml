@@ -50,9 +50,11 @@ spec:
     - podcast-tech24.de
     - thesilentwave.de
     - dzconnect.de
-    - code-load.io
+    - quicksharebox.de
     - wohnung-in-esslingen.de
     - endstationzukunft.de
+    - validation.marcpanse.de
+    - studywatch.de
     - holiday.unexcellent.com
     secretName: default-tls-secret
   rules:
@@ -196,16 +198,6 @@ spec:
               name: sfz-dzconnect
               port:
                 number: 80
-  - host: "code-load.io"
-    http: &file-dzconnect
-      paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: sfz-file-dzconnect
-              port:
-                number: 80
   - host: "wohnung-in-esslingen.de"
     http: &wohnung-in-esslingen
       paths:
@@ -224,6 +216,26 @@ spec:
           backend:
             service:
               name: sfz-endstationzukunft
+              port:
+                number: 80
+  - host: "validation.marcpanse.de"
+    http: &validation
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-validation
+              port:
+                number: 80
+  - host: "studywatch.de"
+    http: &studywatch
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-studywatch
               port:
                 number: 80
   - host: "holiday.unexcellent.com"

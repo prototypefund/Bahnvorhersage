@@ -1,8 +1,5 @@
-import os, sys
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from database import Rtd
 from config import CACHE_PATH
+from database import Rtd
 from helpers import RtdRay
 
 
@@ -23,9 +20,9 @@ class ConnectionRay(Rtd):
 
 
 if __name__ == "__main__":
-    import helpers.bahn_vorhersage
-
     from dask.distributed import Client
+
+    import helpers.bahn_vorhersage
 
     client = Client(n_workers=2, threads_per_worker=1)
 

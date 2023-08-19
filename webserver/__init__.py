@@ -10,7 +10,8 @@ import config
 from flask import Flask
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from helpers import StreckennetzSteffi, logging
+from helpers import logging
+from helpers.StreckennetzSteffi import StreckennetzSteffi
 from data_analysis.per_station import PerStationOverTime
 from webserver.db_logger import db
 from ml_models.xgboost_multi_model import Predictor

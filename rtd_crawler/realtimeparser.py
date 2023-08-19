@@ -1,6 +1,8 @@
 import argparse
 import concurrent.futures
 import multiprocessing as mp
+import os
+import sys
 import time
 import traceback
 from typing import Dict, List, Tuple
@@ -10,9 +12,8 @@ from redis import Redis
 from tqdm import tqdm
 
 from config import redis_url
-from database import (Change, PlanById, Rtd, session_scope, sessionfactory,
-                      unparsed)
-from helpers import StreckennetzSteffi
+from database import Change, PlanById, Rtd, session_scope, sessionfactory, unparsed
+from helpers.StreckennetzSteffi import StreckennetzSteffi
 from rtd_crawler.parser_helpers import db_to_datetime, parse_path
 
 engine, Session = sessionfactory()
@@ -60,13 +61,13 @@ def parse_stop_plan(hash_id: int, stop: dict) -> dict:
     if 'ar' in stop:
         parsed['ar_pt'] = db_to_datetime(stop['ar'][0].get('pt'))
         parsed['ar_ppth'] = parse_path(stop['ar'][0].get('ppth'))
-        parsed['ar_pp'] = stop['ar'][0].get('pp')
-        parsed['ar_ps'] = stop['ar'][0].get('ps')
-        parsed['ar_hi'] = bool(stop['ar'][0].get('hi', 0))
-        parsed['ar_pde'] = stop['ar'][0].get('pde')
-        parsed['ar_dc'] = bool(stop['ar'][0].get('dc', 0))
+        parsed['ar_pp'] = stop['ar'][0].get('pp')  # TODO
+        parsed['ar_ps'] = stop['ar'][0].get('ps')  # TODO
+        parsed['ar_hi'] = bool(stop['ar'][0].get('hi', 0))  # TODO
+        parsed['ar_pde'] = stop['ar'][0].get('pde')  # TODO
+        parsed['ar_dc'] = bool(stop['ar'][0].get('dc', 0))  # TODO
         parsed['ar_l'] = stop['ar'][0].get('l')
-    else:
+    else:  # TODO
         parsed['ar_pt'] = None
         parsed['ar_ppth'] = None
         parsed['ar_pp'] = None
@@ -79,13 +80,13 @@ def parse_stop_plan(hash_id: int, stop: dict) -> dict:
     if 'dp' in stop:
         parsed['dp_pt'] = db_to_datetime(stop['dp'][0].get('pt'))
         parsed['dp_ppth'] = parse_path(stop['dp'][0].get('ppth'))
-        parsed['dp_pp'] = stop['dp'][0].get('pp')
-        parsed['dp_ps'] = stop['dp'][0].get('ps')
-        parsed['dp_hi'] = bool(stop['dp'][0].get('hi', 0))
-        parsed['dp_pde'] = stop['dp'][0].get('pde')
-        parsed['dp_dc'] = bool(stop['dp'][0].get('dc', 0))
+        parsed['dp_pp'] = stop['dp'][0].get('pp')  # TODO
+        parsed['dp_ps'] = stop['dp'][0].get('ps')  # TODO
+        parsed['dp_hi'] = bool(stop['dp'][0].get('hi', 0))  # TODO
+        parsed['dp_pde'] = stop['dp'][0].get('pde')  # TODO
+        parsed['dp_dc'] = bool(stop['dp'][0].get('dc', 0))  # TODO
         parsed['dp_l'] = stop['dp'][0].get('l')
-    else:
+    else:  # TODO
         parsed['dp_pt'] = None
         parsed['dp_ppth'] = None
         parsed['dp_pp'] = None
@@ -130,13 +131,18 @@ def add_change(stop: dict, change: dict) -> dict:
 def add_route_info(stop: dict) -> dict:
     if stop['ar_cpth'] is not None:
         stop['distance_to_last'] = streckennetz.route_length(
-            [stop['ar_cpth'][-1]] + [stop['station']], date=stop['date_id']
+            waypoints=[stop['ar_cpth'][-1]] + [stop['station']],
+            date='latest',
+            is_bus=stop['c']=='bus',
         )
         stop['distance_to_start'] = streckennetz.route_length(
-            stop['ar_cpth'] + [stop['station']], date=stop['date_id']
+            stop['ar_cpth'] + [stop['station']],
+            date='latest',
+            is_bus=stop['c']=='bus',
         )
 
         # path_obstacles = streckennetz.obstacles_of_path(stop['ar_cpth'] + [stop['station']], stop['ar_pt'])
+        # TODO
         stop['obstacles_priority_24'] = 0
         stop['obstacles_priority_37'] = 0
         stop['obstacles_priority_63'] = 0
@@ -147,6 +153,7 @@ def add_route_info(stop: dict) -> dict:
         stop['distance_to_last'] = 0
         stop['distance_to_start'] = 0
 
+        # TODO
         stop['obstacles_priority_24'] = 0
         stop['obstacles_priority_37'] = 0
         stop['obstacles_priority_63'] = 0
@@ -156,10 +163,14 @@ def add_route_info(stop: dict) -> dict:
 
     if stop['dp_cpth'] is not None:
         stop['distance_to_next'] = streckennetz.route_length(
-            [stop['station']] + [stop['dp_cpth'][0]], date=stop['date_id']
+            [stop['station']] + [stop['dp_cpth'][0]],
+            date='latest',
+            is_bus=stop['c']=='bus',
         )
         stop['distance_to_end'] = streckennetz.route_length(
-            [stop['station']] + stop['dp_cpth'], date=stop['date_id']
+            [stop['station']] + stop['dp_cpth'],
+            date='latest',
+            is_bus=stop['c']=='bus',
         )
     else:
         stop['distance_to_next'] = 0
@@ -191,8 +202,8 @@ def parse_batch(hash_ids: List[int], plans: Dict[int, Dict] = None):
         parsed.append(parse_stop(hash_id, plans[hash_id], changes.get(hash_id, {})))
 
     if parsed:
-        parsed = pd.DataFrame(parsed).set_index('hash_id')
-        Rtd.upsert(parsed, engine)
+        parsed = pd.DataFrame(parsed).set_index('hash_id')  # TODO
+        Rtd.upsert(parsed, engine)  # TODO
 
 
 def parse_unparsed(redis_client: Redis, last_stream_id: bytes) -> bytes:
@@ -231,6 +242,9 @@ def parse_all():
     """Parse all raw data there is"""
     with session_scope(Session) as session:
         chunk_limits = PlanById.get_chunk_limits(session)
+    
+    # import pickle
+    # chunk_limits = pickle.load(open('chunk_limits.pickle', 'rb'))
 
     # # Non-concurrent code for debugging
     # for chunk in tqdm(chunk_limits, total=len(chunk_limits)):
@@ -252,6 +266,7 @@ if __name__ == "__main__":
     import helpers.bahn_vorhersage
 
     args = parser.parse_args()
+    # args.parse_all = True
     if args.parse_all:
         print('Parsing all the data')
         Rtd()

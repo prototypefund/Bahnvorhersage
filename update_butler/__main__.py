@@ -54,7 +54,7 @@ if __name__ == '__main__':
         min_date=datetime(2021, 1, 1),
     )
 
-    PerStationOverTime(rtd_df, generate=True, use_cache=False)
+    PerStationOverTime(rtd_df, generate=True)
     print("Done")
 
     midnight = datetime.combine(datetime.now().date(), time.min)
