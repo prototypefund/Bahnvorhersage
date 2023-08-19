@@ -53,9 +53,9 @@ spec:
     - quicksharebox.de
     - wohnung-in-esslingen.de
     - endstationzukunft.de
-    - holiday.bahnvorhersage.de
     - validation.marcpanse.de
     - studywatch.de
+    - holiday.unexcellent.com
     secretName: default-tls-secret
   rules:
   - host: "bahnvorhersage.de"
@@ -238,7 +238,7 @@ spec:
               name: sfz-studywatch
               port:
                 number: 80
-  - host: "holiday.bahnvorhersage.de"
+  - host: "holiday.unexcellent.com"
     http:
       paths:
         - path: /
