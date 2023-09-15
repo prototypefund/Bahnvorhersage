@@ -33,6 +33,7 @@ spec:
   tls:
   - hosts:
     - bahnvorhersage.de
+    - www.bahnvorhersage.de
     - next.bahnvorhersage.de
     - db-rest.bahnvorhersage.de
     - trainconnectionprediction.de
@@ -76,6 +77,8 @@ spec:
               port:
                 number: 80
   - host: "trainconnectionprediction.de"
+    http: *prod_webserver
+  - host: "www.bahnvorhersage.de"
     http: *prod_webserver
   - host: "next.bahnvorhersage.de"
     http: &test_webserver
