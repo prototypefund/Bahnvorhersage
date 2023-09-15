@@ -174,9 +174,7 @@ class Event:
     wings: List[str]
 
     def __init__(self, event: dict) -> None:
-        if (
-            'dc' in event
-        ):
+        if 'dc' in event:
             raise NotImplementedError(
                 f'Found wieird event. Please report this to the developers: {event}'
             )
@@ -305,8 +303,8 @@ class ReferenceTripRelation:
 class TimetableStop:
     """A stop is a part of a Timetable."""
 
-    arrival: Event
-    depature: Event
+    arrival: Event | None
+    depature: Event | None
     connection: Connection
     eva: int
     station_name: str
@@ -352,6 +350,13 @@ class TimetableStop:
         self.reference = TripReference(stop['ref']) if 'ref' in stop else None
         self.rtr = ReferenceTripRelation(stop['rtr']) if 'rtr' in stop else None
         self.trip_label = TripLabel(stop['tl'][0])
+
+    def is_bus(self) -> bool:
+        return (
+            self.trip_label.category == 'Bus'
+            or self.arrival.line == 'SEV' if self.arrival is not None else False
+            or self.depature.line == 'SEV' if self.depature is not None else False
+        )
 
 
 @dataclass
