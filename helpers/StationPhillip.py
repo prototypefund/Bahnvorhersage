@@ -399,7 +399,7 @@ class StationPhillip:
         name: Optional[Union[str, List[str]]] = None,
         ds100: Optional[Union[str, List[str]]] = None,
         allow_duplicates: AllowedDuplicates = 'all',
-    ) -> Union[Tuple[int, int], pd.DataFrame]:
+    ) -> Union[Tuple[float, float], pd.DataFrame]:
         """
         Get location from eva, name or ds100
 
@@ -419,8 +419,8 @@ class StationPhillip:
 
         Returns
         -------
-        (int, int) | pd.DataFrame
-            (int, int) - the single location matching (eva, name or ds100) and date
+        (float, float) - (lat, lon) | pd.DataFrame
+            (float, float) - the single location matching (eva, name or ds100) and date
             pd.DataFrame - DataFrame with the locations matching (eva, name or ds100) and date
         """
         if eva is not None and name is not None and ds100 is not None:
@@ -434,7 +434,7 @@ class StationPhillip:
             name=name,
             ds100=ds100,
             allow_duplicates=allow_duplicates,
-        ).loc[:, ['lon', 'lat']]
+        ).loc[:, ['lat', 'lon']]
         if isinstance(eva, int) or isinstance(name, str) or isinstance(ds100, str):
             # Duplicate Station names exist. Thus, location might have several stations in it.
             # In that case, we use the location of the first one.
@@ -444,7 +444,7 @@ class StationPhillip:
                 )
             elif len(location) != 1:
                 location = location.iloc[0, :]
-            location = (location['lon'].item(), location['lat'].item())
+            location = (location['lat'].item(), location['lon'].item())
 
         return location
 
