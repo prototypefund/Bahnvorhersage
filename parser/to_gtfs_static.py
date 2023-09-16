@@ -25,16 +25,32 @@ from gtfs.trips import Trips
 
 from api.iris import TimetableStop
 from rtd_crawler.hash64 import xxhash64
+from datetime import datetime
 
 engine, Session = sessionfactory()
 
 streckennetz = StreckennetzSteffi(prefer_cache=False)
 
 
+def get_gtfs_stop_time(start_of_trip: datetime, stop_time: datetime) -> str:
+    start_of_trip = start_of_trip.date()
+
+    total_seconds = (stop_time - start_of_trip).total_seconds()
+
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    return f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
+
+
 def stop_to_gtfs(stop_json: dict):
     stop = TimetableStop(stop_json)
 
-    angency = Agency(
+    trip_id = xxhash64(stop.trip_id + '_' + stop.date_id.isoformat())
+    route_id = xxhash64(route_short_name)
+    service_id = xxhash64(stop.date_id.date().isoformat())
+
+    agency = Agency(
         agency_id=stop.trip_label.owner,
         agency_name=stop.trip_label.owner,
         agency_url='https://bahnvorhersage.de',
@@ -42,25 +58,25 @@ def stop_to_gtfs(stop_json: dict):
     )
 
     calendar_dates = CalendarDates(
-        service_id=xxhash64(stop.date_id.date().isoformat()),
+        service_id=service_id,
         date=stop.date_id.date(),
         exception_type=ExceptionType.ADDED,
     )
 
     route_short_name = f"{stop.trip_label.category} {stop.trip_label.line}"
     routes = Routes(
-        route_id=xxhash64(route_short_name),
+        route_id=route_id,
         agency_id=stop.trip_label.owner,
         route_short_name=route_short_name,
         route_type=...,
     )
 
     stop_times = StopTimes(
-        trip_id=...,
+        trip_id=trip_id,
         stop_id=streckennetz.get_eva(date=stop.date_id, name=stop.station_name),
         stop_sequence=stop.stop_id,
-        arrivaltime=...,
-        departure_time=...,
+        arrival_time=get_gtfs_stop_time(stop.date_id, stop.arrival.planned_time),
+        departure_time=get_gtfs_stop_time(stop.stop_id, stop.depature.planned_time),
         shape_dist_traveled=streckennetz.route_length(
             stop.arrival.planned_path, date=stop.date_id
         ),
@@ -78,9 +94,9 @@ def stop_to_gtfs(stop_json: dict):
     )
 
     trips = Trips(
-        trip_id=...,
-        route_id=xxhash64(route_short_name),
-        service_id=xxhash64(stop.date_id.date().isoformat()),
+        trip_id=trip_id,
+        route_id=route_id,
+        service_id=service_id,
         shape_id=...,
     )
         
