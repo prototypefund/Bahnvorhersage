@@ -18,7 +18,7 @@ from rtd_crawler.parser_helpers import db_to_datetime, parse_path
 
 from gtfs.agency import Agency
 from gtfs.calendar_dates import CalendarDates, ExceptionType
-from gtfs.routes import Routes
+from gtfs.routes import Routes, RouteType
 from gtfs.stop_times import StopTimes
 from gtfs.stops import Stops
 from gtfs.trips import Trips
@@ -68,7 +68,7 @@ def stop_to_gtfs(stop_json: dict):
         route_id=route_id,
         agency_id=stop.trip_label.owner,
         route_short_name=route_short_name,
-        route_type=...,
+        route_type=RouteType.BUS if stop.is_bus() else RouteType.RAIL,
     )
 
     stop_times = StopTimes(
