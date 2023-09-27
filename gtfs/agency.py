@@ -3,7 +3,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from gtfs.base import Base
 
 class Agency(Base):
-    __tablename__ = 'agency'
+    __tablename__ = 'gtfs_agency'
 
     agency_id: Mapped[str] = mapped_column(primary_key=True)
     agency_name: Mapped[str]

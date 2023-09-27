@@ -13,7 +13,7 @@ class ExceptionType(enum.Enum):
 
 
 class CalendarDates(Base):
-    __tablename__ = 'calendar_dates'
+    __tablename__ = 'gtfs_calendar_dates'
 
     service_id: Mapped[int] = mapped_column(primary_key=True)
     date: Mapped[date]

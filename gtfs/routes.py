@@ -20,9 +20,9 @@ class RouteType(enum.Enum):
 
 
 class Routes(Base):
-    __tablename__ = 'routes'
+    __tablename__ = 'gtfs_routes'
 
     route_id: Mapped[int] = mapped_column(primary_key=True)
-    agency_id: Mapped[str] = mapped_column(ForeignKey('agency.agency_id'))
+    agency_id: Mapped[str] = mapped_column(ForeignKey('gtfs_agency.agency_id'))
     route_short_name: Mapped[str]
     route_type: Mapped[RouteType]
