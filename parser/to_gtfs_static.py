@@ -12,15 +12,16 @@ from redis import Redis
 from tqdm import tqdm
 
 from config import redis_url
-from database import Change, PlanById, Rtd, session_scope, sessionfactory, unparsed
+from database import Change, PlanById, Rtd, session_scope, sessionfactory, unparsed, upsert_base
 from helpers.StreckennetzSteffi import StreckennetzSteffi
+from helpers.StationPhillip import StationPhillip
 from rtd_crawler.parser_helpers import db_to_datetime, parse_path
 
 from gtfs.agency import Agency
 from gtfs.calendar_dates import CalendarDates, ExceptionType
 from gtfs.routes import Routes, RouteType
 from gtfs.stop_times import StopTimes
-from gtfs.stops import Stops
+from gtfs.stops import Stops, LocationType
 from gtfs.trips import Trips
 
 from api.iris import TimetableStop
@@ -29,7 +30,11 @@ from datetime import datetime
 
 engine, Session = sessionfactory()
 
-streckennetz = StreckennetzSteffi(prefer_cache=False)
+
+def create_gtfs_tables():
+    from gtfs.base import Base
+
+    Base.metadata.create_all(engine)
 
 
 def get_gtfs_stop_time(start_of_trip: datetime, stop_time: datetime) -> str:
@@ -43,7 +48,28 @@ def get_gtfs_stop_time(start_of_trip: datetime, stop_time: datetime) -> str:
     return f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
 
 
-def stop_to_gtfs(stop_json: dict):
+def all_stations_to_gtfs():
+    stations = StationPhillip(prefer_cache=False)
+
+    stops = []
+    for eva in tqdm(stations.evas, desc='Adding stations to GTFS'):
+        lat, lon = stations.get_location(eva=eva, date='latest', allow_duplicates='first')
+        stop = Stops(
+            stop_id=eva,
+            stop_name=stations.get_name(eva=eva, date='latest', allow_duplicates='first'),
+            stop_lat=lat,
+            stop_lon=lon,
+            location_type=LocationType.STATION,
+            parent_station=None,
+        )
+        stops.append(stop.as_dict())
+
+    with Session() as session:
+        upsert_base(session, Stops.__table__, stops)
+        session.commit()
+
+
+def stop_to_gtfs(stop_json: dict, streckennetz: StreckennetzSteffi):
     stop = TimetableStop(stop_json)
 
     trip_id = xxhash64(stop.trip_id + '_' + stop.date_id.isoformat())
@@ -82,22 +108,11 @@ def stop_to_gtfs(stop_json: dict):
         ),
     )
 
-    lat, lon = streckennetz.get_location(date=stop.date_id, name=stop.station_name, allow_duplicates='first')
-
-    stops = Stops(
-        stop_id=streckennetz.get_eva(date=stop.date_id, name=stop.station_name),
-        stop_name=stop.station_name,
-        stop_lat=lat,
-        stop_lon=lon,
-        location_type=...,
-        parent_station=...,
-    )
-
     trips = Trips(
         trip_id=trip_id,
         route_id=route_id,
         service_id=service_id,
-        shape_id=...,
+        # shape_id=...,
     )
         
 
@@ -337,4 +352,6 @@ def parse_all():
 if __name__ == "__main__":
     import helpers.bahn_vorhersage
 
+    create_gtfs_tables()
+    all_stations_to_gtfs()
     parse_all()

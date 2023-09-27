@@ -64,6 +64,10 @@ class StationPhillip:
             .sort_values(by='number_of_events', ascending=False)['name']
             .unique()
         )
+    
+    @property
+    def evas(self) -> List[int]:
+        return self.stations['eva'].unique().tolist()
 
     def __len__(self):
         return len(self.stations)
