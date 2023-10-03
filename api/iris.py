@@ -1,17 +1,17 @@
+import enum
 import urllib.parse
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Set, Union, Literal
+from typing import List, Literal, Set, Union
 
 import lxml.etree as etree
 import pandas as pd
 import requests
-import enum
 
 from rtd_crawler.hash64 import xxhash64
+from rtd_crawler.parser_helpers import db_to_datetime, parse_id, parse_path
 from rtd_crawler.xml_parser import xml_to_json
-from rtd_crawler.parser_helpers import db_to_datetime, parse_path
 
 
 class EventStatus(enum.Enum):
@@ -344,7 +344,7 @@ class TimetableStop:
             HistoricPlatformChange(stop['hpc']) if 'hpc' in stop else None
         )
         self.raw_id = stop['id']
-        self.trip_id, self.date_id, self.stop_id = stop['id'].rsplit('-', 2)
+        self.trip_id, self.date_id, self.stop_id = parse_id(self.raw_id)
         self.hash_id = xxhash64(self.raw_id)
         self.message = Message(stop['m']) if 'm' in stop else None
         self.reference = TripReference(stop['ref']) if 'ref' in stop else None
@@ -353,9 +353,11 @@ class TimetableStop:
 
     def is_bus(self) -> bool:
         return (
-            self.trip_label.category == 'Bus'
-            or self.arrival.line == 'SEV' if self.arrival is not None else False
-            or self.depature.line == 'SEV' if self.depature is not None else False
+            self.trip_label.category == 'Bus' or self.arrival.line == 'SEV'
+            if self.arrival is not None
+            else False or self.depature.line == 'SEV'
+            if self.depature is not None
+            else False
         )
 
 
