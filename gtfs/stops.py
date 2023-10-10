@@ -1,9 +1,9 @@
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import ForeignKey
-
-from gtfs.base import Base
-
 import enum
+
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from database.base import Base
 
 
 class LocationType(enum.Enum):
@@ -27,7 +27,7 @@ class Stops(Base):
     stop_lat: Mapped[float]
     stop_lon: Mapped[float]
     location_type: Mapped[LocationType]
-    parent_station: Mapped[int] = mapped_column(ForeignKey('gtfs_stops.stop_id'), nullable=True)
+    parent_station: Mapped[int] = mapped_column(nullable=True)
 
     def __repr__(self) -> str:
         return f'<Stop {self.stop_id} {self.stop_name} at {self.stop_lat} lat and {self.stop_lon} lon>'
@@ -41,3 +41,13 @@ class Stops(Base):
             'location_type': self.location_type.name,
             'parent_station': self.parent_station,
         }
+
+    def as_tuple(self) -> tuple:
+        return (
+            self.stop_id,
+            self.stop_name,
+            self.stop_lat,
+            self.stop_lon,
+            self.location_type.name,
+            self.parent_station,
+        )
