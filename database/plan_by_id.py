@@ -1,17 +1,15 @@
+import json
 import os
 import sys
 from typing import Dict, List, Tuple
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import sqlalchemy
-from sqlalchemy import Column, BIGINT
-from sqlalchemy.dialects.postgresql import JSON
-from sqlalchemy.ext.declarative import declarative_base
-from database import get_engine, upsert_base
-import json
 import numpy as np
+import sqlalchemy
+from sqlalchemy import BIGINT, Column
+from sqlalchemy.dialects.postgresql import JSON
 
-Base = declarative_base()
+from database import get_engine, upsert_base
+from database.base import Base
 
 
 class PlanById(Base):
@@ -80,7 +78,8 @@ class PlanById(Base):
         n_divisions = count // 20_000
         divisions = np.linspace(minimum, maximum, n_divisions, dtype=int)
         chunk_limits = [
-            (int(divisions[i]), int(divisions[i + 1])) for i in range(len(divisions) - 1)
+            (int(divisions[i]), int(divisions[i + 1]))
+            for i in range(len(divisions) - 1)
         ]
         return chunk_limits
 
@@ -110,7 +109,7 @@ class PlanById(Base):
             session.query(PlanById)
             .filter(
                 PlanById.hash_id >= int(chunk_limits[0]),
-                PlanById.hash_id <= int(chunk_limits[1]),
+                PlanById.hash_id < int(chunk_limits[1]),
             )
             .all()
         )

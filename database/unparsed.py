@@ -1,7 +1,5 @@
-import os
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from typing import List, Tuple
+
 from redis import Redis
 
 
@@ -17,9 +15,7 @@ def add(redis_client: Redis, hash_ids: List[int]) -> None:
 
 
 def get(redis_client: Redis, from_id: bytes) -> Tuple[bytes, List[int]]:
-    resp = redis_client.xread(
-        {'unparsed': from_id}
-    )
+    resp = redis_client.xread({'unparsed': from_id})
     if resp:
         hash_ids = set()
         for last_id, data in resp[0][1]:
@@ -30,8 +26,8 @@ def get(redis_client: Redis, from_id: bytes) -> Tuple[bytes, List[int]]:
 
 
 if __name__ == '__main__':
-    from rtd_crawler.hash64 import hash64
     from config import redis_url
+    from rtd_crawler.hash64 import hash64
 
     redis_connection = Redis.from_url(redis_url)
 
