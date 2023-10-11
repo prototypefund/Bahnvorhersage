@@ -17,8 +17,8 @@ from tqdm import tqdm
 
 from api.iris import TimetableStop
 from config import redis_url
-from database import (Change, PlanById, Rtd, sessionfactory, unparsed,
-                      upsert_base)
+from database import (Change, PlanById, Rtd, sessionfactory, unparsed)
+from database.upsert import upsert_with_retry
 from gtfs.agency import Agency
 from gtfs.calendar_dates import CalendarDates, ExceptionType
 from gtfs.routes import Routes, RouteType
@@ -273,30 +273,6 @@ def upsert_copy_from(
         session.commit()
 
 
-def upsert_with_retry(table, rows: List[dict]):
-    with Session() as session:
-        for row_batch in batcher(rows, 1_000):
-            while True:
-                try:
-                    upsert_base(session, table, row_batch)
-                    session.commit()
-                    break
-                except sqlalchemy.exc.OperationalError as ex:
-                    if 'deadlock detected' in ex.args[0]:
-                        timeout = random.randint(20, 80)
-                        print(
-                            f'{table.fullname} deadlock detected. Waiting {timeout} seconds.'
-                        )
-                        time.sleep(timeout)
-                    elif 'QueryCanceled' in ex.args[0]:
-                        print(
-                            f'{table.fullname} QueryCanceled due to timeout. Retrying.'
-                        )
-                        time.sleep(120)
-                    else:
-                        raise ex
-
-
 def parse_chunk(chunk_limits: Tuple[int, int]):
     """Parse all stops with hash_id within the limits
 
@@ -364,6 +340,7 @@ class GTFSUpserter:
             futures.append(
                 executor.submit(
                     upsert_with_retry,
+                    Session,
                     Agency.__table__,
                     list(self.agecies.values()),
                 )
@@ -371,6 +348,7 @@ class GTFSUpserter:
             futures.append(
                 executor.submit(
                     upsert_with_retry,
+                    Session,
                     CalendarDates.__table__,
                     list(self.calendar_dates.values()),
                 )
@@ -379,6 +357,7 @@ class GTFSUpserter:
             futures.append(
                 executor.submit(
                     upsert_with_retry,
+                    Session,
                     Routes.__table__,
                     list(self.routes.values()),
                 )

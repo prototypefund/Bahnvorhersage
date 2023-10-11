@@ -2,6 +2,9 @@ from typing import List
 
 import sqlalchemy
 from sqlalchemy.dialects.postgresql import Insert, insert
+from helpers.batcher import batcher
+import random
+import time
 
 
 def create_upsert_statement(
@@ -63,3 +66,31 @@ def do_nothing_upsert_base(
     )
 
     session.execute(on_conflict_stmt)
+
+
+def upsert_with_retry(
+    Session: sqlalchemy.orm.sessionmaker,
+    table: sqlalchemy.sql.schema.Table,
+    rows: List[dict],
+):
+    with Session() as session:
+        for row_batch in batcher(rows, 5_000):
+            while True:
+                try:
+                    upsert_base(session, table, row_batch)
+                    session.commit()
+                    break
+                except sqlalchemy.exc.OperationalError as ex:
+                    if 'deadlock detected' in ex.args[0]:
+                        timeout = random.randint(20, 80)
+                        print(
+                            f'{table.fullname} deadlock detected. Waiting {timeout} seconds.'
+                        )
+                        time.sleep(timeout)
+                    elif 'QueryCanceled' in ex.args[0]:
+                        print(
+                            f'{table.fullname} QueryCanceled due to timeout. Retrying.'
+                        )
+                        time.sleep(120)
+                    else:
+                        raise ex
