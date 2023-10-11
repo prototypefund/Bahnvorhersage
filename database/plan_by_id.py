@@ -1,6 +1,4 @@
 import json
-import os
-import sys
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -8,7 +6,8 @@ import sqlalchemy
 from sqlalchemy import BIGINT, Column
 from sqlalchemy.dialects.postgresql import JSON
 
-from database import get_engine, upsert_base
+from database.engine import get_engine
+from database.upsert import upsert_base
 from database.base import Base
 
 

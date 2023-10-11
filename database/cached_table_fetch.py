@@ -5,7 +5,7 @@ import pandas as pd
 from cityhash import CityHash64
 
 from config import CACHE_PATH
-from database import DB_CONNECT_STRING, get_engine
+from database.engine import DB_CONNECT_STRING, get_engine
 
 
 def cached_table_fetch_postgis(
