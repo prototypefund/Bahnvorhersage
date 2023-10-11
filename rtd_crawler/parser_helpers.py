@@ -1,4 +1,5 @@
 from datetime import datetime
+import pytz
 from typing import List, Union
 
 
@@ -18,6 +19,29 @@ def db_to_datetime(dt: Union[str, None]) -> Union[datetime, None]:
     return datetime(
         int('20' + dt[0:2]), int(dt[2:4]), int(dt[4:6]), int(dt[6:8]), int(dt[8:10])
     )
+
+
+def db_to_utc(dt: Union[str, None]) -> Union[datetime, None]:
+    """
+    Convert bahn time in format: '%y%m%d%H%M' to datetime.
+    As it is fastest to directly construct a datetime object from this, no strptime is used.
+
+    Args:
+        dt (str): bahn time format
+
+    Returns:
+        datetime.datetime: converted bahn time
+    """
+    if dt is None:
+        return None
+    local_datetime = datetime(
+        int('20' + dt[0:2]), int(dt[2:4]), int(dt[4:6]), int(dt[6:8]), int(dt[8:10])
+    )
+    local_tz = pytz.timezone('Europe/Berlin')
+    local_datetime = local_tz.localize(local_datetime)
+    utc_datetime = local_datetime.astimezone(pytz.utc)
+    return utc_datetime
+
 
 
 def parse_path(path: Union[str, None]) -> Union[List[str], None]:
@@ -41,4 +65,4 @@ def parse_id(id: str) -> tuple[int, datetime, int]:
         trip_id, date_id, stop_id
     """
     trip_id, date_id, stop_id = id.rsplit('-', 2)
-    return int(trip_id), db_to_datetime(date_id), int(stop_id)
+    return int(trip_id), db_to_utc(date_id), int(stop_id)
