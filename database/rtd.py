@@ -1,19 +1,15 @@
-import os
-import sys
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import pangres
-import pandas as pd
-import sqlalchemy
-from sqlalchemy import Column, Integer, Text, DateTime, String, BIGINT, Float, Boolean
-from sqlalchemy.dialects.postgresql import JSON, ARRAY
-from sqlalchemy.ext.declarative import declarative_base
-from database import get_engine
 import datetime
+
+import pandas as pd
+import pangres
+import sqlalchemy
+from sqlalchemy import (BIGINT, Boolean, Column, DateTime, Float, Integer,
+                        String, Text)
+from sqlalchemy.dialects.postgresql import ARRAY, JSON
+
 from config import RTD_TABLENAME
-
-
-Base = declarative_base()
+from database.base import Base
+from database.engine import get_engine
 
 
 class Rtd(Base):
@@ -235,11 +231,11 @@ sql_types = {
 }
 
 if __name__ == '__main__':
+    from database.engine import sessionfactory
     from helpers import bahn_vorhersage
-    
+
     Rtd()
 
-    from database import Rtd, sessionfactory
     engine, Session = sessionfactory()
 
     with Session() as session:

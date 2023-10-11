@@ -1,16 +1,11 @@
-import os
-import sys
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from sqlalchemy import Column, Integer, DateTime, String, Float, func
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session
-from database import get_engine
 from datetime import datetime
+
+from sqlalchemy import Column, DateTime, Float, Integer, String, func
+from sqlalchemy.orm import Session
+
+from database.base import Base
+from database.engine import get_engine
 from helpers import ttl_lru_cache
-
-
-Base = declarative_base()
 
 
 class MlStat(Base):

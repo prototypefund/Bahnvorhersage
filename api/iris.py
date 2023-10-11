@@ -1,17 +1,25 @@
+import enum
 import urllib.parse
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import List, Set, Union, Literal
+from datetime import datetime, date
+from typing import List, Literal, Set, Union, Dict
 
 import lxml.etree as etree
 import pandas as pd
 import requests
-import enum
 
 from rtd_crawler.hash64 import xxhash64
+from rtd_crawler.parser_helpers import db_to_utc, parse_id, parse_path
 from rtd_crawler.xml_parser import xml_to_json
-from rtd_crawler.parser_helpers import db_to_datetime, parse_path
+from helpers.retry import retry
+
+
+PLAN_URL = 'https://iris.noncd.db.de/iris-tts/timetable/plan/'
+CHANGES_URL = 'https://iris.noncd.db.de/iris-tts/timetable/fchg/'
+RECENT_CHANGES_URL = 'https://iris.noncd.db.de/iris-tts/timetable/rchg/'
+
+IRIS_TIMEOUT = 90
 
 
 class EventStatus(enum.Enum):
@@ -108,7 +116,7 @@ class DistributorMessage:
         self.internal_text = distributor_message['int']
         self.distributor_name = distributor_message['n']
         self.distributor_type = DistributorType(distributor_message['t'])
-        self.timestamp = db_to_datetime(distributor_message['ts'])
+        self.timestamp = db_to_utc(distributor_message['ts'])
 
 
 @dataclass
@@ -140,15 +148,15 @@ class Message:
         self.external_category = message['ec']
         self.external_link = message['elnk']
         self.external_text = message['ext']
-        self.valid_from = db_to_datetime(message['from'])
+        self.valid_from = db_to_utc(message['from'])
         self.message_id = message['id']
         self.internal_text = message['int']
         self.owner = message['o']
         self.priority = MessagePriority(message['pr'])
         self.message_type = MessageType(message['t'])
         self.trip_label = TripLabel(message['tl'])
-        self.valid_to = db_to_datetime(message['to'])
-        self.timestamp = db_to_datetime(message['ts'])
+        self.valid_to = db_to_utc(message['to'])
+        self.timestamp = db_to_utc(message['ts'])
 
 
 @dataclass
@@ -180,13 +188,11 @@ class Event:
             )
 
         self.changed_distant_endpoint = event['cde'] if 'cde' in event else None
-        self.cancellation_time = (
-            db_to_datetime(event['clt']) if 'clt' in event else None
-        )
+        self.cancellation_time = db_to_utc(event['clt']) if 'clt' in event else None
         self.changed_platform = event['cp'] if 'cp' in event else None
         self.changed_path = parse_path(event['cpth']) if 'cpth' in event else None
         self.changed_status = EventStatus(event['cs']) if 'cs' in event else None
-        self.changed_time = db_to_datetime(event['ct']) if 'ct' in event else None
+        self.changed_time = db_to_utc(event['ct']) if 'ct' in event else None
         self.distant_change = int(event['dc']) if 'dc' in event else None
         self.hidden = bool(int(event['hi'])) if 'hi' in event else None
         self.line = event['l'] if 'l' in event else None
@@ -197,7 +203,7 @@ class Event:
         self.planned_platform = event['pp']
         self.planned_path = parse_path(event['ppth'])
         self.planned_status = EventStatus(event['ps']) if 'ps' in event else None
-        self.planned_time = db_to_datetime(event['pt'])
+        self.planned_time = db_to_utc(event['pt'])
         self.transition = event['tra'] if 'tra' in event else None
         self.wings = event['wings'].split('|') if 'wings' in event else None
 
@@ -344,7 +350,7 @@ class TimetableStop:
             HistoricPlatformChange(stop['hpc']) if 'hpc' in stop else None
         )
         self.raw_id = stop['id']
-        self.trip_id, self.date_id, self.stop_id = stop['id'].rsplit('-', 2)
+        self.trip_id, self.date_id, self.stop_id = parse_id(self.raw_id)
         self.hash_id = xxhash64(self.raw_id)
         self.message = Message(stop['m']) if 'm' in stop else None
         self.reference = TripReference(stop['ref']) if 'ref' in stop else None
@@ -353,9 +359,11 @@ class TimetableStop:
 
     def is_bus(self) -> bool:
         return (
-            self.trip_label.category == 'Bus'
-            or self.arrival.line == 'SEV' if self.arrival is not None else False
-            or self.depature.line == 'SEV' if self.depature is not None else False
+            self.trip_label.category == 'Bus' or self.arrival.line == 'SEV'
+            if self.arrival is not None
+            else False or self.depature.line == 'SEV'
+            if self.depature is not None
+            else False
         )
 
 
@@ -384,6 +392,11 @@ class IrisStation:
         self.valid_to = pd.Timestamp.max.to_pydatetime(warn=False)
 
         self.meta = parse_meta(iris_station.get('meta', ''))
+
+
+def xml_str_to_json(xml_response: str) -> List[Dict]:
+    xml_response = etree.fromstring(xml_response.encode())
+    return list(xml_to_json(single) for single in xml_response)
 
 
 def stations_equal(iris_station: IrisStation, station: pd.Series) -> bool:
@@ -487,6 +500,36 @@ def search_iris_multiple(
     """
     for search_term in search_terms:
         yield get_stations_from_iris(search_term)
+
+
+@retry(max_retries=3)
+def get_plan(eva: int, date: date, hour: int):
+    r = requests.get(
+        PLAN_URL + f"{eva}/{date.strftime('%y%m%d')}/{hour:02d}",
+        timeout=IRIS_TIMEOUT,
+    )
+    r.raise_for_status()
+    return xml_str_to_json(r.text)
+
+
+@retry(max_retries=3)
+def get_all_changes(eva: int):
+    r = requests.get(
+        CHANGES_URL + f"{eva}",
+        timeout=IRIS_TIMEOUT,
+    )
+    r.raise_for_status()
+    return xml_str_to_json(r.text)
+
+
+@retry(max_retries=3)
+def get_recent_changes(eva: int):
+    r = requests.get(
+        RECENT_CHANGES_URL + f"{eva}",
+        timeout=IRIS_TIMEOUT,
+    )
+    r.raise_for_status()
+    return xml_str_to_json(r.text)
 
 
 if __name__ == '__main__':

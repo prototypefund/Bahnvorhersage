@@ -3,6 +3,7 @@ import json
 import warnings
 from functools import lru_cache
 from typing import List
+from datetime import datetime
 
 import igraph
 from cityhash import CityHash64
@@ -20,7 +21,11 @@ def redis_lru_cache_str_float(name: str, maxsize: int = 128):
     def wrapper(func):
         @lru_cache(maxsize)
         def inner(self, **kwargs):
-            cache_key = hex(CityHash64(json.dumps(kwargs, sort_keys=True)))
+            hashable_kwargs = {}
+            for key in kwargs:
+                if key != 'date':
+                    hashable_kwargs[key] = kwargs[key]
+            cache_key = hex(CityHash64(json.dumps(hashable_kwargs, sort_keys=True)))
             result = redis_client.hget(name, cache_key)
             if result is not None:
                 return float(result)
@@ -78,10 +83,10 @@ class StreckennetzSteffi(StationPhillip):
 
     @redis_lru_cache_str_float(name='best_distance_cache', maxsize=None)
     def best_distance(
-        self, source: str, target: str, date: DateSelector, is_bus: bool
+        self, source: str, target: str, is_bus: bool
     ) -> float:
         try:
-            geo_distance = self.geographic_distance(source, target, date)
+            geo_distance = self.geographic_distance(source, target)
 
             # For bus routes, use geographic distance, as the railway-network
             # distance would not make sense.
@@ -116,7 +121,7 @@ class StreckennetzSteffi(StationPhillip):
             return network_distance
 
     def route_length(
-        self, waypoints: List[str], date: DateSelector, is_bus: bool
+        self, waypoints: List[str], is_bus: bool
     ) -> float:
         """
         Calculate approximate length of a route, e.g. the sum of the distances
@@ -138,7 +143,7 @@ class StreckennetzSteffi(StationPhillip):
         length = 0
         for source, target in pairwise(waypoints):
             length += self.best_distance(
-                source=source, target=target, date=date, is_bus=is_bus
+                source=source, target=target, is_bus=is_bus
             )
         return length
 
@@ -152,7 +157,6 @@ if __name__ == '__main__':
         'Tübingen Hbf - Altingen(Württ):',
         streckennetz_steffi.route_length(
             ['Tübingen Hbf', 'Altingen(Württ)'],
-            date='latest',
             is_bus=False,
         ),
     )

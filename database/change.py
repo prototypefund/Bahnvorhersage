@@ -1,15 +1,13 @@
-import os
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import sqlalchemy
-from sqlalchemy import Column, BIGINT
-from sqlalchemy.dialects.postgresql import JSON
-from sqlalchemy.ext.declarative import declarative_base
-from typing import Dict, List
-from database import get_engine, upsert_base
 import json
+from typing import Dict, List
 
-Base = declarative_base()
+import sqlalchemy
+from sqlalchemy import BIGINT, Column
+from sqlalchemy.dialects.postgresql import JSON
+
+from database.base import Base
+from database.engine import get_engine
+from database.upsert import upsert_base
 
 
 class Change(Base):
@@ -31,12 +29,16 @@ class Change(Base):
 
     @staticmethod
     def add_changes(session: sqlalchemy.orm.Session, changes: dict):
-        new_changes = [{'hash_id': train_id, 'change': json.dumps(changes[train_id])}
-                        for train_id in changes]
+        new_changes = [
+            {'hash_id': train_id, 'change': json.dumps(changes[train_id])}
+            for train_id in changes
+        ]
         Change.upsert(session, new_changes)
 
     @staticmethod
-    def get_changes(session: sqlalchemy.orm.Session, hash_ids: List[int]) -> Dict[int, dict]:
+    def get_changes(
+        session: sqlalchemy.orm.Session, hash_ids: List[int]
+    ) -> Dict[int, dict]:
         """
         Get changes that have a given hash_id
 

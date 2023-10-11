@@ -1,9 +1,11 @@
-from typing import Optional, Callable
-import pandas as pd
+from typing import Callable, Optional
+
 import geopandas as gpd
-from database import DB_CONNECT_STRING, get_engine
-from config import CACHE_PATH
+import pandas as pd
 from cityhash import CityHash64
+
+from config import CACHE_PATH
+from database.engine import DB_CONNECT_STRING, get_engine
 
 
 def cached_table_fetch_postgis(
@@ -138,8 +140,9 @@ def pd_to_psql(df, uri, table_name, schema_name=None, if_exists='fail', sep=',')
     if schema_name:
         schema_name = schema_name.lower()
 
-    import sqlalchemy
     import io
+
+    import sqlalchemy
 
     if schema_name is not None:
         sql_engine = sqlalchemy.create_engine(

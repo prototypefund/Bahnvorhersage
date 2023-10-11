@@ -51,6 +51,7 @@ spec:
     - podcast-tech24.de
     - thesilentwave.de
     - dzconnect.de
+    - beta.dzconnect.de
     - quicksharebox.de
     - wohnung-in-esslingen.de
     - endstationzukunft.de
@@ -199,6 +200,16 @@ spec:
           backend:
             service:
               name: sfz-dzconnect
+              port:
+                number: 80
+  - host: "beta.dzconnect.de"
+    http: &dzconnect-beta
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-dzconnect-beta
               port:
                 number: 80
   - host: "wohnung-in-esslingen.de"
