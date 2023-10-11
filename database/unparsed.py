@@ -4,13 +4,15 @@ from redis import Redis
 
 def add_change(redis_client: Redis, hash_ids: List[int]) -> None:
     if hash_ids:
+        pipe = redis_client.pipeline()
         for hash_id in hash_ids:
-            redis_client.xadd(
+            pipe.xadd(
                 'unparsed_change',
                 {'hash_id': hash_id.to_bytes(8, 'big', signed=True)},
-                maxlen=50_000,
+                maxlen=1_000_000,
                 approximate=True,
             )
+        pipe.execute()
 
 def add(redis_client: Redis, hash_ids: List[int]) -> None:
     if hash_ids:
@@ -18,7 +20,7 @@ def add(redis_client: Redis, hash_ids: List[int]) -> None:
             redis_client.xadd(
                 'unparsed',
                 {'hash_id': hash_id.to_bytes(8, 'big', signed=True)},
-                maxlen=50_000,
+                maxlen=1_000_000,
                 approximate=True,
             )
 
