@@ -1,5 +1,5 @@
 import datetime
-from typing import List, Literal, Optional, Tuple, Union
+from typing import List, Literal, Optional, Tuple, Union, Set
 
 import geopy.distance
 import pandas as pd
@@ -8,12 +8,25 @@ from config import CACHE_TIMEOUT_SECONDS
 from database import cached_table_fetch
 from helpers import ttl_lru_cache
 
+from dataclasses import dataclass
+
 DateSelector = Union[
     datetime.datetime, List[datetime.datetime], Literal['latest'], Literal['all']
 ]
 AllowedDuplicates = Union[
     Literal['all'], Literal['first'], Literal['last'], Literal['none']
 ]
+
+
+@dataclass
+class Station:
+    eva: int
+    name: str
+    ds100: str
+    lat: float
+    lon: float
+    valid_from: datetime.datetime
+    valid_to: datetime.datetime
 
 
 class StationPhillip:
@@ -49,28 +62,74 @@ class StationPhillip:
 
     @property
     @ttl_lru_cache(CACHE_TIMEOUT_SECONDS, 1)
-    def name_index_stations(self) -> pd.DataFrame:
-        name_index_stations = cached_table_fetch('stations', **self.kwargs).set_index(
-            'name'
-        )
-        name_index_stations['eva'] = name_index_stations['eva'].astype(int)
-        return name_index_stations
-
-    @property
-    @ttl_lru_cache(CACHE_TIMEOUT_SECONDS, 1)
     def sta_list(self) -> List[str]:
         return list(
             self._get_station(date=datetime.datetime.now())
             .sort_values(by='number_of_events', ascending=False)['name']
             .unique()
         )
-    
+
     @property
     def evas(self) -> List[int]:
         return self.stations['eva'].unique().tolist()
 
+    @property
+    @ttl_lru_cache(CACHE_TIMEOUT_SECONDS, 1)
+    def stations_by_eva(self) -> dict[int, Station]:
+        stations_by_eva: dict[int, Station] = {}
+        for i in range(len(self.stations)):
+            row = self.stations.iloc[i]
+            station = Station(
+                eva=int(row['eva']),
+                name=row['name'],
+                ds100=row['ds100'],
+                lat=row['lat'],
+                lon=row['lon'],
+                valid_from=row['valid_from'],
+                valid_to=row['valid_to'],
+            )
+
+            if station.eva in stations_by_eva:
+                # As stations change over time, even evas might have multiple
+                # stations associated with them. We want to have the most
+                # recent one here.
+                if station.valid_from >= stations_by_eva[station.eva].valid_to:
+                    stations_by_eva[station.eva] = station
+            else:
+                stations_by_eva[station.eva] = station
+
+        return stations_by_eva
+
+    @property
+    @ttl_lru_cache(CACHE_TIMEOUT_SECONDS, 1)
+    def evas_by_name(self) -> dict[str, List[int]]:
+        evas_by_name = {}
+        for i in range(len(self.stations)):
+            row = self.stations.iloc[i]
+            if row['name'] in evas_by_name:
+                if row['eva'] not in evas_by_name[row['name']]:
+                    evas_by_name[row['name']].append(int(row['eva']))
+            else:
+                evas_by_name[row['name']] = [int(row['eva'])]
+
+        return evas_by_name
+
+    @property
+    @ttl_lru_cache(CACHE_TIMEOUT_SECONDS, 1)
+    def evas_by_ds100(self) -> dict[str, List[int]]:
+        evas_by_ds100 = {}
+        for i in range(len(self.stations)):
+            row = self.stations.iloc[i]
+            if row['ds100'] in evas_by_ds100:
+                if row['eva'] not in evas_by_ds100[row['ds100']]:
+                    evas_by_ds100[row['ds100']].append(int(row['eva']))
+            else:
+                evas_by_ds100[row['ds100']] = [int(row['eva'])]
+
+        return evas_by_ds100
+
     def __len__(self):
-        return len(self.stations)
+        return len(self.evas)
 
     def __iter__(self):
         """
@@ -276,7 +335,41 @@ class StationPhillip:
             stations = stations.droplevel(level=['name', 'eva', 'ds100'])
             return stations
 
-    def get_eva(
+    def _best_eva(self, evas: List[int]) -> int:
+        """
+        Several station names might link to the same eva.
+        Thats generally kind of a problem. Evas for normal
+        german stations lie in the range of 8000000 to 8099999.
+        So we assume, that the eva closest to that range is
+        the most fitting one.
+
+        Parameters
+        ----------
+        evas : List[int]
+            Evas describing the same station
+
+        Returns
+        -------
+        int
+            Best fit (subjective) found for the station
+        """
+        if len(evas) == 1:
+            return evas[0]
+        else:
+            distances = [abs(eva - 8050000) for eva in evas]
+            return evas[distances.index(min(distances))]
+
+    def get_eva(self, name=None, ds100=None) -> int:
+        if name is not None:
+            evas = self.evas_by_name[name]
+        elif ds100 is not None:
+            evas = self.evas_by_ds100[ds100]
+        else:
+            raise ValueError('Either name or ds100 must be supplied')
+        
+        return self._best_eva(evas)
+
+    def get_eva_(
         self,
         date: DateSelector,
         name: Optional[Union[str, List[str]]] = None,
@@ -396,7 +489,11 @@ class StationPhillip:
 
         return ds100
 
-    def get_location(
+    def get_location(self, eva):
+        station = self.stations_by_eva[eva]
+        return station.lat, station.lon
+
+    def get_location_(
         self,
         date: DateSelector,
         eva: Optional[Union[int, List[int]]] = None,
@@ -456,10 +553,9 @@ class StationPhillip:
         self,
         name1: str,
         name2: str,
-        date: DateSelector = None,
     ) -> float:
-        coords_1 = self.get_location(name=name1, date=date, allow_duplicates='first')
-        coords_2 = self.get_location(name=name2, date=date, allow_duplicates='first')
+        coords_1 = self.get_location(eva=self.get_eva(name=name1))
+        coords_2 = self.get_location(eva=self.get_eva(name=name2))
 
         return geopy.distance.distance(coords_1, coords_2).meters
 
@@ -480,6 +576,12 @@ if __name__ == '__main__':
     import helpers.bahn_vorhersage
 
     stations = StationPhillip(prefer_cache=False)
+
+    print(stations.get_eva(name='Tübingen Hbf'))
+    print(stations.get_eva(ds100='TT'))
+
+    print(stations.stations_by_eva[8000141])
+    print(stations.get_location(eva=8000141))
 
     print(stations.sta_list[:10])
     # print(
