@@ -36,7 +36,7 @@ class DelayAnalysis:
                 'ar_happened',
                 'dp_happened',
             ],
-            long_distance_only=True,
+            long_distance_only=False,
         )
         from dask.distributed import Client
 
@@ -91,9 +91,9 @@ class DelayAnalysis:
 
         ax1.grid(True)
 
-        ax1.set_title('Verteilung von Verspätungen', fontsize=50)
-        ax1.set_xlabel('Verspätung in Minuten', fontsize=30)
-        ax1.set_ylabel('Wahrscheinlichkeitsdichte', fontsize=30)
+        ax1.set_title('Delay distribution', fontsize=50)
+        ax1.set_xlabel('Delay in minutes', fontsize=30)
+        ax1.set_ylabel('Probability density', fontsize=30)
 
         fig.legend(fontsize=20)
         
@@ -107,5 +107,5 @@ class DelayAnalysis:
 if __name__ == '__main__':
     import helpers.bahn_vorhersage
 
-    delay = DelayAnalysis(prefere_cache=False, generate=False)
+    delay = DelayAnalysis(prefere_cache=True, generate=False)
     delay.plot(save_as='per_delay_fern.png', loggy=False)
