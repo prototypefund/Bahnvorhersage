@@ -503,33 +503,27 @@ def search_iris_multiple(
 
 
 @retry(max_retries=3)
-def get_plan(eva: int, date: date, hour: int):
-    r = requests.get(
-        PLAN_URL + f"{eva}/{date.strftime('%y%m%d')}/{hour:02d}",
-        timeout=IRIS_TIMEOUT,
-    )
+def _make_iris_request(url: str, session: requests.Session = None) -> List[Dict]:
+    if session is None:
+        r = requests.get(url, timeout=IRIS_TIMEOUT)
+    else:
+        r = session.get(url, timeout=IRIS_TIMEOUT)
     r.raise_for_status()
     return xml_str_to_json(r.text)
 
 
-@retry(max_retries=3)
-def get_all_changes(eva: int):
-    r = requests.get(
-        CHANGES_URL + f"{eva}",
-        timeout=IRIS_TIMEOUT,
+def get_plan(eva: int, date: date, hour: int, session: requests.Session = None):
+    return _make_iris_request(
+        PLAN_URL + f"{eva}/{date.strftime('%y%m%d')}/{hour:02d}", session=session
     )
-    r.raise_for_status()
-    return xml_str_to_json(r.text)
 
 
-@retry(max_retries=3)
-def get_recent_changes(eva: int):
-    r = requests.get(
-        RECENT_CHANGES_URL + f"{eva}",
-        timeout=IRIS_TIMEOUT,
-    )
-    r.raise_for_status()
-    return xml_str_to_json(r.text)
+def get_all_changes(eva: int, session: requests.Session = None):
+    return _make_iris_request(CHANGES_URL + f"{eva}", session=session)
+
+
+def get_recent_changes(eva: int, session: requests.Session = None):
+    return _make_iris_request(RECENT_CHANGES_URL + f"{eva}", session=session)
 
 
 if __name__ == '__main__':

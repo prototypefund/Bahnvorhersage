@@ -1,10 +1,7 @@
 import concurrent.futures
-import datetime
 import time
-from itertools import chain
 
 from redis import Redis
-from tqdm import tqdm
 import requests
 
 from config import redis_url, station_to_monitor_per_thread
@@ -14,21 +11,23 @@ from helpers.batcher import batcher
 from database.unique_change import UniqueChange
 from api.iris import get_all_changes, get_recent_changes
 from typing import List, Callable
-from database.upsert import upsert_base
+from database.upsert import  upsert_with_retry
 from database.base import create_all
+import traceback
 
 
 def crawler_worker(evas: List[int], download_function: Callable):
-    changes = []
-    for eva in evas:
-        try:
-            result = download_function(eva)
-            print(f'downloaded {eva}')
-            # for change in result:
-            #     changes.append(UniqueChange(change).as_dict())
-        except requests.exceptions.HTTPError as exc:
-            pass
-    return changes
+    changes = {}
+    with requests.Session() as session:
+        for eva in evas:
+            try:
+                result = download_function(eva, session=session)
+                for change in result:
+                    change = UniqueChange(change).as_dict()
+                    changes[change['change_hash']] = change
+            except requests.exceptions.HTTPError as exc:
+                pass
+        return changes
 
 
 def get_and_process_changes(
@@ -43,17 +42,13 @@ def get_and_process_changes(
             for eva_batch in eva_batches
         )
 
-        changes = []
+        changes = {}
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
-            print(f'got {len(result)} changes from finished worker')
-            changes.extend(result)
+            changes.update(result)
 
-        with Session() as session:
-            upsert_base(session, UniqueChange.__table__, changes)
-            session.commit()
-
-        unparsed.add_change(redis_client, [change['hash_id'] for change in changes])
+        upsert_with_retry(Session, UniqueChange.__table__, list(changes.values()))
+        unparsed.add_change(redis_client, [changes[key]['hash_id'] for key in changes])
 
 
 def main():
@@ -71,15 +66,18 @@ def main():
         )
 
     while True:
-        start_time = time.time()
-        get_and_process_changes(
-            stations.stations['eva'].unique().tolist(),
-            get_recent_changes,
-            Session,
-            redis_client,
-        )
-        print(f'Finished in {time.time() - start_time} seconds')
-        time.sleep(max(0, 120 - (time.time() - start_time)))
+        try:
+            start_time = time.time()
+            get_and_process_changes(
+                stations.stations['eva'].unique().tolist(),
+                get_recent_changes,
+                Session,
+                redis_client,
+            )
+            print(f'Finished in {time.time() - start_time} seconds')
+            time.sleep(max(0, 120 - (time.time() - start_time)))
+        except Exception as ex:
+            traceback.print_exc()
 
 
 if __name__ == '__main__':

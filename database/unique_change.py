@@ -29,6 +29,14 @@ class UniqueChange(Base):
             'change': self.change,
         }
     
+    def as_tuple(self):
+        return (
+            self.hash_id,
+            self.change_hash,
+            self.time_crawled,
+            self.change,
+        )
+    
     @staticmethod
     def add_changes(session: Session, changes: List[Dict]):
         for change in changes:
