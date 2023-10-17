@@ -3,29 +3,24 @@ import csv
 import io
 import multiprocessing as mp
 import os
-import random
-import sys
-import time
-import traceback
 from datetime import datetime
 from typing import Dict, List, Tuple
 
-import pandas as pd
 import sqlalchemy
 from redis import Redis
 from tqdm import tqdm
 
 from api.iris import TimetableStop
 from config import redis_url
-from database import (Change, PlanById, Rtd, sessionfactory, unparsed)
-from database.upsert import upsert_with_retry
+from database import (PlanById, unparsed)
+from database.upsert import upsert_with_retry, upsert_copy_from
+from database.engine import sessionfactory, get_engine
 from gtfs.agency import Agency
 from gtfs.calendar_dates import CalendarDates, ExceptionType
 from gtfs.routes import Routes, RouteType
 from gtfs.stop_times import StopTimes, StopTimesTemp
 from gtfs.stops import LocationType, Stops
 from gtfs.trips import Trips, TripTemp
-from helpers.batcher import batcher
 from helpers.StationPhillip import StationPhillip
 from helpers.StreckennetzSteffi import StreckennetzSteffi
 from rtd_crawler.hash64 import xxhash64
@@ -39,7 +34,6 @@ AND pid <> pg_backend_pid()
 AND state in ('idle', 'idle in transaction', 'idle in transaction (aborted)', 'disabled');
 """
 
-engine, Session = sessionfactory()
 streckennetz = StreckennetzSteffi(prefer_cache=False)
 
 
@@ -80,9 +74,11 @@ def all_stations_to_gtfs():
         )
         stops.append(stop.as_dict())
 
-    with Session() as session:
-        upsert_base(session, Stops.__table__, stops)
-        session.commit()
+    engine = get_engine(
+        poolclass=sqlalchemy.pool.NullPool,
+    )
+    upsert_with_retry(engine, Stops.__table__, stops)
+    engine.dispose()
 
 
 def stop_to_gtfs(
@@ -127,10 +123,10 @@ def stop_to_gtfs(
         trip_id=trip_id,
         stop_id=stop_id,
         stop_sequence=stop.stop_id,
-        arrival_time=get_gtfs_stop_time(stop.date_id, stop.arrival.planned_time)
+        arrival_time=stop.arrival.planned_time # get_gtfs_stop_time(stop.date_id, stop.arrival.planned_time)
         if stop.arrival is not None
         else None,
-        departure_time=get_gtfs_stop_time(stop.date_id, stop.depature.planned_time)
+        departure_time=stop.depature.planned_time # get_gtfs_stop_time(stop.date_id, stop.depature.planned_time)
         if stop.depature is not None
         else None,
         shape_dist_traveled=streckennetz.route_length(
@@ -150,37 +146,37 @@ def stop_to_gtfs(
     return agency, calendar_dates, routes, stop_times, trips
 
 
-def parse_batch(hash_ids: List[int], plans: Dict[int, Dict] = None):
-    with Session() as session:
-        if plans is None:
-            plans = PlanById.get_stops(session, hash_ids)
-        changes = Change.get_changes(session, hash_ids)
-    parsed = []
-    for hash_id in plans:
-        parsed.append(parse_stop(hash_id, plans[hash_id], changes.get(hash_id, {})))
+# def parse_batch(hash_ids: List[int], plans: Dict[int, Dict] = None):
+#     with Session() as session:
+#         if plans is None:
+#             plans = PlanById.get_stops(session, hash_ids)
+#         changes = Change.get_changes(session, hash_ids)
+#     parsed = []
+#     for hash_id in plans:
+#         parsed.append(parse_stop(hash_id, plans[hash_id], changes.get(hash_id, {})))
 
-    if parsed:
-        parsed = pd.DataFrame(parsed).set_index('hash_id')  # TODO
-        Rtd.upsert(parsed, engine)  # TODO
-
-
-def parse_unparsed(redis_client: Redis, last_stream_id: bytes) -> bytes:
-    last_stream_id, unparsed_hash_ids = unparsed.get(redis_client, last_stream_id)
-    if unparsed_hash_ids:
-        print('parsing', len(unparsed_hash_ids), 'unparsed events')
-        parse_batch(unparsed_hash_ids)
-    return last_stream_id
+#     if parsed:
+#         parsed = pd.DataFrame(parsed).set_index('hash_id')  # TODO
+#         Rtd.upsert(parsed, engine)  # TODO
 
 
-def parse_unparsed_continues():
-    redis_client = Redis.from_url(redis_url)
-    last_stream_id = b'0-0'
-    while True:
-        try:
-            last_stream_id = parse_unparsed(redis_client, last_stream_id)
-        except Exception:
-            traceback.print_exc(file=sys.stdout)
-        time.sleep(60)
+# def parse_unparsed(redis_client: Redis, last_stream_id: bytes) -> bytes:
+#     last_stream_id, unparsed_hash_ids = unparsed.get(redis_client, last_stream_id)
+#     if unparsed_hash_ids:
+#         print('parsing', len(unparsed_hash_ids), 'unparsed events')
+#         parse_batch(unparsed_hash_ids)
+#     return last_stream_id
+
+
+# def parse_unparsed_continues():
+#     redis_client = Redis.from_url(redis_url)
+#     last_stream_id = b'0-0'
+#     while True:
+#         try:
+#             last_stream_id = parse_unparsed(redis_client, last_stream_id)
+#         except Exception:
+#             traceback.print_exc(file=sys.stdout)
+#         time.sleep(60)
 
 
 class psql_dialect(csv.Dialect):
@@ -235,42 +231,10 @@ def tuples_to_csv(tuples: List[tuple]) -> str:
     return fbuf.read()
 
 
-def clear_temp_tables():
-    with Session() as session:
-        session.execute(sqlalchemy.text(f"TRUNCATE {StopTimesTemp.__table__.fullname}"))
-        session.execute(sqlalchemy.text(f"TRUNCATE {TripTemp.__table__.fullname}"))
-        session.commit()
-
-
-def upsert_copy_from(
-    table: sqlalchemy.schema.Table, temp_table: sqlalchemy.schema.Table, csv: str
-):
-    # Use copy from to insert the date into a temporary table
-    sql_cnxn = engine.raw_connection()
-    cursor = sql_cnxn.cursor()
-
-    fbuf = io.StringIO(csv)
-    cursor.copy_from(fbuf, temp_table.fullname, sep=',', null='')
-    sql_cnxn.commit()
-    cursor.close()
-    sql_cnxn.close()
-
-    # INSTERT INTO table SELECT * FROM temp_table ON CONFLICT DO UPDATE
-    # Insert the data from the temporary table into the real table using raw sql
-    # update_cols = [c.name for c in table.c if c not in list(table.primary_key.columns)]
-
-    sql_insert = f"""
-        INSERT INTO {table.fullname}
-        SELECT * FROM {temp_table.fullname}
-        ON CONFLICT ({', '.join(table.primary_key.columns.keys())}) DO NOTHING
-    """
-    # SET {', '.join([f'{col} = excluded.{col}' for col in update_cols])}
-    sql_clear = f"TRUNCATE {temp_table.fullname}"
-
-    with Session() as session:
-        session.execute(sqlalchemy.text(sql_insert))
-        session.execute(sqlalchemy.text(sql_clear))
-        session.commit()
+def clear_temp_tables(session: sqlalchemy.orm.Session):
+    session.execute(sqlalchemy.text(f"TRUNCATE {StopTimesTemp.__table__.fullname}"))
+    session.execute(sqlalchemy.text(f"TRUNCATE {TripTemp.__table__.fullname}"))
+    session.commit()
 
 
 def parse_chunk(chunk_limits: Tuple[int, int]):
@@ -281,6 +245,10 @@ def parse_chunk(chunk_limits: Tuple[int, int]):
     chunk_limits : Tuple[int, int]
         min and max hash_id to parse in this chunk
     """
+    engine, Session = sessionfactory(
+        poolclass=sqlalchemy.pool.NullPool,
+    )
+
     with Session() as session:
         stops = PlanById.get_stops_from_chunk(session, chunk_limits)
 
@@ -315,6 +283,7 @@ class GTFSUpserter:
         self.routes = {}
         self.stop_times = {}
         self.trips = {}
+        self.sa_engine = get_engine()
 
     def upsert(
         self,
@@ -330,7 +299,7 @@ class GTFSUpserter:
         self.stop_times.update(stop_times)
         self.trips.update(trips)
 
-        if len(self.stop_times) > 1_000_000:
+        if len(self.stop_times) > 5_000_000:
             self.flush()
 
     def flush(self):
@@ -340,7 +309,7 @@ class GTFSUpserter:
             futures.append(
                 executor.submit(
                     upsert_with_retry,
-                    Session,
+                    self.sa_engine,
                     Agency.__table__,
                     list(self.agecies.values()),
                 )
@@ -348,7 +317,7 @@ class GTFSUpserter:
             futures.append(
                 executor.submit(
                     upsert_with_retry,
-                    Session,
+                    self.sa_engine,
                     CalendarDates.__table__,
                     list(self.calendar_dates.values()),
                 )
@@ -357,7 +326,7 @@ class GTFSUpserter:
             futures.append(
                 executor.submit(
                     upsert_with_retry,
-                    Session,
+                    self.sa_engine,
                     Routes.__table__,
                     list(self.routes.values()),
                 )
@@ -369,6 +338,7 @@ class GTFSUpserter:
                     StopTimes.__table__,
                     StopTimesTemp.__table__,
                     tuples_to_csv(list(self.stop_times.values())),
+                    self.sa_engine,
                 )
             )
             futures.append(
@@ -377,11 +347,13 @@ class GTFSUpserter:
                     Trips.__table__,
                     TripTemp.__table__,
                     tuples_to_csv(list(self.trips.values())),
+                    self.sa_engine,
                 )
             )
 
             for future in concurrent.futures.as_completed(futures):
                 future.result()
+            self.sa_engine.dispose()
 
         self.agecies = {}
         self.calendar_dates = {}
@@ -407,7 +379,7 @@ def parse_all():
     # for chunk in tqdm(chunk_limits, total=len(chunk_limits)):
     #     gtfs_upserter.upsert(*parse_chunk(chunk))
 
-    n_processes = min(64, os.cpu_count())
+    n_processes = min(40, os.cpu_count())
 
     with tqdm(total=len(chunk_limits)) as pbar:
         with concurrent.futures.ProcessPoolExecutor(
@@ -415,7 +387,7 @@ def parse_all():
         ) as executor:
             parser_tasks = {
                 executor.submit(parse_chunk, chunk_limits.pop(0))
-                for _ in range(min(n_processes * 2, len(chunk_limits)))
+                for _ in range(min(500, len(chunk_limits)))
             }
 
             while parser_tasks:
@@ -434,10 +406,17 @@ def parse_all():
         gtfs_upserter.flush()
 
 
-if __name__ == "__main__":
-    import helpers.bahn_vorhersage
-
+def main():
+    engine, Session = sessionfactory()
     create_all(engine)
-    clear_temp_tables()
+    with Session() as session:
+        clear_temp_tables(session)
+    engine.dispose()
+
     # all_stations_to_gtfs()
     parse_all()
+
+
+if __name__ == "__main__":
+    import helpers.bahn_vorhersage
+    main()
