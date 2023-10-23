@@ -366,7 +366,7 @@ class StationPhillip:
             evas = self.evas_by_ds100[ds100]
         else:
             raise ValueError('Either name or ds100 must be supplied')
-        
+
         return self._best_eva(evas)
 
     def get_eva_(
@@ -409,7 +409,10 @@ class StationPhillip:
 
         return eva
 
-    def get_name(
+    def get_name(self, eva: int) -> str:
+        return self.stations_by_eva[eva].name
+
+    def get_name_(
         self,
         date: DateSelector,
         eva: Optional[Union[int, List[int]]] = None,
@@ -556,6 +559,16 @@ class StationPhillip:
     ) -> float:
         coords_1 = self.get_location(eva=self.get_eva(name=name1))
         coords_2 = self.get_location(eva=self.get_eva(name=name2))
+
+        return geopy.distance.distance(coords_1, coords_2).meters
+
+    def geographic_distance_by_eva(
+        self,
+        eva_1: int,
+        eva_2: int,
+    ) -> float:
+        coords_1 = self.get_location(eva=eva_1)
+        coords_2 = self.get_location(eva=eva_2)
 
         return geopy.distance.distance(coords_1, coords_2).meters
 
