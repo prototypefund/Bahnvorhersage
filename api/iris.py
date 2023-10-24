@@ -512,17 +512,17 @@ def _make_iris_request(url: str, session: requests.Session = None) -> List[Dict]
     return xml_str_to_json(r.text)
 
 
-def get_plan(eva: int, date: date, hour: int, session: requests.Session = None):
+def get_plan(eva: int, date: date, hour: int, session: requests.Session = None) -> List[Dict]:
     return _make_iris_request(
         PLAN_URL + f"{eva}/{date.strftime('%y%m%d')}/{hour:02d}", session=session
     )
 
 
-def get_all_changes(eva: int, session: requests.Session = None):
+def get_all_changes(eva: int, session: requests.Session = None) -> List[Dict]:
     return _make_iris_request(CHANGES_URL + f"{eva}", session=session)
 
 
-def get_recent_changes(eva: int, session: requests.Session = None):
+def get_recent_changes(eva: int, session: requests.Session = None) -> List[Dict]:
     return _make_iris_request(RECENT_CHANGES_URL + f"{eva}", session=session)
 
 
