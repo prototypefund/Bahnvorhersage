@@ -14,6 +14,18 @@ def add_change(redis_client: Redis, hash_ids: List[int]) -> None:
             )
         pipe.execute()
 
+def add_plan(redis_client: Redis, hash_ids: List[int]) -> None:
+    if hash_ids:
+        pipe = redis_client.pipeline()
+        for hash_id in hash_ids:
+            pipe.xadd(
+                'unparsed_plan',
+                {'hash_id': hash_id.to_bytes(8, 'big', signed=True)},
+                maxlen=1_000_000,
+                approximate=True,
+            )
+        pipe.execute()
+
 def add(redis_client: Redis, hash_ids: List[int]) -> None:
     if hash_ids:
         for hash_id in hash_ids:
