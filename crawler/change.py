@@ -5,7 +5,8 @@ from redis import Redis
 import requests
 
 from config import redis_url, station_to_monitor_per_thread
-from database import sessionfactory, unparsed
+from database.engine import sessionfactory
+import database.unparsed as unparsed
 from helpers.StationPhillip import StationPhillip
 from helpers.batcher import batcher
 from database.unique_change import UniqueChange
@@ -31,7 +32,7 @@ def crawler_worker(evas: List[int], download_function: Callable):
 
 
 def get_and_process_changes(
-    evas: List[int], download_function: Callable, Session, redis_client
+    evas: List[int], download_function: Callable, engine, redis_client
 ):
     eva_batches = [
         list(batch) for batch in batcher(evas, station_to_monitor_per_thread)
@@ -47,7 +48,8 @@ def get_and_process_changes(
             result = future.result()
             changes.update(result)
 
-        upsert_with_retry(Session, UniqueChange.__table__, list(changes.values()))
+
+        upsert_with_retry(engine=engine, table=UniqueChange.__table__, rows=list(changes.values()))
         unparsed.add_change(redis_client, [changes[key]['hash_id'] for key in changes])
 
 
@@ -61,7 +63,7 @@ def main():
     get_and_process_changes(
             stations.stations['eva'].unique().tolist(),
             get_all_changes,
-            Session,
+            engine,
             redis_client,
         )
 
@@ -71,7 +73,7 @@ def main():
             get_and_process_changes(
                 stations.stations['eva'].unique().tolist(),
                 get_recent_changes,
-                Session,
+                engine,
                 redis_client,
             )
             print(f'Finished in {time.time() - start_time} seconds')
