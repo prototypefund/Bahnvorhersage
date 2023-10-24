@@ -5,7 +5,7 @@ import geopy.distance
 import pandas as pd
 
 from config import CACHE_TIMEOUT_SECONDS
-from database import cached_table_fetch
+from database.cached_table_fetch import cached_table_fetch
 from helpers import ttl_lru_cache
 
 from dataclasses import dataclass

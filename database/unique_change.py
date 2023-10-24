@@ -1,8 +1,8 @@
 from database.base import Base
 from datetime import datetime, timezone
-from sqlalchemy.orm import Mapped, mapped_column, Session
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import BigInteger, JSON
-from typing import List, Dict
+from typing import Dict
 import json
 from rtd_crawler.hash64 import xxhash64
 
@@ -14,7 +14,7 @@ class UniqueChange(Base):
     time_crawled: Mapped[datetime]
     change: Mapped[str] = mapped_column(JSON)
 
-    def __init__(self, change: dict) -> None:
+    def __init__(self, change: Dict) -> None:
         change_str = json.dumps(change, sort_keys=True)
         self.hash_id = xxhash64(change['id'])
         self.change_hash = xxhash64(change_str)
@@ -28,17 +28,3 @@ class UniqueChange(Base):
             'time_crawled': self.time_crawled,
             'change': self.change,
         }
-    
-    def as_tuple(self):
-        return (
-            self.hash_id,
-            self.change_hash,
-            self.time_crawled,
-            self.change,
-        )
-    
-    @staticmethod
-    def add_changes(session: Session, changes: List[Dict]):
-        for change in changes:
-            session.merge(UniqueChange(change))
-        session.commit()
