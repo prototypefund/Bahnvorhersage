@@ -6,11 +6,11 @@ from typing import List
 from datetime import datetime
 
 import igraph
-from cityhash import CityHash64
 from redis import Redis
 
 from config import redis_url
 from database import cached_sql_fetch
+from rtd_crawler.hash64 import xxhash64
 from helpers import pairwise
 from helpers.StationPhillip import DateSelector, StationPhillip
 
@@ -25,7 +25,7 @@ def redis_lru_cache_str_float(name: str, maxsize: int = 128):
             for key in kwargs:
                 if key != 'date':
                     hashable_kwargs[key] = kwargs[key]
-            cache_key = hex(CityHash64(json.dumps(hashable_kwargs, sort_keys=True)))
+            cache_key = hex(xxhash64(json.dumps(hashable_kwargs, sort_keys=True)))
             result = redis_client.hget(name, cache_key)
             if result is not None:
                 return float(result)

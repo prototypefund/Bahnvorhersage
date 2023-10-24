@@ -5,7 +5,7 @@ from typing import Optional
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from helpers import colormaps
+import helpers.colormaps as colormaps
 
 
 def plot_ar(

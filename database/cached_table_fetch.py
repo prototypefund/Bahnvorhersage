@@ -2,7 +2,7 @@ from typing import Callable, Optional
 
 import geopandas as gpd
 import pandas as pd
-from cityhash import CityHash64
+from rtd_crawler.hash64 import xxhash64
 
 from config import CACHE_PATH
 from database.engine import DB_CONNECT_STRING, get_engine
@@ -39,7 +39,7 @@ def cached_sql_fetch(
     prefer_cache: Optional[bool] = False,
     **kwargs,
 ) -> gpd.GeoDataFrame:
-    cache_name = hex(CityHash64(sql))
+    cache_name = hex(xxhash64(sql))
     cache_path = f'{CACHE_PATH}/{cache_name}.parquet'
 
     if prefer_cache:
