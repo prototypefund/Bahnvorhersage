@@ -1,10 +1,4 @@
 import os
-import sys
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-basepath = os.path.dirname(os.path.realpath(__file__))
-if os.path.isfile("/mnt/config/config.py"):
-    sys.path.append("/mnt/config/")
 import config
 
 from flask import Flask
@@ -14,7 +8,7 @@ from helpers import logging
 from helpers.StreckennetzSteffi import StreckennetzSteffi
 from data_analysis.per_station import PerStationOverTime
 from webserver.db_logger import db
-from ml_models.xgboost_multi_model import Predictor
+from ml_models.predictor import Predictor
 
 # Do not use GUI for matplotlib
 import matplotlib
@@ -22,11 +16,11 @@ import matplotlib
 matplotlib.use('Agg')
 
 logging.info('Initialising streckennetz')
-streckennetz = StreckennetzSteffi(prefer_cache=False)
+streckennetz = StreckennetzSteffi(prefer_cache=True)
 logging.info('Done!')
 
 logging.info('Initialising per_station_time')
-per_station_time = PerStationOverTime(None, prefer_cache=False)
+per_station_time = PerStationOverTime(prefer_cache=True)
 logging.info('Done!')
 
 logging.info('Initialising predictor')

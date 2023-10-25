@@ -3,16 +3,15 @@ import json
 import warnings
 from functools import lru_cache
 from typing import List
-from datetime import datetime
 
 import igraph
 from redis import Redis
 
 from config import redis_url
-from database import cached_sql_fetch
+from database.cached_table_fetch import cached_sql_fetch
 from rtd_crawler.hash64 import xxhash64
 from helpers import pairwise
-from helpers.StationPhillip import DateSelector, StationPhillip
+from helpers.StationPhillip import StationPhillip
 
 
 def redis_lru_cache_str_float(name: str, maxsize: int = 128):

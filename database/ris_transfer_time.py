@@ -17,7 +17,7 @@ class Platform:
 
 
 @dataclass
-class Connection:
+class TransferInfo:
     identical_physical_platform: bool
     frequent_traveller: RisTransferDuration
     mobility_impaired: RisTransferDuration
@@ -34,8 +34,8 @@ class Connection:
         }
 
 
-def neo4j_result_to_connection(result) -> Connection:
-    return Connection(
+def neo4j_result_to_connection(result) -> TransferInfo:
+    return TransferInfo(
         result['c.identical_physical_platform'],
         RisTransferDuration(
             connection_duration=None,
@@ -60,7 +60,7 @@ def neo4j_result_to_connection(result) -> Connection:
     )
 
 
-def fastest_connection(connection: List[Connection]) -> Connection:
+def fastest_connection(connection: List[TransferInfo]) -> TransferInfo:
     return min(
         connection,
         key=lambda connection: connection.frequent_traveller.duration,
@@ -69,7 +69,7 @@ def fastest_connection(connection: List[Connection]) -> Connection:
 
 def get_transfer_time(
     tx: Session, start: Platform, destination: Platform
-) -> Connection:
+) -> TransferInfo:
     if start.platform is None:
         start_platform_query = (
             'MATCH (from:Platform {eva: $from_eva} WHERE from.platform IS NULL)'
@@ -113,7 +113,7 @@ def get_transfer_time(
             return get_transfer_time(
                 tx, Platform(start.eva, None), Platform(destination.eva, None)
             )
-        return Connection(
+        return TransferInfo(
             False,
             RisTransferDuration(
                 connection_duration=None, duration=timedelta(minutes=2)

@@ -2,6 +2,7 @@ import datetime
 import os
 import pickle
 from typing import Literal
+import math
 
 import dask.dataframe as dd
 import numpy as np
@@ -12,7 +13,7 @@ from xgboost import XGBClassifier
 
 from config import ENCODER_PATH, JSON_MODEL_PATH
 from helpers import RtdRay, ttl_lru_cache
-from helpers.StreckennetzSteffi import StreckennetzSteffi
+
 
 
 def save_model(model: XGBClassifier, minute: int, ar_or_dp: Literal['ar', 'dp']):
@@ -36,42 +37,6 @@ def save_model(model: XGBClassifier, minute: int, ar_or_dp: Literal['ar', 'dp'])
         model.save_model(JSON_MODEL_PATH.format('dp_' + str(minute)))
     else:
         raise ValueError(f'ar_or_dp has to be ar or dp not {ar_or_dp}')
-
-
-def load_model(minute: int, ar_or_dp: Literal['ar', 'dp'], gpu=False) -> XGBClassifier:
-    """Load trained XGBClassifier model for prediction form disk
-
-    Parameters
-    ----------
-    minute : int
-        The minute of delay that the model should predict
-    ar_or_dp : str : `ar` | `dp`
-        Whether the model should predict arrival or departure delays
-    gpu : bool
-        Load model for prediction on GPU, by default False
-
-    Returns
-    -------
-    XGBClassifier
-        The trained classifier model
-
-    Raises
-    ------
-    ValueError
-        `ar_or_dp` is neither `ar` nor `dp`
-    """
-    booster = XGBClassifier()
-    if ar_or_dp == 'ar':
-        booster.load_model(JSON_MODEL_PATH.format('ar_' + str(minute)))
-    elif ar_or_dp == 'dp':
-        booster.load_model(JSON_MODEL_PATH.format('dp_' + str(minute)))
-    else:
-        raise ValueError(f'ar_or_dp has to be ar or dp not {ar_or_dp}')
-
-    if gpu:
-        booster.set_params(predictor='gpu_predictor')
-
-    return booster
 
 
 def split_ar_dp(rtd: pd.DataFrame | dd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -129,7 +94,7 @@ def train_models(n_models=15, **load_parameters):
         ar_labels[minute] = (ar_train["ar_delay"] <= minute) & (
             ar_train["ar_cs"] != status_encoder["ar"]["c"]
         )
-        dp_labels[minute + 1] = (dp_train["dp_delay"] >= (minute + 1)) & (
+        dp_labels[minute] = (dp_train["dp_delay"] >= (minute)) & (
             dp_train["dp_cs"] != status_encoder["dp"]["c"]
         )
 
@@ -170,17 +135,16 @@ def train_models(n_models=15, **load_parameters):
 
     for minute in tqdm(range(n_models), desc="Training models"):
         model_name = f"ar_{minute}"
-        # print("Training", model_name, '. . .')
+        print("Training", model_name, '. . .')
         model = train_model(ar_train, ar_labels[minute], **parameters[minute])
         save_model(model, minute=minute, ar_or_dp='ar')
-        # print("Training", model_name, "done.")
+        print("Training", model_name, "done.")
 
-        minute += 1
         model_name = f"dp_{minute}"
-        # print("Training", model_name, '. . .')
+        print("Training", model_name, '. . .')
         model = train_model(dp_train, dp_labels[minute], **parameters[minute - 1])
         save_model(model, minute=minute, ar_or_dp='dp')
-        # print("Training", model_name, "done.")
+        print("Training", model_name, "done.")
 
 
 def majority_baseline(x, y):
@@ -251,256 +215,6 @@ def feature_importance(ar_or_dp: Literal['ar', 'dp']):
     fig.set_size_inches(13.6, 8.5)
     fig.savefig(f"feature_importance_{ar_or_dp}.png", dpi=300, bbox_inches='tight')
     plt.clf()
-
-
-class Predictor:
-    CATEGORICALS = ['o', 'c', 'n', 'station', 'pp']
-    FEATURES = [
-        'station',
-        'lat',
-        'lon',
-        'o',
-        'c',
-        'n',
-        'distance_to_start',
-        'distance_to_end',
-        'pp',
-        'stop_id',
-        'minute',
-        'day',
-        'stay_time',
-    ]
-
-    FEATUER_NAMES = {
-        'station': 'Station',
-        'lat': 'Latitude',
-        'lon': 'Longitude',
-        'o': 'Operator',
-        'c': 'Train type',
-        'n': 'Train number',
-        'distance_to_start': 'Distance to start',
-        'distance_to_end': 'Distance to end',
-        'pp': 'Platform',
-        'stop_id': 'Stop number',
-        'minute': 'Minute',
-        'day': 'Day',
-        'stay_time': 'Stay time',
-    }
-
-    FEATURE_DTYPES = {
-        'station': 'int',
-        'lat': 'float',
-        'lon': 'float',
-        'o': 'int',
-        'c': 'int',
-        'n': 'int',
-        'distance_to_start': 'float',
-        'distance_to_end': 'float',
-        'pp': 'int',
-        'stop_id': 'int',
-        'minute': 'int',
-        'day': 'int',
-        'stay_time': 'float',
-    }
-
-    def __init__(self, n_models: int = 15):
-        self.n_models = n_models
-
-    @ttl_lru_cache(seconds_to_live=60 * 60 * 4)
-    def categorical_encoder(
-        self, category: Literal['o', 'c', 'n', 'station', 'pp']
-    ) -> dict[str, int]:
-        """Load categorical encoder either from disk or time sensitive cache.
-
-        Parameters
-        ----------
-        category: str: `o` | `c` | `n` | `station` | `pp`
-            The category that should be encoded by the encoder
-
-        Returns
-        -------
-        dict[str, int]
-            The encoder dict to map any str / category to a int
-
-        Raises
-        ------
-        ValueError
-            The supplied category does not exist
-        """
-        if category not in self.CATEGORICALS:
-            raise ValueError(
-                f'category {category} is unknown. Valid categories are: {self.CATEGORICALS}'
-            )
-        return pickle.load(open(ENCODER_PATH.format(encoder=category), 'rb'))
-
-    @ttl_lru_cache(seconds_to_live=60 * 60 * 4)
-    @staticmethod
-    def model(minute: int, ar_or_dp: Literal['ar', 'dp']) -> XGBClassifier:
-        """Load trained XGBClassifier model for prediction either form disk or time sensitive cache. See `load_model` for more details."""
-        return load_model(minute, ar_or_dp)
-
-    def predict_ar(self, features: pd.DataFrame) -> np.ndarray:
-        features = features.to_numpy()
-        prediction = np.empty((len(features), self.n_models))
-        for model in range(self.n_models):
-            prediction[:, model] = Predictor.model(model, 'ar').predict_proba(
-                features, validate_features=False
-            )[:, 1]
-        return prediction
-
-    def predict_dp(self, features: pd.DataFrame) -> np.ndarray:
-        features = features.to_numpy()
-        prediction = np.empty((len(features), self.n_models))
-        for model in range(self.n_models):
-            prediction[:, model] = Predictor.model(model, 'dp').predict_proba(
-                features, validate_features=False
-            )[:, 1]
-        return prediction
-
-    def predict_con(
-        self,
-        ar_prediction: np.ndarray,
-        dp_prediction: np.ndarray,
-    ) -> np.ndarray:
-        """Calculate connection score based on arrival predictions,
-        departure predictions and transfer times.
-
-        Parameters
-        ----------
-        ar_p : np.ndarray
-            Arrival predictions
-        dp_p : np.ndarray
-            Departure predictions
-
-        Returns
-        -------
-        np.ndarray
-            Connections scores (0 <= con_score <= 1)
-        """
-        con_score = np.ones(len(ar_prediction))
-
-        con_score = ar_prediction[:, 0] * dp_prediction[:, 0]
-
-        con_score = con_score + np.sum(
-            np.maximum(ar_prediction[:, 1:] - ar_prediction[:, :-1], 0)
-            * dp_prediction[:, 1:],
-            axis=1,
-        )
-        # Somtimes, due to inaccuracies in the prediction, the connection score
-        # can be greater than 1. This is not possible, so we set it to 1.
-        return np.minimum(con_score, np.ones(len(con_score)))
-
-    def get_pred_data(
-        self,
-        segments: list[dict],
-        streckennetz: StreckennetzSteffi,
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """Collect data needed for prediction.
-
-        Parameters
-        ----------
-        segments : list[dict]
-            The segments of a train journey
-        streckennetz : StreckennetzSteffi
-            An instance of the StreckennetzSteffi class
-
-        Returns
-        -------
-        tuple[pd.DataFrame, pd.DataFrame]
-            ar_data, dp_data
-        """
-        dtypes = {
-            'station': 'int',
-            'lat': 'float',
-            'lon': 'float',
-            'o': 'int',
-            'c': 'int',
-            'n': 'int',
-            'distance_to_start': 'float',
-            'distance_to_end': 'float',
-            'pp': 'int',
-            'stop_id': 'int',
-            'minute': 'int',
-            'day': 'int',
-            'stay_time': 'float',
-        }
-        ar_data = pd.DataFrame(
-            columns=self.FEATURES,
-            index=range(len(segments)),
-        )
-        dp_data = ar_data.copy()
-        for i, segment in enumerate(segments):
-            # Encode categoricals
-            for cat in self.CATEGORICALS:
-                try:
-                    if cat == 'pp':
-                        ar_data.at[i, cat] = self.categorical_encoder(cat)[
-                            segment['ar_' + 'cp']
-                        ]
-                    else:
-                        ar_data.at[i, cat] = self.categorical_encoder(cat)[
-                            segment['ar_' + cat]
-                        ]
-                except KeyError:
-                    ar_data.at[i, cat] = -1
-                    print(
-                        'unknown {cat}: {value}'.format(
-                            cat=cat, value=segment['ar_' + cat]
-                        )
-                    )
-                try:
-                    if cat == 'pp':
-                        dp_data.at[i, cat] = self.categorical_encoder(cat)[
-                            segment['dp_' + 'cp']
-                        ]
-                    else:
-                        dp_data.at[i, cat] = self.categorical_encoder(cat)[
-                            segment['dp_' + cat]
-                        ]
-                except KeyError:
-                    dp_data.at[i, cat] = -1
-                    print(
-                        'unknown {cat}: {value}'.format(
-                            cat=cat, value=segment['dp_' + cat]
-                        )
-                    )
-
-            ar_data.at[i, 'lat'] = segment['ar_lat']
-            ar_data.at[i, 'lon'] = segment['ar_lon']
-            dp_data.at[i, 'lat'] = segment['dp_lat']
-            dp_data.at[i, 'lon'] = segment['dp_lon']
-
-            ar_data.at[i, 'stop_id'] = segment['ar_stop_id']
-            dp_data.at[i, 'stop_id'] = segment['dp_stop_id']
-
-            ar_data.at[i, 'distance_to_start'] = streckennetz.route_length(
-                segment['full_trip'][: ar_data.at[i, 'stop_id'] + 1],
-                date=segment['dp_pt'],
-            )
-            ar_data.at[i, 'distance_to_end'] = streckennetz.route_length(
-                segment['full_trip'][ar_data.at[i, 'stop_id'] :], date=segment['dp_pt']
-            )
-            dp_data.at[i, 'distance_to_start'] = streckennetz.route_length(
-                segment['full_trip'][: dp_data.at[i, 'stop_id'] + 1],
-                date=segment['dp_pt'],
-            )
-            dp_data.at[i, 'distance_to_end'] = streckennetz.route_length(
-                segment['full_trip'][dp_data.at[i, 'stop_id'] :], date=segment['dp_pt']
-            )
-
-            ar_data.at[i, 'minute'] = (
-                segment['ar_ct'].time().minute + segment['ar_ct'].time().hour * 60
-            )
-            ar_data.at[i, 'day'] = segment['ar_ct'].weekday()
-            dp_data.at[i, 'minute'] = (
-                segment['dp_ct'].time().minute + segment['dp_ct'].time().hour * 60
-            )
-            dp_data.at[i, 'day'] = segment['dp_ct'].weekday()
-
-            ar_data.at[i, 'stay_time'] = segment['stay_times'][ar_data.at[i, 'stop_id']]
-            dp_data.at[i, 'stay_time'] = segment['stay_times'][dp_data.at[i, 'stop_id']]
-
-        return ar_data.astype(self.FEATURE_DTYPES), dp_data.astype(self.FEATURE_DTYPES)
 
 
 if __name__ == "__main__":

@@ -1,12 +1,7 @@
-import os, sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from helpers import RtdRay
-import datetime
 import matplotlib.pyplot as plt
 from config import CACHE_PATH
 import pandas as pd
-import numpy as np
-import seaborn as sn
 import matplotlib.pyplot as plt
 
 # SELECT summary, count(summary) as count, avg(category) as category FROM simpler_obstacles WHERE category = 0 GROUP BY summary ORDER BY summary DESC;

@@ -30,7 +30,7 @@ if os.path.isdir("/usr/src/app/cache"):
 
 from helpers import RtdRay, groupby_index_to_flat, ttl_lru_cache
 from helpers.StationPhillip import StationPhillip
-from database import cached_table_fetch
+from database.cached_table_fetch import cached_table_fetch
 from config import CACHE_PATH, n_dask_workers
 
 

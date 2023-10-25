@@ -7,7 +7,7 @@ import pandas as pd
 from dask.distributed import Client
 
 from config import ENCODER_PATH, RTD_CACHE_PATH, RTD_TABLENAME
-from database import DB_CONNECT_STRING, get_engine
+from database.engine import DB_CONNECT_STRING, get_engine
 from helpers.StationPhillip import StationPhillip
 
 """
