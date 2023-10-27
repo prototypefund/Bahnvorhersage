@@ -18,26 +18,29 @@ spec:
         app: next-webserver
     spec:
       containers:
-      - image: trainconnectionprediction/next-webserver:latest
+      - image: trainconnectionprediction/bahnvorhersage:stagging
+        command: ["gunicorn"]
+        args: ["-b 0.0.0.0:5000", "webserver:create_app()", "-t 800"]
         imagePullPolicy: Always
         name: tcp
         resources: {}
         volumeMounts:
         - name: tz-berlin # set timezone to CEST
           mountPath: /etc/localtime
-        - mountPath: /mnt/config
-          name: config-pvc-storage
-        - mountPath: /usr/src/app/cache
-          name: cache-pvc-storage
+        - name: config
+          mountPath: /usr/src/app/config.py
+          subPath: config.py
+        - name: cache-pvc-storage
+          mountPath: /usr/src/app/cache
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       schedulerName: default-scheduler
       securityContext: {}
       terminationGracePeriodSeconds: 30
       volumes:
-      - name: config-pvc-storage
-        persistentVolumeClaim:
-          claimName: config-pvc
+      - name: "config"
+        configMap:
+          name: "config"
       - name: cache-pvc-storage
         persistentVolumeClaim:
           claimName: cache-pvc

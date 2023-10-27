@@ -4,7 +4,7 @@
 
 # DOCKER_BUILDKIT=1 docker build . -t bahnvorhersage
 # docker run -v $(pwd)/config.py:/usr/src/app/config.py -v $(pwd)/cache:/usr/src/app/cache bahnvorhersage python3 -m crawler.plan
-FROM python:3.12 AS runtime-image
+FROM python:3.11-slim
 
 ## Virtualenv
 ENV VIRTUAL_ENV=/opt/venv
@@ -47,4 +47,5 @@ ENV PYTHONUNBUFFERED 1
 ENV PATH="/opt/venv/bin:$PATH"
 ENV MPLCONFIGDIR="/tmp/matplotlib"
 
+EXPOSE 5000
 
