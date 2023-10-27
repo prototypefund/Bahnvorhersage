@@ -1,4 +1,4 @@
-from database import DB_CONNECT_STRING
+from database.engine import DB_CONNECT_STRING
 
 
 class Config(object):
