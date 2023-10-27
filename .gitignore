@@ -191,3 +191,4 @@ cache/*
 server_config.py
 webserver/tcp.db
 k8s/redis_secrets.yaml
+k8s/config.yaml
