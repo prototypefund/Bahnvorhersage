@@ -1,7 +1,7 @@
 import datetime
 import pandas as pd
 from helpers import RtdRay, ttl_lru_cache
-from database import cached_table_fetch
+from database.cached_table_fetch import cached_table_fetch
 from config import n_dask_workers
 
 

@@ -7,7 +7,7 @@ import tueplots.bundles
 from dask.distributed import Client
 
 from config import n_dask_workers
-from database import cached_table_fetch
+from database.cached_table_fetch import cached_table_fetch
 from helpers import RtdRay, groupby_index_to_flat
 
 

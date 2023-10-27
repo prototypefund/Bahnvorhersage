@@ -3,7 +3,7 @@ from typing import Any, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 
-from database import cached_table_fetch
+from database.cached_table_fetch import cached_table_fetch
 
 
 class NoLocationError(Exception):

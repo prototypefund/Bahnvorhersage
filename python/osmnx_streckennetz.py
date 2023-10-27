@@ -20,8 +20,8 @@ import xxhash
 import sqlalchemy
 import geoalchemy2
 
-
-from database import get_engine, cached_table_fetch_postgis
+from database.cached_table_fetch import cached_table_fetch_postgis
+from database.engine import get_engine
 from helpers.StationPhillip import StationPhillip
 
 RAIL_FILTER = (
