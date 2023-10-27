@@ -1,6 +1,6 @@
 from database.base import Base
 from datetime import datetime, timezone
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, Session
 from sqlalchemy.types import BigInteger, JSON
 from typing import Dict
 import json
@@ -28,3 +28,15 @@ class UniqueChange(Base):
             'time_crawled': self.time_crawled,
             'change': self.change,
         }
+
+    @staticmethod
+    def count_entries(session: Session) -> int:
+        """
+        Get the number of rows in db.
+
+        Returns
+        -------
+        int
+            Number of Rows.
+        """
+        return session.query(UniqueChange).count()
