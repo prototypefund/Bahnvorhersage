@@ -18,7 +18,7 @@ spec:
         app: monitor-bot
     spec:
       containers:
-      - image: trainconnectionprediction/bahnvorhersage:stagging
+      - image: trainconnectionprediction/bahnvorhersage:latest
         command: ["python3"]
         args: ["-m", "rtd_crawler.monitor_bot"]
         imagePullPolicy: Always

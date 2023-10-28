@@ -24,7 +24,9 @@ spec:
     spec:
       containers:
         - name: webserver
-          image: trainconnectionprediction/webserver:latest
+          image: trainconnectionprediction/bahnvorhersage:latest
+          command: ["gunicorn"]
+          args: ["-b 0.0.0.0:5000", "webserver:create_app()", "-t 800"]
           imagePullPolicy: Always
           resources: {}
           terminationMessagePath: /dev/termination-log
@@ -32,8 +34,9 @@ spec:
           volumeMounts:
             - name: tz-berlin # set timezone to CEST
               mountPath: /etc/localtime
-            - name: config-pvc-storage
-              mountPath: /mnt/config
+            - name: config
+              mountPath: /usr/src/app/config.py
+              subPath: config.py
             - name: cache-pvc-storage
               mountPath: /usr/src/app/cache
       dnsPolicy: ClusterFirst
@@ -42,9 +45,9 @@ spec:
       securityContext: {}
       terminationGracePeriodSeconds: 30
       volumes:
-        - name: config-pvc-storage
-          persistentVolumeClaim:
-            claimName: config-pvc
+        - name: "config"
+          configMap:
+            name: "config"
         - name: cache-pvc-storage
           persistentVolumeClaim:
             claimName: cache-pvc

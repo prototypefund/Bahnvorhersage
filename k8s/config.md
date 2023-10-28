@@ -9,3 +9,13 @@ data:
   config.py: |
     Hier Inhalt von config.py (schön sauber eingerückt)
 ```
+
+# Config erstellen
+
+Laut einer anderen Datei wurde die Configmap anfangs wie folgt generiert:
+
+```sh
+kubectl create configmap tcp-config --from-file /mnt/config/config.py
+```
+
+Ob man die so auch updaten kann, habe ich noch überhaupt gar nicht getestet.

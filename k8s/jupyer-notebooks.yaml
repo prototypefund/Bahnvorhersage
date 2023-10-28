@@ -24,8 +24,9 @@ spec:
         volumeMounts:
         - name: tz-berlin # set timezone to CEST
           mountPath: /etc/localtime
-        - mountPath: /mnt/config
-          name: config-pvc-storage
+        - name: config
+          mountPath: /usr/src/app/config.py
+          subPath: config.py
         - mountPath: /mnt/cache
           name: cache-pvc-storage
       dnsPolicy: ClusterFirst
@@ -34,9 +35,9 @@ spec:
       securityContext: {}
       terminationGracePeriodSeconds: 30
       volumes:
-      - name: config-pvc-storage
-        persistentVolumeClaim:
-          claimName: config-pvc
+      - name: "config"
+        configMap:
+          name: "config"
       - name: cache-pvc-storage
         persistentVolumeClaim:
           claimName: cache-pvc
