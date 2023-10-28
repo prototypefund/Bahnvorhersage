@@ -5,7 +5,7 @@ from typing import Optional
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from helpers import colormaps
+import helpers.colormaps as colormaps
 
 
 def plot_ar(
@@ -114,7 +114,7 @@ def plot_simple_ar(stats: pd.DataFrame, save_as: Optional[str] = None):
         kind='line',
         ax=ax,
         linewidth=3,
-        label='Modellgenauigkeit',
+        label='Model accuracy',
     )
     simple_stats['ar_baseline'].plot(
         kind='line',
@@ -123,9 +123,9 @@ def plot_simple_ar(stats: pd.DataFrame, save_as: Optional[str] = None):
         label='Baseline',
     )
 
-    ax.set_title(f'Ankunft', fontsize=50)
+    ax.set_title(f'Arrival', fontsize=50)
     ax.tick_params(axis='both', labelsize=20)
-    ax.set_ylabel('Genauigkeit', fontsize=30)
+    ax.set_ylabel('Accuracy', fontsize=30)
     ax.set_xlabel('Minute', fontsize=30)
 
     ax.grid()
@@ -148,7 +148,7 @@ def plot_simple_dp(stats: pd.DataFrame, save_as: Optional[str] = None):
         kind='line',
         ax=ax,
         linewidth=3,
-        label='Modellgenauigkeit',
+        label='Model accuracy',
     )
     simple_stats['dp_baseline'].plot(
         kind='line',
@@ -157,9 +157,9 @@ def plot_simple_dp(stats: pd.DataFrame, save_as: Optional[str] = None):
         label='Baseline',
     )
 
-    ax.set_title(f'Abfahrt', fontsize=50)
+    ax.set_title(f'Departure', fontsize=50)
     ax.tick_params(axis='both', labelsize=20)
-    ax.set_ylabel('Genauigkeit', fontsize=30)
+    ax.set_ylabel('Accuracy', fontsize=30)
     ax.set_xlabel('Minute', fontsize=30)
 
     ax.grid()
@@ -205,10 +205,10 @@ if __name__ == '__main__':
     plot_simple_ar(stats, save_as='pred_accu_ar_overview.png')
     plot_simple_dp(stats, save_as='pred_accu_dp_overview.png')
 
-    plot_ar(stats, 0, 6, save_as='stats_ar_0_6.png')
-    plot_ar(stats, 6, 12, save_as='stats_ar_6_12.png')
-    plot_ar(stats, 12, 15, save_as='stats_ar_12_15.png')
+    # plot_ar(stats, 0, 6, save_as='stats_ar_0_6.png')
+    # plot_ar(stats, 6, 12, save_as='stats_ar_6_12.png')
+    # plot_ar(stats, 12, 15, save_as='stats_ar_12_15.png')
 
-    plot_dp(stats, 0, 6, save_as='stats_dp_0_6.png')
-    plot_dp(stats, 6, 12, save_as='stats_dp_6_12.png')
-    plot_dp(stats, 12, 15, save_as='stats_dp_12_15.png')
+    # plot_dp(stats, 0, 6, save_as='stats_dp_0_6.png')
+    # plot_dp(stats, 6, 12, save_as='stats_dp_6_12.png')
+    # plot_dp(stats, 12, 15, save_as='stats_dp_12_15.png')

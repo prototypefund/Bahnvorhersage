@@ -222,6 +222,31 @@ subsets:
 apiVersion: v1
 kind: Service
 metadata:
+  name: sfz-dzconnect-beta
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  clusterIP: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: sfz-dzconnect-beta
+subsets:
+- addresses:
+  - ip: 192.168.178.24
+  ports:
+  - name: http
+    port: 8009
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: sfz-wohnung-in-esslingen
 spec:
   ports:
@@ -342,4 +367,29 @@ subsets:
   ports:
   - name: http
     port: 8110
-    protocol: TCP 
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sfz-plasticycle
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  clusterIP: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: sfz-plasticycle
+subsets:
+- addresses:
+  - ip: 192.168.178.24
+  ports:
+  - name: http
+    port: 8040
+    protocol: TCP

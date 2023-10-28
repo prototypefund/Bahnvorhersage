@@ -8,7 +8,7 @@ import pandas as pd
 
 from config import n_dask_workers
 from data_analysis.packed_bubbles import BubbleChart
-from database import cached_table_fetch
+from database.cached_table_fetch import cached_table_fetch
 from helpers import RtdRay, groupby_index_to_flat
 
 

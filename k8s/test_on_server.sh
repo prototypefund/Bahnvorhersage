@@ -1,7 +1,7 @@
 # Run this script to test your changes on next.trainconnectionprediction.de
 
-DOCKER_BUILDKIT=1 docker build -f webserver/Dockerfile.webserver . -t trainconnectionprediction/next-webserver:latest
+DOCKER_BUILDKIT=1 docker build . -t trainconnectionprediction/bahnvorhersage:stagging
 
-docker push trainconnectionprediction/next-webserver:latest
+docker push trainconnectionprediction/bahnvorhersage:stagging
 
 kubectl rollout restart deployment/next-webserver

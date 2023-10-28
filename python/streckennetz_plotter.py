@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import shapely
 
 from data_analysis.per_station import create_base_plot
-from database import cached_table_fetch
+from database.cached_table_fetch import cached_table_fetch
 from helpers.BetriebsstellenBill import BetriebsstellenBill
 from helpers.ObstacleOlly import ObstacleOlly
 from helpers.StationPhillip import StationPhillip

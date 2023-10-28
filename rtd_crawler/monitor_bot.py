@@ -1,13 +1,11 @@
-import os, sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if os.path.isfile("/mnt/config/config.py"):
-    sys.path.append("/mnt/config/")
 import discord
 from discord.ext import tasks, commands
 from config import discord_bot_token
 import datetime
 import requests
-from database import Change, PlanById, sessionfactory
+from database.unique_change import UniqueChange
+from database.plan_by_id_v2 import PlanByIdV2
+from database.engine import sessionfactory
 from typing import Callable, Coroutine, Union
 import traceback
 import functools
@@ -23,19 +21,6 @@ def to_thread(func: Callable) -> Coroutine:
     return wrapper
 
 
-engine, Session = sessionfactory()
-client = discord.Client()
-old_change_count = 0
-old_plan_count = 0
-
-
-@client.event
-async def on_ready():
-    print(f'{client.user} has connected to Discord!')
-    channel = client.get_channel(720671295129518232)
-    await channel.send('Data gatherer monitor now active')
-
-
 @to_thread
 def monitor_plan() -> Union[str, None]:
     global old_plan_count
@@ -49,7 +34,7 @@ def monitor_plan() -> Union[str, None]:
     message = None
     try:
         with Session() as session:
-            new_plan_count = PlanById.count_entries(session)
+            new_plan_count = PlanByIdV2.count_entries(session)
         plan_count_delta = new_plan_count - old_plan_count
         old_plan_count = new_plan_count
         if plan_count_delta < 500:
@@ -78,7 +63,7 @@ def monitor_change() -> Union[str, None]:
     message = None
     try:
         with Session() as session:
-            new_change_count = Change.count_entries(session)
+            new_change_count = UniqueChange.count_entries(session)
         count_delta = new_change_count - old_change_count
         old_change_count = new_change_count
         if count_delta < 1000:
@@ -136,13 +121,19 @@ async def monitor_website():
         print(message)
 
 
-class Monitor(commands.Cog):
-    def __init__(self):
-        self.monitor.start()
+class Monitor(discord.Client):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
         self.old_change_count = 0
 
-    def monitor_unload(self):
-        self.monitor.cancel()
+    async def setup_hook(self) -> None:
+        self.monitor.start()
+
+    async def on_ready(self):
+        print(f'{client.user} has connected to Discord!')
+        channel = client.get_channel(720671295129518232)
+        await channel.send('Data gatherer v2 monitor now active')
 
     @tasks.loop(hours=1)
     async def monitor(self):
@@ -163,5 +154,15 @@ class Monitor(commands.Cog):
 if __name__ == "__main__":
     import helpers.bahn_vorhersage
 
-    m = Monitor()
+    engine, Session = sessionfactory()
+
+    intents = discord.Intents.default()
+    intents.message_content = True
+
+    client = Monitor(intents=intents)
+    # client = discord.Client(intents=intents)
+
+    old_change_count = 0
+    old_plan_count = 0
+
     client.run(discord_bot_token)

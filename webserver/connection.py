@@ -7,11 +7,10 @@ import numpy as np
 import requests
 from pytz import timezone
 
-from database.ris_transfer_time import Connection
+from database.ris_transfer_time import TransferInfo
 from helpers import ttl_lru_cache
 from webserver import predictor, streckennetz
-from webserver.transfer_times import (get_needed_transfer_times,
-                                      shift_predictions_by_transfer_time)
+from webserver.transfer_times import (get_needed_transfer_times)
 
 
 @dataclass
@@ -21,7 +20,7 @@ class Prediction:
     ar_predictions: list[float]
     dp_predictions: list[float]
     transfer_times: list[int]
-    needed_transfer_times: list[Connection]
+    needed_transfer_times: list[TransferInfo]
 
 
 def rate_journey(iris_journey: list[dict], fptf_journey: list[dict]) -> Prediction:
@@ -47,14 +46,12 @@ def rate_journey(iris_journey: list[dict], fptf_journey: list[dict]) -> Predicti
         [segment['transfer_time'] for segment in iris_journey[:-1]]
     )
 
-    ar_con_prediction, dp_con_prediction = shift_predictions_by_transfer_time(
+    con_scores = predictor.predict_con(
         ar_prediction[:-1].copy(),
         dp_prediction[1:].copy(),
         transfer_time,
         needed_transfer_times,
     )
-
-    con_scores = predictor.predict_con(ar_con_prediction, dp_con_prediction)
 
     return Prediction(
         connection_score=int(round(con_scores.prod() * 100)),
@@ -121,8 +118,8 @@ def get_journeys(
         list : Parsed connections
     """
     request_data = {
-        'from': streckennetz.get_eva(name=start, date=date),
-        'to': streckennetz.get_eva(name=destination, date=date),
+        'from': streckennetz.get_eva(name=start),
+        'to': streckennetz.get_eva(name=destination),
         'results': 6,
         'transfers': max_changes,
         'transferTime': transfer_time,

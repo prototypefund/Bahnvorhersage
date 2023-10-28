@@ -33,10 +33,10 @@ spec:
   tls:
   - hosts:
     - bahnvorhersage.de
+    - www.bahnvorhersage.de
     - next.bahnvorhersage.de
     - db-rest.bahnvorhersage.de
     - trainconnectionprediction.de
-    - next.trainconnectionprediction.de
     - nextcloud.sfz-eningen.de
     - nextcloud.marcpanse.de
     - paralox-nextcloud.de
@@ -50,12 +50,14 @@ spec:
     - podcast-tech24.de
     - thesilentwave.de
     - dzconnect.de
+    - beta.dzconnect.de
     - quicksharebox.de
     - wohnung-in-esslingen.de
     - endstationzukunft.de
     - validation.marcpanse.de
     - studywatch.de
     - holiday.unexcellent.com
+    - plasticycle.de
     secretName: default-tls-secret
   rules:
   - host: "bahnvorhersage.de"
@@ -76,6 +78,8 @@ spec:
               port:
                 number: 80
   - host: "trainconnectionprediction.de"
+    http: *prod_webserver
+  - host: "www.bahnvorhersage.de"
     http: *prod_webserver
   - host: "next.bahnvorhersage.de"
     http: &test_webserver
@@ -121,9 +125,6 @@ spec:
               name: frontend-service
               port:
                 number: 80
-  - host: "next.trainconnectionprediction.de"
-    http: *test_webserver
-
   - host: "overleaf.marcpanse.de"
     http: &overleaf
       paths:
@@ -198,6 +199,16 @@ spec:
               name: sfz-dzconnect
               port:
                 number: 80
+  - host: "beta.dzconnect.de"
+    http: &dzconnect-beta
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-dzconnect-beta
+              port:
+                number: 80
   - host: "wohnung-in-esslingen.de"
     http: &wohnung-in-esslingen
       paths:
@@ -248,3 +259,13 @@ spec:
               name: holiday-challenge-service
               port:
                 number: 3000
+  - host: "plasticycle.de"
+    http: &plasticycle
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-plasticycle
+              port:
+                number: 80

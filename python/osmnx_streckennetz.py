@@ -16,12 +16,12 @@ from shapely.geometry import LineString, MultiPoint, Point, Polygon, MultiLineSt
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import igraph as ig
-from cityhash import CityHash32
+import xxhash
 import sqlalchemy
 import geoalchemy2
 
-
-from database import get_engine, cached_table_fetch_postgis
+from database.cached_table_fetch import cached_table_fetch_postgis
+from database.engine import get_engine
 from helpers.StationPhillip import StationPhillip
 
 RAIL_FILTER = (
@@ -430,7 +430,7 @@ def split_geom(
 def create_new_edges(
     name: str, edge: pd.Series, nodes: gpd.GeoDataFrame, intersection: Point
 ) -> gpd.GeoDataFrame:
-    name_hash = CityHash32(name)
+    name_hash = xxhash.xxh32_intdigest(name)
     v = nodes.loc[edge['v']]
     u = nodes.loc[edge['u']]
 
@@ -672,7 +672,7 @@ def download_and_process_streckennetz():
                     replace_edges.update(changes['drop'])
                     add_edges.append(changes['add'])
 
-                    add_nodes[CityHash32(name)] = {
+                    add_nodes[xxhash.xxh32_intdigest(name)] = {
                         'geometry': stations_gdf.loc[name, 'geometry'],
                         'name': name,
                         'railway': 'stop',

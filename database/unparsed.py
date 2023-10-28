@@ -1,9 +1,30 @@
-import os
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from typing import List, Tuple
+
 from redis import Redis
 
+def add_change(redis_client: Redis, hash_ids: List[int]) -> None:
+    if hash_ids:
+        pipe = redis_client.pipeline()
+        for hash_id in hash_ids:
+            pipe.xadd(
+                'unparsed_change',
+                {'hash_id': hash_id.to_bytes(8, 'big', signed=True)},
+                maxlen=1_000_000,
+                approximate=True,
+            )
+        pipe.execute()
+
+def add_plan(redis_client: Redis, hash_ids: List[int]) -> None:
+    if hash_ids:
+        pipe = redis_client.pipeline()
+        for hash_id in hash_ids:
+            pipe.xadd(
+                'unparsed_plan',
+                {'hash_id': hash_id.to_bytes(8, 'big', signed=True)},
+                maxlen=1_000_000,
+                approximate=True,
+            )
+        pipe.execute()
 
 def add(redis_client: Redis, hash_ids: List[int]) -> None:
     if hash_ids:
@@ -11,15 +32,13 @@ def add(redis_client: Redis, hash_ids: List[int]) -> None:
             redis_client.xadd(
                 'unparsed',
                 {'hash_id': hash_id.to_bytes(8, 'big', signed=True)},
-                maxlen=500_00,
+                maxlen=1_000_000,
                 approximate=True,
             )
 
 
 def get(redis_client: Redis, from_id: bytes) -> Tuple[bytes, List[int]]:
-    resp = redis_client.xread(
-        {'unparsed': from_id}
-    )
+    resp = redis_client.xread({'unparsed': from_id})
     if resp:
         hash_ids = set()
         for last_id, data in resp[0][1]:
@@ -30,8 +49,8 @@ def get(redis_client: Redis, from_id: bytes) -> Tuple[bytes, List[int]]:
 
 
 if __name__ == '__main__':
-    from rtd_crawler.hash64 import hash64
     from config import redis_url
+    from rtd_crawler.hash64 import hash64
 
     redis_connection = Redis.from_url(redis_url)
 

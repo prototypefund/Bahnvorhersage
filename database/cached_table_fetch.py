@@ -1,9 +1,11 @@
-from typing import Optional, Callable
-import pandas as pd
+from typing import Callable, Optional
+
 import geopandas as gpd
-from database import DB_CONNECT_STRING, get_engine
+import pandas as pd
+from rtd_crawler.hash64 import xxhash64
+
 from config import CACHE_PATH
-from cityhash import CityHash64
+from database.engine import DB_CONNECT_STRING, get_engine
 
 
 def cached_table_fetch_postgis(
@@ -37,7 +39,7 @@ def cached_sql_fetch(
     prefer_cache: Optional[bool] = False,
     **kwargs,
 ) -> gpd.GeoDataFrame:
-    cache_name = hex(CityHash64(sql))
+    cache_name = hex(xxhash64(sql))
     cache_path = f'{CACHE_PATH}/{cache_name}.parquet'
 
     if prefer_cache:
@@ -138,8 +140,9 @@ def pd_to_psql(df, uri, table_name, schema_name=None, if_exists='fail', sep=',')
     if schema_name:
         schema_name = schema_name.lower()
 
-    import sqlalchemy
     import io
+
+    import sqlalchemy
 
     if schema_name is not None:
         sql_engine = sqlalchemy.create_engine(

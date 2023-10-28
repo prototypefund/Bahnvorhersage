@@ -8,7 +8,8 @@ import pandas as pd
 from pytz import timezone
 from tqdm import tqdm
 
-from database import DB_CONNECT_STRING, cached_table_fetch
+from database.cached_table_fetch import cached_table_fetch
+from database.engine import DB_CONNECT_STRING
 from helpers.BetriebsstellenBill import BetriebsstellenBill
 from helpers.StreckennetzSteffi import StreckennetzSteffi
 

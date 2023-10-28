@@ -51,6 +51,7 @@ if __name__ == '__main__':
         if hour == hour_in_five_hours():
             time.sleep(20)
         else:
+            # TODO
             evas = stations.get_eva(date=datetime.datetime.now()).to_list()
             names = stations.get_name(eva=evas, date=datetime.datetime.now()).to_list()
             date = date_in_five_hours()
