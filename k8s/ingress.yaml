@@ -37,7 +37,6 @@ spec:
     - next.bahnvorhersage.de
     - db-rest.bahnvorhersage.de
     - trainconnectionprediction.de
-    - next.trainconnectionprediction.de
     - nextcloud.sfz-eningen.de
     - nextcloud.marcpanse.de
     - paralox-nextcloud.de
@@ -126,9 +125,6 @@ spec:
               name: frontend-service
               port:
                 number: 80
-  - host: "next.trainconnectionprediction.de"
-    http: *test_webserver
-
   - host: "overleaf.marcpanse.de"
     http: &overleaf
       paths:
