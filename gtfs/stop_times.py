@@ -1,7 +1,8 @@
+from datetime import datetime
+
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import BigInteger, String
-from datetime import datetime
 
 from database.base import Base
 

@@ -12,9 +12,11 @@ from tqdm import tqdm
 
 from api.iris import TimetableStop
 from config import redis_url
-from database import (PlanById, unparsed)
-from database.upsert import upsert_with_retry, upsert_copy_from
-from database.engine import sessionfactory, get_engine
+from database import unparsed
+from database.base import create_all
+from database.engine import get_engine, sessionfactory
+from database.plan_by_id import PlanById
+from database.upsert import upsert_copy_from, upsert_with_retry
 from gtfs.agency import Agency
 from gtfs.calendar_dates import CalendarDates, ExceptionType
 from gtfs.routes import Routes, RouteType
@@ -24,7 +26,6 @@ from gtfs.trips import Trips, TripTemp
 from helpers.StationPhillip import StationPhillip
 from helpers.StreckennetzSteffi import StreckennetzSteffi
 from rtd_crawler.hash64 import xxhash64
-from database.base import create_all
 
 """ Clear dangeling connections to db
 SELECT pg_terminate_backend(pid)
@@ -86,10 +87,13 @@ def stop_to_gtfs(
 ) -> Tuple[Agency, CalendarDates, Routes, StopTimes, Trips]:
     stop = TimetableStop(stop_json)
     line = stop.arrival.line if stop.arrival is not None else stop.depature.line
+    if line is None:
+        line = stop.trip_label.number
     route_short_name = f"{stop.trip_label.category} {line}"
+    route_long_name = f"{stop.trip_label.category} {stop.trip_label.number}"
 
     trip_id = xxhash64(str(stop.trip_id) + '_' + stop.date_id.isoformat())
-    route_id = xxhash64(route_short_name)
+    route_id = xxhash64(route_long_name)
     service_id = xxhash64(stop.date_id.date().isoformat())
 
     agency = Agency(
@@ -109,6 +113,7 @@ def stop_to_gtfs(
         route_id=route_id,
         agency_id=stop.trip_label.owner,
         route_short_name=route_short_name,
+        route_long_name=route_long_name,
         route_type=RouteType.BUS if stop.is_bus() else RouteType.RAIL,
     )
 
@@ -123,10 +128,10 @@ def stop_to_gtfs(
         trip_id=trip_id,
         stop_id=stop_id,
         stop_sequence=stop.stop_id,
-        arrival_time=stop.arrival.planned_time # get_gtfs_stop_time(stop.date_id, stop.arrival.planned_time)
+        arrival_time=stop.arrival.planned_time  # get_gtfs_stop_time(stop.date_id, stop.arrival.planned_time)
         if stop.arrival is not None
         else None,
-        departure_time=stop.depature.planned_time # get_gtfs_stop_time(stop.date_id, stop.depature.planned_time)
+        departure_time=stop.depature.planned_time  # get_gtfs_stop_time(stop.date_id, stop.depature.planned_time)
         if stop.depature is not None
         else None,
         shape_dist_traveled=streckennetz.route_length(
@@ -419,4 +424,5 @@ def main():
 
 if __name__ == "__main__":
     import helpers.bahn_vorhersage
+
     main()

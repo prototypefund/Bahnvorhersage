@@ -26,6 +26,7 @@ class Routes(Base):
     route_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     agency_id: Mapped[str]
     route_short_name: Mapped[str]
+    route_long_name: Mapped[str]
     route_type: Mapped[RouteType]
 
     def __repr__(self):
@@ -36,6 +37,7 @@ class Routes(Base):
             'route_id': self.route_id,
             'agency_id': self.agency_id,
             'route_short_name': self.route_short_name,
+            'route_long_name': self.route_long_name,
             'route_type': self.route_type,
         }
 
@@ -44,5 +46,10 @@ class Routes(Base):
             self.route_id,
             self.agency_id,
             self.route_short_name,
+            self.route_long_name,
             self.route_type,
         )
+
+    def is_regional(self):
+        train_cat = self.route_short_name.split(' ')[0]
+        return train_cat not in {'IC', 'EC', 'ICE', 'EN', 'RJ', 'RJX', 'TGV', 'FLX'}
