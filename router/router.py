@@ -12,11 +12,19 @@ from typing import Dict, Any, List, Set, Tuple
 import sqlalchemy.orm
 from pyvis.network import Network
 from rtd_crawler.hash64 import xxhash64
-from helpers.pairwise import pairwise
 from helpers.StationPhillip import StationPhillip
 from sortedcontainers import SortedKeyList
+import pickle
+from itertools import pairwise
 
 # Note: Every timestamp must be in UTC.
+
+# - tracken, wie viel min von start entfernt
+# - verbindungen herausfiltern, wenn zu lang (heuristik mit beachten)
+# - verbindungen mit patero filtern, nach ankunftszeit
+# - datenbank effizienter nutzen, vielleicht mit dumps oder so
+# - transfers (fußwege) beachten
+# - 
 
 
 class AlreadyInGraphError(Exception):
@@ -38,6 +46,16 @@ class Segment:
     segment_type: SegmentType
     duration: timedelta
     trip_id: int | None
+    station: str = None
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
+    def __str__(self) -> str:
+        if self.segment_type == SegmentType.TRIP:
+            return f'🭅{self.duration.total_seconds() // 60:n}🭐'
+        else:
+            return f'🚶{self.duration.total_seconds() // 60:n} {self.station}🚶'
 
 
 @dataclass(order=True)
@@ -235,7 +253,9 @@ def display_routes(routes: nx.DiGraph, filename: str = 'nx.html'):
         network_node['y'] = -y * 1_000
         del network_node["data"]
     for network_edge in net.edges:
-        network_edge['title'] = f'{network_edge["data"].duration.total_seconds() // 60}, {network_edge["data"].trip_id}'
+        network_edge[
+            'title'
+        ] = f'{network_edge["data"].duration.total_seconds() // 60}, {network_edge["data"].trip_id}'
         network_edge['color'] = (
             'black' if network_edge["data"].segment_type == SegmentType.TRIP else 'blue'
         )
@@ -262,6 +282,9 @@ class Router:
         self._queue = queue.PriorityQueue()
         self._nodes_in_queue = set()
         self.queue_size = 0
+
+    def get_segment(self, u, v) -> Segment:
+        return self.routes.edges[u, v]['data']
 
     def get_routes(self):
         pass
@@ -489,10 +512,81 @@ class Router:
                     f'Graph size: Nodes: {len(self.routes.nodes)} Edges: {len(self.routes.edges)}'
                 )
 
-    def trim_routes(self):
+    def extract_real_path(self, path: List[int]) -> List[int]:
+        start_name = self.routes.nodes[path[0]]['data'].stop_name
+        destination_name = self.routes.nodes[path[-1]]['data'].stop_name
+        start_id = 0
+        destination_id = len(path) - 1
+        for node_id in path:
+            if self.routes.nodes[node_id]['data'].stop_name == start_name:
+                start_id = node_id
+            if self.routes.nodes[node_id]['data'].stop_name == destination_name:
+                destination_id = node_id
+                break
+        return path[path.index(start_id) : path.index(destination_id) + 1]
+
+    def get_legs(self, path: List[int]):
+        trip_ids = [self.get_segment(u, v).trip_id for u, v in pairwise(path)]
+        unique_trip_ids = set(trip_ids) - {None}
+        segment_bounds = []
+        for trip_id in unique_trip_ids:
+            lower_bound = trip_ids.index(trip_id)
+            upper_bound = len(trip_ids) - 1 - trip_ids[::-1].index(trip_id)
+            segment_bounds.append(lower_bound)
+            segment_bounds.append(upper_bound + 1)
+        segment_bounds = list(set(segment_bounds))
+        segment_bounds.sort()
+        segment_bounds.pop(0)
+        segment_bounds = [path[i] for i in segment_bounds]
+
+        legs = []
+        current_leg = Segment(segment_type=None, duration=timedelta(), trip_id=None)
+        for u, v in pairwise(path):
+            segment = self.get_segment(u, v)
+            current_leg.duration += segment.duration
+            current_leg.segment_type = segment.segment_type
+            current_leg.trip_id = segment.trip_id
+            current_leg.station = self.routes.nodes[v]['data'].stop_name
+
+            if v in segment_bounds:
+                legs.append(current_leg)
+                current_leg = Segment(
+                    segment_type=None, duration=timedelta(), trip_id=None
+                )
+        return legs
+
+    def get_paths(self):
         graph_of_destination = graph_of_stop(self.routes, self.destination_id)
         last_node = graph_of_destination.nodes[len(graph_of_destination.nodes) - 1]
+
+        id_paths = list(nx.all_simple_paths(self.routes, 0, last_node['node_id'], cutoff=40))
+        paths = []
+        for path in id_paths:
+            path = self.extract_real_path(path)
+            departure = self.routes.nodes[path[0]]['data'].timestamp
+            arrival = self.routes.nodes[path[-1]]['data'].timestamp
+            duration = arrival - departure
+            legs = self.get_legs(path)
+            paths.append(
+                {
+                    'path': path,
+                    'legs': legs,
+                    'duration': duration,
+                    'departure': departure,
+                    'arrival': arrival,
+                }
+            )
+
+        return paths
+
+    def trim_routes(self):
+        graph_of_destination = graph_of_stop(self.routes, self.destination_id)
+        graph_of_start = graph_of_stop(self.routes, self.start_id)
+        last_node = graph_of_destination.nodes[len(graph_of_destination.nodes) - 1]
+
         ids_to_keep = set()
+        ids_to_keep |= set(graph_of_destination.nodes[n]['node_id'] for n in graph_of_destination.nodes)
+        ids_to_keep |= set(graph_of_start.nodes[n]['node_id'] for n in graph_of_start.nodes)
 
         for node_id in iter_routes_predecessors(
             self.routes, last_node['node_id'], stopping_stop_id=self.start_id
@@ -504,6 +598,17 @@ class Router:
                 self.routes.remove_node(node_id)
 
 
+def print_route(route):
+    print(
+        route['duration'].total_seconds() // 60,
+        ':\t',
+        route['departure'].strftime('%H:%M'),
+        route['arrival'].strftime('%H:%M'),
+        end=' ',
+    )
+    print(route['legs'])
+
+
 if __name__ == "__main__":
     stations = StationPhillip()
 
@@ -512,17 +617,20 @@ if __name__ == "__main__":
     with Session() as session:
         router = Router(
             start=stations.get_eva('Augsburg Hbf'),
-            destination=stations.get_eva('Ulm Hbf'),
+            destination=stations.get_eva('Biberach(Riß)'),
             timestamp=datetime(2022, 9, 1, 12, 0, 0),
             session=session,
         )
         router.do_routing()
-        display_routes(router.routes, 'tmp.html')
-        # import pickle
+        # display_routes(router.routes, 'tmp.html')
+        pickle.dump(router.routes, open('routes_biberach.pickle', 'wb'))
 
-        # pickle.dump(router.routes, open('routes_biberach.pickle', 'wb'))
-        # router.routes = pickle.load(open('routes_biberach.pickle', 'rb'))
+        router.routes = pickle.load(open('routes_biberach.pickle', 'rb'))
         router.trim_routes()
+        paths = router.get_paths()
+        paths.sort(key=lambda x: (x['arrival'], x['departure']))
+        for path in paths:
+            print_route(path)
         display_routes(router.routes, 'tmp_trimmed.html')
     print('Done')
 
