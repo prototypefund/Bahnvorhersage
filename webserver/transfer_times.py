@@ -7,7 +7,7 @@ from neo4j import GraphDatabase
 
 from config import NEO4J_AUTH, NEO4J_URI
 from database.ris_transfer_time import TransferInfo, Platform, get_transfer_time
-from helpers import pairwise
+from itertools import pairwise
 
 
 def remove_walking_segments(fptf_journey_legs: List[Dict]) -> List[Dict]:
