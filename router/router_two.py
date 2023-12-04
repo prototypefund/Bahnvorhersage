@@ -1,16 +1,18 @@
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import List, Dict, Tuple
-from gtfs.stop_times import StopTimes
-from gtfs.calendar_dates import CalendarDates
-from gtfs.trips import Trips
-from gtfs.routes import Routes
-from database.engine import sessionfactory
-from helpers.StationPhillip import StationPhillip
-import queue
-from sortedcontainers import SortedKeyList
-import sqlalchemy
+from datetime import date, datetime, timedelta, time
 from itertools import pairwise
+from typing import Dict, List, Tuple
+
+import sqlalchemy
+from sortedcontainers import SortedKeyList
+
+from database.engine import sessionfactory
+from gtfs.calendar_dates import CalendarDates
+from gtfs.routes import Routes
+from gtfs.stop_times import StopTimes
+from gtfs.trips import Trips
+from helpers.StationPhillip import StationPhillip
+from router.priority_queue import PriorityQueue, QueueItem
 
 TRAIN_SPEED_MS = 70  # ~ 250 km/h
 MAX_TIME_DRIVING_AWAY = timedelta(
@@ -18,8 +20,7 @@ MAX_TIME_DRIVING_AWAY = timedelta(
 )  # driving away for 30 km
 MINIMAL_TRANSFER_TIME = timedelta(seconds=0)
 MINIMAL_TIME_FOR_NEXT_SEARCH = timedelta(seconds=60)
-N_MINIMAL_ROUTES_TO_DESTINATION = 2
-
+N_MINIMAL_ROUTES_TO_DESTINATION = 6
 
 """
 General algorithm description:
@@ -36,7 +37,12 @@ General algorithm description:
                 - If stop is destination:
                     - Do some special magic
 """
-# TODO: minimum heuristic including stopover stops
+
+
+# TODO: tagübergänge regeln
+
+class TimeNotFetchedError(Exception):
+    pass
 
 
 def compute_heuristic(
@@ -70,7 +76,9 @@ class Trip:
     route: Routes
     stop_sequence: List[StopTimes]
 
-    def stop_sequence_from(self, stop_id: int, include_start: bool = False) -> List[StopTimes]:
+    def stop_sequence_from(
+        self, stop_id: int, include_start: bool = False
+    ) -> List[StopTimes]:
         for i, stop_time in enumerate(self.stop_sequence):
             if stop_time.stop_id == stop_id:
                 if include_start:
@@ -84,17 +92,6 @@ class Trip:
             if stop_time.stop_id == stop_id:
                 return stop_time
         raise KeyError(f"Stop {stop_id} not in trip {self.trip_id}")
-
-
-@dataclass(order=True)
-class QueueItem:
-    node_id: int = field(compare=False)
-    heuristic: timedelta = field(compare=False)
-    timestamp: datetime = field(compare=False)
-    priority: datetime = field(init=False)
-
-    def __post_init__(self):
-        self.priority = self.timestamp + self.heuristic
 
 
 def interval_totally_contained(x1, x2, y1, y2) -> bool:
@@ -114,6 +111,8 @@ class JourneyIdentifier:
         self.duration = self.arrival_time - self.departure_time
 
     def is_pareto_dominated_by(self, other: "JourneyIdentifier") -> bool:
+        if self.is_regional > other.is_regional:
+            return False
         if not interval_totally_contained(
             self.departure_time,
             self.arrival_time,
@@ -168,11 +167,69 @@ class GTFSInterface:
         self.stops: Dict[int, Stop] = {}
         self.session = sessionfactory()[1]()
 
+    def prefetch_for_date(self, service_date: date):
+        import pickle
+        self.trips_by_stop = pickle.load(open('trips_by_stop_1_9_22.cpickle', 'rb'))
+        self.trips = pickle.load(open('trips_1_9_22.cpickle', 'rb'))
+
+        # trips_today: Dict[int, List[StopTimes]] = {}
+
+        # stop_times = self._all_stop_times_for_date(service_date)
+        # for stop_time in stop_times:
+        #     if stop_time.trip_id in trips_today:
+        #         trips_today[stop_time.trip_id].append(stop_time)
+        #     else:
+        #         trips_today[stop_time.trip_id] = [stop_time]
+
+        #     if stop_time.departure_time is None:
+        #         continue
+
+        #     if stop_time.stop_id in self.trips_by_stop:
+        #         self.trips_by_stop[stop_time.stop_id].add(stop_time)
+        #     else:
+        #         self.trips_by_stop[stop_time.stop_id] = SortedKeyList(
+        #             [stop_time], key=lambda x: x.departure_time
+        #         )
+
+        # routes = self._get_routes_from_db(list(trips_today.keys()))
+
+        # for route, trip_id in routes:
+        #     self.trips[trip_id] = Trip(
+        #         trip_id=trip_id,
+        #         route=route,
+        #         stop_sequence=list(
+        #             sorted(trips_today[trip_id], key=lambda x: x.stop_sequence)
+        #         ),
+        #     )
+
+    def _all_stop_times_for_date(self, service_date: date) -> List[StopTimes]:
+        stmt = (
+            sqlalchemy.select(StopTimes)
+            .join(Trips, StopTimes.trip_id == Trips.trip_id)
+            .join(CalendarDates, Trips.service_id == CalendarDates.service_id)
+            .where(
+                CalendarDates.date == service_date,
+            )
+        )
+
+        return self.session.scalars(stmt).all()
+
+    def _get_routes_from_db(self, trip_ids: List[int]):
+        stmt = (
+            sqlalchemy.select(Routes, Trips.trip_id)
+            .join(Trips, Routes.route_id == Trips.route_id)
+            .where(Trips.trip_id.in_(trip_ids))
+        )
+
+        return self.session.execute(stmt).all()
+
     def _next_stop_times_from_cache(
         self, stop_id: int, timestamp: datetime
     ) -> List[StopTimes]:
         if stop_id in self.trips_by_stop:
             index = self.trips_by_stop[stop_id].bisect_left(MockStopTimes(timestamp))
+            if index == len(self.trips_by_stop[stop_id]):
+                raise TimeNotFetchedError()
             min_ts = self.trips_by_stop[stop_id][index].departure_time
             if min_ts < timestamp:
                 index += 1
@@ -214,6 +271,8 @@ class GTFSInterface:
     def next_trips(self, stop_id: int, timestamp: datetime) -> List[int]:
         try:
             stop_times = self._next_stop_times_from_cache(stop_id, timestamp)
+        # except TimeNotFetchedError:
+        #     stop_times = self._next_stop_times_from_db(stop_id, timestamp)
         except KeyError:
             stop_times = self._next_stop_times_from_db(stop_id, timestamp)
 
@@ -343,11 +402,6 @@ class ConnectionTree:
         v, u = list(self.get_journey(node_id))[-2:]
         return self.legs[u, v].departure_ts
 
-    def get_duration(self, node_id: int) -> timedelta:
-        departure_ts = self.get_departure_ts(node_id)
-        arrival_ts = self.legs[self.upwards[node_id], node_id]
-        return arrival_ts - departure_ts
-
     def get_transfers(self, node_id: int) -> int:
         return len(list(self.get_journey(node_id))) - 1
 
@@ -363,12 +417,20 @@ class ConnectionTree:
         return trip_id in [
             self.legs[u, v] for v, u in pairwise(self.get_journey(node_id))
         ]
-    
-    def is_regional(self, node_id: int, db: GTFSInterface) -> bool:
-        return all([
-            db.get_trip(self.legs[u, v].trip_id).route.is_regional()
+
+    def is_line_in_route(self, node_id: int, trip: Trip, db: GTFSInterface) -> bool:
+        return trip.route.route_short_name in [
+            db.get_trip(self.legs[u, v].trip_id).route.route_short_name
             for v, u in pairwise(self.get_journey(node_id))
-        ])
+        ]
+
+    def is_regional(self, node_id: int, db: GTFSInterface) -> bool:
+        return all(
+            [
+                db.get_trip(self.legs[u, v].trip_id).route.is_regional()
+                for v, u in pairwise(self.get_journey(node_id))
+            ]
+        )
 
     def is_stop_id_in_route(self, node_id: int, stop_id: int) -> bool:
         return stop_id in [self.get_stop_id(n) for n in self.get_journey(node_id)]
@@ -427,32 +489,8 @@ class ConnectionTree:
         return tree_str
 
 
-class PriorityQueue:
-    def __init__(self) -> None:
-        self.size = 0
-        self._queue = queue.PriorityQueue()
-
-    def __len__(self):
-        return self.size
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        item = self._get()
-        return item
-
-    def put(self, item: QueueItem):
-        self._queue.put(item)
-        self.size += 1
-
-    def _get(self) -> QueueItem:
-        self.size -= 1
-        return self._queue.get()
-
-
 class RouterTwo:
-    def __init__(self, start, destination, timestamp) -> None:
+    def __init__(self, start: int, destination: int, timestamp: datetime) -> None:
         self.start_id = start
         self.destination_id = destination
         self.departure_time = timestamp
@@ -463,7 +501,9 @@ class RouterTwo:
         )
         self.con_tree = ConnectionTree(root_stop=self.db.get_stop(self.start_id))
         self.routes_to_destination = 0
-        self.arrival_time = None
+        self.latest_arrival_time = self.departure_time
+
+        self.db.prefetch_for_date(self.departure_time.date())
 
         self.queue.put(
             QueueItem(
@@ -481,9 +521,12 @@ class RouterTwo:
         if stop_id == self.destination_id:
             print('Found route to destination')
             self.routes_to_destination += 1
-            if self.routes_to_destination == N_MINIMAL_ROUTES_TO_DESTINATION:
-                self.arrival_time = timestamp
-        if self.arrival_time is not None and timestamp > self.arrival_time:
+            if self.routes_to_destination <= N_MINIMAL_ROUTES_TO_DESTINATION:
+                self.latest_arrival_time = max(timestamp, self.latest_arrival_time)
+        if (
+            self.routes_to_destination > N_MINIMAL_ROUTES_TO_DESTINATION
+            and timestamp > self.latest_arrival_time
+        ):
             return True
         else:
             return False
@@ -499,7 +542,7 @@ class RouterTwo:
                 self.db.get_stop(stop.stop_id).heuristic
                 >= min_heuristic + MAX_TIME_DRIVING_AWAY
             ):
-                break
+                continue
             elif self.con_tree.is_stop_id_in_route(start_node_id, stop.stop_id):
                 break
             elif stop.stop_id == self.destination_id:
@@ -518,10 +561,20 @@ class RouterTwo:
             ):
                 return
 
-            next_trips = self.db.next_trips(
-                stop_id=self.con_tree.get_stop_id(q_item.node_id),
-                timestamp=q_item.timestamp,
-            )
+            try:
+                next_trips = self.db.next_trips(
+                    stop_id=self.con_tree.get_stop_id(q_item.node_id),
+                    timestamp=q_item.timestamp,
+                )
+            except TimeNotFetchedError:
+                self.queue.put(
+                    QueueItem(
+                        node_id=q_item.node_id,
+                        heuristic=q_item.heuristic,
+                        timestamp=datetime.combine(q_item.timestamp.date(), time.max)
+                    )
+                )
+                continue
 
             # A queue item needs to be added, after next_trips are departed to search for other alternatives
             # As all next trips are departing at the same time, we can just take the first one
@@ -541,6 +594,8 @@ class RouterTwo:
                 if self.con_tree.is_trip_id_in_route(q_item.node_id, trip_id):
                     continue
                 trip = self.db.get_trip(trip_id)
+                if self.con_tree.is_line_in_route(q_item.node_id, trip, self.db):
+                    continue
                 stop_sequence = trip.stop_sequence_from(
                     stop_id=self.con_tree.get_stop_id(q_item.node_id)
                 )
@@ -563,7 +618,9 @@ class RouterTwo:
                         departure_time=self.con_tree.get_departure_ts(this_node_id),
                         arrival_time=stop_time.arrival_time,
                         transfers=self.con_tree.get_transfers(node_id=q_item.node_id),
-                        is_regional=self.con_tree.is_regional(node_id=q_item.node_id, db=self.db),
+                        is_regional=self.con_tree.is_regional(
+                            node_id=q_item.node_id, db=self.db
+                        ),
                     )
                     if any(
                         [
@@ -594,11 +651,13 @@ class RouterTwo:
 if __name__ == '__main__':
     stations = StationPhillip()
 
-    router = RouterTwo(
+    router_two = RouterTwo(
         start=stations.get_eva(name='Augsburg Hbf'),
-        destination=stations.get_eva(name='Plochingen'),
+        destination=stations.get_eva(name='Tübingen Hbf'),
         timestamp=datetime(2022, 9, 1, 12, 0, 0),
     )
-    router.do_routing()
-    router.con_tree.truncate_to_trips(destination_stop_id=router.destination_id)
-    print(router.con_tree.to_str(db=router.db))
+    router_two.do_routing()
+    # eva_plo = router_two.db.stations.get_eva(name='Plochingen')
+    # router_two.con_tree.truncate_to_trips(destination_stop_id=eva_plo)
+    router_two.con_tree.truncate_to_trips(destination_stop_id=router_two.destination_id)
+    print(router_two.con_tree.to_str(db=router_two.db))

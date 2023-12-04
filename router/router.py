@@ -1,21 +1,23 @@
-import networkx as nx
-from datetime import datetime, timedelta
+import enum
+import pickle
 import queue
 from dataclasses import dataclass, field, replace
-from gtfs.stop_times import StopTimes
-from gtfs.trips import Trips
-from gtfs.calendar_dates import CalendarDates
+from datetime import datetime, timedelta
+from itertools import pairwise
+from typing import Any, Dict, List, Set, Tuple
+
+import networkx as nx
 import sqlalchemy
-from database.engine import sessionfactory
-import enum
-from typing import Dict, Any, List, Set, Tuple
 import sqlalchemy.orm
 from pyvis.network import Network
-from rtd_crawler.hash64 import xxhash64
-from helpers.StationPhillip import StationPhillip
 from sortedcontainers import SortedKeyList
-import pickle
-from itertools import pairwise
+
+from database.engine import sessionfactory
+from gtfs.calendar_dates import CalendarDates
+from gtfs.stop_times import StopTimes
+from gtfs.trips import Trips
+from helpers.StationPhillip import StationPhillip
+from rtd_crawler.hash64 import xxhash64
 
 # Note: Every timestamp must be in UTC.
 
@@ -24,7 +26,7 @@ from itertools import pairwise
 # - verbindungen mit patero filtern, nach ankunftszeit
 # - datenbank effizienter nutzen, vielleicht mit dumps oder so
 # - transfers (fußwege) beachten
-# - 
+# -
 
 
 class AlreadyInGraphError(Exception):
@@ -559,7 +561,9 @@ class Router:
         graph_of_destination = graph_of_stop(self.routes, self.destination_id)
         last_node = graph_of_destination.nodes[len(graph_of_destination.nodes) - 1]
 
-        id_paths = list(nx.all_simple_paths(self.routes, 0, last_node['node_id'], cutoff=40))
+        id_paths = list(
+            nx.all_simple_paths(self.routes, 0, last_node['node_id'], cutoff=40)
+        )
         paths = []
         for path in id_paths:
             path = self.extract_real_path(path)
@@ -585,8 +589,12 @@ class Router:
         last_node = graph_of_destination.nodes[len(graph_of_destination.nodes) - 1]
 
         ids_to_keep = set()
-        ids_to_keep |= set(graph_of_destination.nodes[n]['node_id'] for n in graph_of_destination.nodes)
-        ids_to_keep |= set(graph_of_start.nodes[n]['node_id'] for n in graph_of_start.nodes)
+        ids_to_keep |= set(
+            graph_of_destination.nodes[n]['node_id'] for n in graph_of_destination.nodes
+        )
+        ids_to_keep |= set(
+            graph_of_start.nodes[n]['node_id'] for n in graph_of_start.nodes
+        )
 
         for node_id in iter_routes_predecessors(
             self.routes, last_node['node_id'], stopping_stop_id=self.start_id
