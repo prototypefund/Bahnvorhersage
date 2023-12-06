@@ -10,7 +10,7 @@ from redis import Redis
 from config import redis_url
 from database.cached_table_fetch import cached_sql_fetch
 from rtd_crawler.hash64 import xxhash64
-from helpers import pairwise
+from itertools import pairwise
 from helpers.StationPhillip import StationPhillip
 
 

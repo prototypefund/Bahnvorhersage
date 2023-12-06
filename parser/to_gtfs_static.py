@@ -135,7 +135,7 @@ def stop_to_gtfs(
         if stop.depature is not None
         else None,
         shape_dist_traveled=streckennetz.route_length(
-            stop.arrival.planned_path, is_bus=stop.is_bus()
+            stop.arrival.planned_path + [stop.station_name], is_bus=stop.is_bus()
         )
         if stop.arrival is not None
         else 0,
@@ -370,13 +370,17 @@ class GTFSUpserter:
 def parse_all():
     """Parse all raw data there is"""
 
-    # with Session() as session:
-    #     chunk_limits = PlanById.get_chunk_limits(session)
+    engine, Session = sessionfactory(
+        poolclass=sqlalchemy.pool.NullPool,
+    )
 
-    import pickle
+    with Session() as session:
+        chunk_limits = PlanById.get_chunk_limits(session)
+
+    # import pickle
 
     # pickle.dump(chunk_limits, open('chunk_limits.pickle', 'wb'))
-    chunk_limits = pickle.load(open('chunk_limits.pickle', 'rb'))
+    # chunk_limits = pickle.load(open('chunk_limits.pickle', 'rb'))
 
     gtfs_upserter = GTFSUpserter()
 
