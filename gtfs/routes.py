@@ -52,4 +52,4 @@ class Routes(Base):
 
     def is_regional(self):
         train_cat = self.route_short_name.split(' ')[0]
-        return train_cat not in {'IC', 'EC', 'ICE', 'EN', 'RJ', 'RJX', 'TGV', 'FLX'}
+        return train_cat not in {'IC', 'EC', 'ECE', 'ICE', 'EN', 'RJ', 'RJX', 'TGV', 'FLX'}
