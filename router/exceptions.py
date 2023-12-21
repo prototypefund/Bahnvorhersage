@@ -1,0 +1,2 @@
+class TimeNotFetchedError(Exception):
+    pass

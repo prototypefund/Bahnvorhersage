@@ -1,26 +1,23 @@
-from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, time
+from datetime import datetime, time, timedelta
 from itertools import pairwise
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Set
 
-import sqlalchemy
-from sortedcontainers import SortedKeyList
-
-from database.engine import sessionfactory
-from gtfs.calendar_dates import CalendarDates
-from gtfs.routes import Routes
 from gtfs.stop_times import StopTimes
-from gtfs.trips import Trips
 from helpers.StationPhillip import StationPhillip
+from router.constants import (
+    MAX_TIME_DRIVING_AWAY,
+    MINIMAL_TIME_FOR_NEXT_SEARCH,
+    MINIMAL_TRANSFER_TIME,
+    N_MINIMAL_ROUTES_TO_DESTINATION,
+    EXTRA_TIME,
+    MAX_TRANSFERS,
+)
+from router.datatypes import JourneyIdentifier, Leg, Stop, Trip
+from router.exceptions import TimeNotFetchedError
+from router.gtfs_db_interface import GTFSInterface
+from router.heuristic import compute_heuristic
 from router.priority_queue import PriorityQueue, QueueItem
-
-TRAIN_SPEED_MS = 70  # ~ 250 km/h
-MAX_TIME_DRIVING_AWAY = timedelta(
-    seconds=30_000 / TRAIN_SPEED_MS
-)  # driving away for 30 km
-MINIMAL_TRANSFER_TIME = timedelta(seconds=0)
-MINIMAL_TIME_FOR_NEXT_SEARCH = timedelta(seconds=60)
-N_MINIMAL_ROUTES_TO_DESTINATION = 6
+from helpers.profiler import profile
 
 """
 General algorithm description:
@@ -39,109 +36,13 @@ General algorithm description:
 """
 
 
+# TODO: alternativensuche
+# TODO: suche aus dem Zug heraus
+# TODO: generell gtfs mergen
+# TODO: delfi gtfs mergen
 # TODO: tagübergänge regeln
-
-class TimeNotFetchedError(Exception):
-    pass
-
-
-def compute_heuristic(
-    stations: StationPhillip, stop_id: int, destination_id: int
-) -> timedelta:
-    distance_m = stations.geographic_distance_by_eva(
-        eva_1=stop_id, eva_2=destination_id
-    )
-    return timedelta(seconds=distance_m / TRAIN_SPEED_MS)
-
-
-@dataclass(frozen=True, eq=True)
-class MockStopTimes:
-    departure_time: datetime
-
-
-@dataclass(eq=True)
-class Leg:
-    trip_id: int
-    departure_ts: datetime
-    arrival_ts: datetime
-    duration: timedelta = field(init=False)
-
-    def __post_init__(self):
-        self.duration = self.arrival_ts - self.departure_ts
-
-
-@dataclass
-class Trip:
-    trip_id: int
-    route: Routes
-    stop_sequence: List[StopTimes]
-
-    def stop_sequence_from(
-        self, stop_id: int, include_start: bool = False
-    ) -> List[StopTimes]:
-        for i, stop_time in enumerate(self.stop_sequence):
-            if stop_time.stop_id == stop_id:
-                if include_start:
-                    return self.stop_sequence[i:]
-                else:
-                    return self.stop_sequence[i + 1 :]
-        raise KeyError(f"Stop {stop_id} not in trip {self.trip_id}")
-
-    def stop_time_at(self, stop_id: int) -> StopTimes:
-        for stop_time in self.stop_sequence:
-            if stop_time.stop_id == stop_id:
-                return stop_time
-        raise KeyError(f"Stop {stop_id} not in trip {self.trip_id}")
-
-
-def interval_totally_contained(x1, x2, y1, y2) -> bool:
-    return (x1 <= y1 and x2 >= y2) or (y1 <= x1 and y2 >= x2)
-
-
-@dataclass
-class JourneyIdentifier:
-    tree_node_id: int
-    departure_time: datetime
-    arrival_time: datetime
-    duration: timedelta = field(init=False)
-    transfers: int
-    is_regional: bool
-
-    def __post_init__(self):
-        self.duration = self.arrival_time - self.departure_time
-
-    def is_pareto_dominated_by(self, other: "JourneyIdentifier") -> bool:
-        if self.is_regional > other.is_regional:
-            return False
-        if not interval_totally_contained(
-            self.departure_time,
-            self.arrival_time,
-            other.departure_time,
-            other.arrival_time,
-        ):
-            return False
-        else:
-            # self is worse in all aspects -> self is dominated by other
-            return (
-                self.arrival_time >= other.arrival_time
-                and self.duration >= other.duration
-                and self.transfers >= other.transfers
-                and self.is_regional >= other.is_regional
-            )
-
-    def __str__(self) -> str:
-        return f'dp: {self.departure_time.strftime("%H:%M")}, ar: {self.arrival_time.strftime("%H:%M")}, t: {self.transfers}, d: {self.duration.total_seconds() // 60:n}'
-
-
-@dataclass
-class Stop:
-    stop_id: int
-    name: str
-    heuristic: timedelta
-    pareto_connections: List[JourneyIdentifier] = field(init=False)
-
-    def __post_init__(self):
-        self.pareto_connections = []
+# TODO: transfers
+# TODO: connection to string starts with wrong station
 
 
 def find_pareto_optimal_set(
@@ -155,196 +56,6 @@ def find_pareto_optimal_set(
     return [
         journey for journey, dominated in zip(journeys, is_dominated) if not dominated
     ]
-
-
-class GTFSInterface:
-    def __init__(self, destination_id: int, stations: StationPhillip) -> None:
-        self.destination_id = destination_id
-        self.stations = stations
-
-        self.trips_by_stop: Dict[int, SortedKeyList] = {}
-        self.trips: Dict[int, Trip] = {}
-        self.stops: Dict[int, Stop] = {}
-        self.session = sessionfactory()[1]()
-
-    def prefetch_for_date(self, service_date: date):
-        import pickle
-        self.trips_by_stop = pickle.load(open('trips_by_stop_1_9_22.cpickle', 'rb'))
-        self.trips = pickle.load(open('trips_1_9_22.cpickle', 'rb'))
-
-        # trips_today: Dict[int, List[StopTimes]] = {}
-
-        # stop_times = self._all_stop_times_for_date(service_date)
-        # for stop_time in stop_times:
-        #     if stop_time.trip_id in trips_today:
-        #         trips_today[stop_time.trip_id].append(stop_time)
-        #     else:
-        #         trips_today[stop_time.trip_id] = [stop_time]
-
-        #     if stop_time.departure_time is None:
-        #         continue
-
-        #     if stop_time.stop_id in self.trips_by_stop:
-        #         self.trips_by_stop[stop_time.stop_id].add(stop_time)
-        #     else:
-        #         self.trips_by_stop[stop_time.stop_id] = SortedKeyList(
-        #             [stop_time], key=lambda x: x.departure_time
-        #         )
-
-        # routes = self._get_routes_from_db(list(trips_today.keys()))
-
-        # for route, trip_id in routes:
-        #     self.trips[trip_id] = Trip(
-        #         trip_id=trip_id,
-        #         route=route,
-        #         stop_sequence=list(
-        #             sorted(trips_today[trip_id], key=lambda x: x.stop_sequence)
-        #         ),
-        #     )
-
-    def _all_stop_times_for_date(self, service_date: date) -> List[StopTimes]:
-        stmt = (
-            sqlalchemy.select(StopTimes)
-            .join(Trips, StopTimes.trip_id == Trips.trip_id)
-            .join(CalendarDates, Trips.service_id == CalendarDates.service_id)
-            .where(
-                CalendarDates.date == service_date,
-            )
-        )
-
-        return self.session.scalars(stmt).all()
-
-    def _get_routes_from_db(self, trip_ids: List[int]):
-        stmt = (
-            sqlalchemy.select(Routes, Trips.trip_id)
-            .join(Trips, Routes.route_id == Trips.route_id)
-            .where(Trips.trip_id.in_(trip_ids))
-        )
-
-        return self.session.execute(stmt).all()
-
-    def _next_stop_times_from_cache(
-        self, stop_id: int, timestamp: datetime
-    ) -> List[StopTimes]:
-        if stop_id in self.trips_by_stop:
-            index = self.trips_by_stop[stop_id].bisect_left(MockStopTimes(timestamp))
-            if index == len(self.trips_by_stop[stop_id]):
-                raise TimeNotFetchedError()
-            min_ts = self.trips_by_stop[stop_id][index].departure_time
-            if min_ts < timestamp:
-                index += 1
-                min_ts = self.trips_by_stop[stop_id][index].departure_time
-                print('min_ts < timestamp')
-
-            stop_times = []
-            for stop_time in self.trips_by_stop[stop_id][index:]:
-                if stop_time.departure_time == min_ts:
-                    stop_times.append(stop_time)
-                else:
-                    break
-            return stop_times
-        raise KeyError(f"No next stop time for {stop_id}, {timestamp} in cache")
-
-    def _next_stop_times_from_db(
-        self, stop_id: int, timestamp: datetime
-    ) -> List[StopTimes]:
-        stmt = (
-            sqlalchemy.select(StopTimes)
-            .join(Trips, StopTimes.trip_id == Trips.trip_id)
-            .join(CalendarDates, Trips.service_id == CalendarDates.service_id)
-            .where(
-                StopTimes.stop_id == stop_id,
-                StopTimes.departure_time != None,
-                StopTimes.departure_time >= timestamp,
-                CalendarDates.date == timestamp.date(),
-            )
-            .order_by(StopTimes.departure_time)
-        )
-
-        stop_times = self.session.scalars(stmt).all()
-        self.trips_by_stop[stop_id] = SortedKeyList(
-            stop_times, key=lambda x: x.departure_time
-        )
-
-        return self._next_stop_times_from_cache(stop_id, timestamp)
-
-    def next_trips(self, stop_id: int, timestamp: datetime) -> List[int]:
-        try:
-            stop_times = self._next_stop_times_from_cache(stop_id, timestamp)
-        # except TimeNotFetchedError:
-        #     stop_times = self._next_stop_times_from_db(stop_id, timestamp)
-        except KeyError:
-            stop_times = self._next_stop_times_from_db(stop_id, timestamp)
-
-        return [stop_time.trip_id for stop_time in stop_times]
-
-    def _get_trip_from_db(self, trip_id: int) -> Trip:
-        stmt = (
-            sqlalchemy.select(StopTimes)
-            .where(
-                StopTimes.trip_id == trip_id,
-            )
-            .order_by(StopTimes.stop_sequence)
-        )
-        trip = self.session.scalars(stmt).all()
-
-        route_stmt = sqlalchemy.select(Routes).where(
-            Trips.route_id == Routes.route_id,
-            Trips.trip_id == trip_id,
-        )
-        route = self.session.scalars(route_stmt).one()
-
-        self.trips[trip_id] = Trip(trip_id=trip_id, route=route, stop_sequence=trip)
-
-        return self.trips[trip_id]
-
-    def get_trip(self, trip_id: int) -> Trip:
-        if trip_id in self.trips:
-            return self.trips[trip_id]
-        else:
-            return self._get_trip_from_db(trip_id)
-
-    def get_stop_sequence(
-        self, trip_id: int, start_stop_id: int, include_start: bool = False
-    ) -> List[StopTimes]:
-        if trip_id in self.trips:
-            return self.trips[trip_id].stop_sequence_from(
-                start_stop_id, include_start=include_start
-            )
-        else:
-            return self._get_trip_from_db(trip_id).stop_sequence_from(
-                start_stop_id, include_start=include_start
-            )
-
-    def get_stop_time(self, trip_id: int, stop_id: int) -> StopTimes:
-        if trip_id in self.trips:
-            return self.trips[trip_id].stop_time_at(stop_id)
-        else:
-            return self._get_trip_from_db(trip_id).stop_time_at(stop_id)
-
-    def init_stop(self, stop_id: int) -> Stop:
-        stop = Stop(
-            stop_id=stop_id,
-            name=self.stations.get_name(stop_id),
-            heuristic=compute_heuristic(
-                stations=self.stations,
-                stop_id=stop_id,
-                destination_id=self.destination_id,
-            ),
-        )
-        self.stops[stop_id] = stop
-        return stop
-
-    def get_stop(self, stop_id: int) -> Stop:
-        if stop_id in self.stops:
-            return self.stops[stop_id]
-        else:
-            return self.init_stop(stop_id)
-
-    def add_pareto_connection(self, stop_id: int, journey: JourneyIdentifier) -> None:
-        stop = self.get_stop(stop_id)
-        stop.pareto_connections.append(journey)
-        self.stops[stop_id] = stop
 
 
 class ConnectionTree:
@@ -398,12 +109,36 @@ class ConnectionTree:
             parent = self.upwards[node_id]
             yield from self.get_journey(parent)
 
-    def get_departure_ts(self, node_id: int) -> datetime:
-        v, u = list(self.get_journey(node_id))[-2:]
-        return self.legs[u, v].departure_ts
+    def get_journey_identifier(self, node_id: int) -> JourneyIdentifier:
+        journey = list(self.get_journey(node_id))
+        return JourneyIdentifier(
+            tree_node_id=node_id,
+            departure_time=self.get_departure_ts(journey),
+            arrival_time=self.get_arrival_ts(journey),
+            transfers=self.get_transfers(journey),
+            is_regional=self.is_regional(journey),
+            dist_traveled=self.sum_dist_traveled(journey),
+        )
 
-    def get_transfers(self, node_id: int) -> int:
-        return len(list(self.get_journey(node_id))) - 1
+    def get_departure_ts(self, journey: List[int]) -> datetime:
+        return self.legs[journey[-1], journey[-2]].departure_ts
+        # v, u = list(self.get_journey(node_id))[-2:]
+        # return self.legs[u, v].departure_ts
+
+    def get_arrival_ts(self, journey: List[int]) -> datetime:
+        return self.legs[journey[1], journey[0]].arrival_ts
+        # v, u = islice(self.get_journey(node_id), 2)
+        # return self.legs[u, v].arrival_ts
+
+    def get_transfers(self, journey: List[int]) -> int:
+        return len(journey) - 1
+        # return len(list(self.get_journey(node_id))) - 1
+
+    def is_regional(self, journey: List[int]) -> bool:
+        return all([self.legs[u, v].is_regional for v, u in pairwise(journey)])
+
+    def sum_dist_traveled(self, journey: List[int]) -> float:
+        return sum([self.legs[u, v].dist_traveled for v, u in pairwise(journey)])
 
     def get_minimum_heuristic(self, node_id: int, db: GTFSInterface) -> timedelta:
         return min(
@@ -415,7 +150,7 @@ class ConnectionTree:
 
     def is_trip_id_in_route(self, node_id: int, trip_id: int) -> bool:
         return trip_id in [
-            self.legs[u, v] for v, u in pairwise(self.get_journey(node_id))
+            self.legs[u, v].trip_id for v, u in pairwise(self.get_journey(node_id))
         ]
 
     def is_line_in_route(self, node_id: int, trip: Trip, db: GTFSInterface) -> bool:
@@ -423,14 +158,6 @@ class ConnectionTree:
             db.get_trip(self.legs[u, v].trip_id).route.route_short_name
             for v, u in pairwise(self.get_journey(node_id))
         ]
-
-    def is_regional(self, node_id: int, db: GTFSInterface) -> bool:
-        return all(
-            [
-                db.get_trip(self.legs[u, v].trip_id).route.is_regional()
-                for v, u in pairwise(self.get_journey(node_id))
-            ]
-        )
 
     def is_stop_id_in_route(self, node_id: int, stop_id: int) -> bool:
         return stop_id in [self.get_stop_id(n) for n in self.get_journey(node_id)]
@@ -454,26 +181,31 @@ class ConnectionTree:
     def journey_to_str(
         self, journey_destination_node_id: int, db: GTFSInterface
     ) -> str:
-        journey = list(reversed(list(self.get_journey(journey_destination_node_id))))
+        journey = list(self.get_journey(journey_destination_node_id))
         identifier = JourneyIdentifier(
             tree_node_id=journey_destination_node_id,
-            departure_time=self.get_departure_ts(journey_destination_node_id),
+            departure_time=self.get_departure_ts(journey=journey),
             arrival_time=self.legs[
                 self.upwards[journey_destination_node_id], journey_destination_node_id
             ].arrival_ts,
-            transfers=len(journey) - 2,
+            transfers=self.get_transfers(journey),
             is_regional=True,
+            dist_traveled=self.sum_dist_traveled(journey=journey),
         )
+        journey = list(reversed(journey))
 
         journey_str = str(identifier) + ': '
-        for u, v in pairwise(journey):
-            journey_str += f'{db.get_stop(self.get_stop_id(u)).name} -> '
-            trip = db.get_trip(self.legs[u, v].trip_id)
-            if trip.route.is_regional():
-                journey_str += f'🭃{self.legs[u, v].duration.total_seconds() // 60:n} {trip.route.route_short_name}🭎 -> '
-            else:
-                journey_str += f'🭊🭂{self.legs[u, v].duration.total_seconds() // 60:n} {trip.route.route_short_name}🭍🬿 -> '
-        journey_str += f'{db.get_stop(self.get_stop_id(journey[-1])).name}'
+        journey_str += f'{db.get_stop(self.get_stop_id(journey[0])).name} -> '
+
+        for i in range(len(journey) - 2):
+            journey_str += self.legs[journey[i], journey[i + 1]].to_string(db)
+            ar_ts = self.legs[journey[i], journey[i + 1]].arrival_ts
+            dp_ts = self.legs[journey[i + 1], journey[i + 2]].departure_ts
+            transfer_time = dp_ts - ar_ts
+            journey_str += f' -> {transfer_time.total_seconds() // 60:n} {db.get_stop(self.get_stop_id(journey[i + 1])).name} -> '
+
+        journey_str += self.legs[journey[-2], journey[-1]].to_string(db)
+        journey_str += f' -> {db.get_stop(self.get_stop_id(journey[-1])).name}'
         return journey_str
 
     def to_str(self, db: GTFSInterface) -> str:
@@ -538,32 +270,89 @@ class RouterTwo:
         useful_stops = []
 
         for stop in stops:
-            if (
-                self.db.get_stop(stop.stop_id).heuristic
-                >= min_heuristic + MAX_TIME_DRIVING_AWAY
-            ):
-                continue
+            stop_identifier = (stop.arrival_time, stop.stop_id)
+
+            current_heuristic = self.db.get_stop(stop.stop_id).heuristic
+            if current_heuristic < min_heuristic:
+                min_heuristic = current_heuristic
+
+            if current_heuristic >= min_heuristic + MAX_TIME_DRIVING_AWAY:
+                break
             elif self.con_tree.is_stop_id_in_route(start_node_id, stop.stop_id):
                 break
+            elif stop_identifier in self.destinations_seen:
+                continue
             elif stop.stop_id == self.destination_id:
+                self.destinations_seen.add(stop_identifier)
                 useful_stops.append(stop)
                 break
             else:
+                self.destinations_seen.add(stop_identifier)
                 useful_stops.append(stop)
 
         return useful_stops
 
+    def is_node_pareto(self, node_id: int, journey: JourneyIdentifier) -> bool:
+        stop = self.db.get_stop(self.con_tree.node_id_to_stop_id[node_id])
+        if any(
+            [
+                journey.is_pareto_dominated_by(other_journey)
+                for other_journey in stop.pareto_connections
+            ]
+        ):
+            return False
+
+        destination = self.db.get_stop(self.destination_id)
+        if any(
+            [
+                journey.is_pareto_dominated_by(other_journey)
+                for other_journey in destination.pareto_connections
+            ]
+        ):
+            return False
+
+        return True
+
+    def append_or_replace_pareto_connection(
+        self, stop_id: int, journey: JourneyIdentifier
+    ) -> None:
+        stop = self.db.get_stop(stop_id)
+
+        dominated_journeys = list(
+            filter(lambda x: x.is_pareto_dominated_by(journey), stop.pareto_connections)
+        )
+        for dominated_journey in dominated_journeys:
+            self.con_tree.remove_node(dominated_journey.tree_node_id)
+            stop.pareto_connections.remove(dominated_journey)
+
+        stop.pareto_connections.append(journey)
+        self.db.stops[stop_id] = stop
+
     def do_routing(self):
+        processed_q_items = 0
+        unique_trip_id = set()
         for q_item in self.queue:
+            processed_q_items += 1
             if self.router_stop_condition(
                 stop_id=None,
                 timestamp=q_item.timestamp,
             ):
+                print('processed q items:', processed_q_items)
+                print('n processed trips:', len(unique_trip_id))
                 return
+            if q_item.node_id not in self.con_tree.node_id_to_stop_id:
+                continue
+            if (
+                self.con_tree.get_transfers(list(self.con_tree.get_journey(q_item.node_id)))
+                >= MAX_TRANSFERS
+            ):
+                continue
+
+            from_stop_id = self.con_tree.get_stop_id(q_item.node_id)
 
             try:
                 next_trips = self.db.next_trips(
-                    stop_id=self.con_tree.get_stop_id(q_item.node_id),
+                    stop_id=from_stop_id,
                     timestamp=q_item.timestamp,
                 )
             except TimeNotFetchedError:
@@ -571,34 +360,35 @@ class RouterTwo:
                     QueueItem(
                         node_id=q_item.node_id,
                         heuristic=q_item.heuristic,
-                        timestamp=datetime.combine(q_item.timestamp.date(), time.max)
+                        timestamp=datetime.combine(q_item.timestamp.date(), time.max),
                     )
                 )
                 continue
 
             # A queue item needs to be added, after next_trips are departed to search for other alternatives
             # As all next trips are departing at the same time, we can just take the first one
-            departing_train = self.db.get_stop_time(
-                next_trips[0], self.con_tree.get_stop_id(q_item.node_id)
-            )
+            departure_time = self.db.get_stop_time(
+                next_trips[0], from_stop_id
+            ).departure_time
             self.queue.put(
                 QueueItem(
                     node_id=q_item.node_id,
                     heuristic=q_item.heuristic,
-                    timestamp=departing_train.departure_time
-                    + MINIMAL_TIME_FOR_NEXT_SEARCH,
+                    timestamp=departure_time + MINIMAL_TIME_FOR_NEXT_SEARCH,
                 )
             )
 
+            # Routes might have branches in them (joining or splitting trains)
+            # if two or more joined trains travel together on the same route, only
+            # one of them should be considered for routing
+            self.destinations_seen: Set[Tuple[int, int]] = set()
+
             for trip_id in next_trips:
-                if self.con_tree.is_trip_id_in_route(q_item.node_id, trip_id):
-                    continue
+                unique_trip_id.add(trip_id)
                 trip = self.db.get_trip(trip_id)
-                if self.con_tree.is_line_in_route(q_item.node_id, trip, self.db):
-                    continue
-                stop_sequence = trip.stop_sequence_from(
-                    stop_id=self.con_tree.get_stop_id(q_item.node_id)
-                )
+                print(trip.route.route_short_name)
+
+                stop_sequence = trip.stop_sequence_from(stop_id=from_stop_id)
                 stop_sequence = self.filter_useful_stops(
                     stop_sequence, start_node_id=q_item.node_id
                 )
@@ -609,42 +399,37 @@ class RouterTwo:
                         to_stop=stop,
                         leg=Leg(
                             trip_id=trip_id,
-                            departure_ts=departing_train.departure_time,
+                            departure_ts=departure_time,
                             arrival_ts=stop_time.arrival_time,
+                            is_regional=trip.route.is_regional(),
+                            dist_traveled=trip.dist_traveled(
+                                from_stop_id=from_stop_id,
+                                to_stop_id=stop_time.stop_id,
+                            ),
                         ),
                     )
-                    this_journey = JourneyIdentifier(
-                        tree_node_id=this_node_id,
-                        departure_time=self.con_tree.get_departure_ts(this_node_id),
-                        arrival_time=stop_time.arrival_time,
-                        transfers=self.con_tree.get_transfers(node_id=q_item.node_id),
-                        is_regional=self.con_tree.is_regional(
-                            node_id=q_item.node_id, db=self.db
-                        ),
-                    )
-                    if any(
-                        [
-                            this_journey.is_pareto_dominated_by(other_journey)
-                            for other_journey in stop.pareto_connections
-                        ]
-                    ):
-                        self.con_tree.remove_node(this_node_id)
-                    else:
+                    this_journey = self.con_tree.get_journey_identifier(this_node_id)
+                    if self.is_node_pareto(this_node_id, journey=this_journey):
                         print(
-                            f'Adding leg from {self.db.stations.get_name(eva=self.con_tree.get_stop_id(q_item.node_id))} to {self.db.stations.get_name(eva=stop.stop_id)} at {departing_train.departure_time}'
+                            f'Adding leg from {self.db.stations.get_name(eva=from_stop_id)} to {self.db.stations.get_name(eva=stop.stop_id)} at {departure_time}'
                         )
-                        self.db.add_pareto_connection(stop_time.stop_id, this_journey)
+                        self.append_or_replace_pareto_connection(
+                            stop_time.stop_id, this_journey
+                        )
                         if stop.stop_id != self.destination_id:
                             self.queue.put(
                                 QueueItem(
                                     node_id=this_node_id,
                                     heuristic=stop.heuristic,
-                                    timestamp=stop_time.arrival_time,
+                                    timestamp=stop_time.arrival_time
+                                    + MINIMAL_TRANSFER_TIME,
                                 )
                             )
                         self.router_stop_condition(
                             stop_id=stop.stop_id, timestamp=stop_time.arrival_time
                         )
+                    else:
+                        self.con_tree.remove_node(this_node_id)
                 print(f"Tree size: {len(self.con_tree)}")
 
 
@@ -654,9 +439,13 @@ if __name__ == '__main__':
     router_two = RouterTwo(
         start=stations.get_eva(name='Augsburg Hbf'),
         destination=stations.get_eva(name='Tübingen Hbf'),
-        timestamp=datetime(2022, 9, 1, 12, 0, 0),
+        timestamp=datetime(2023, 5, 1, 13, 0, 0),
     )
     router_two.do_routing()
+
+    # import cloudpickle
+    # cloudpickle.dump(router_two.db.trips, open('trips_1_9_22.cpickle', 'wb'))
+    # cloudpickle.dump(router_two.db.trips_by_stop, open('trips_by_stop_1_9_22.cpickle', 'wb'))
     # eva_plo = router_two.db.stations.get_eva(name='Plochingen')
     # router_two.con_tree.truncate_to_trips(destination_stop_id=eva_plo)
     router_two.con_tree.truncate_to_trips(destination_stop_id=router_two.destination_id)
