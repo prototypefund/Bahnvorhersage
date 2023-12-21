@@ -3,7 +3,7 @@ import pstats
 import tempfile
 
 
-def profile(sort='tottime', lines=50, strip_dirs=False):
+def profile(sort='cumtime', lines=50, strip_dirs=False):
     """A decorator which profiles a callable.
     Example usage:
 
