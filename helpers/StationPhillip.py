@@ -30,11 +30,16 @@ class Station:
 
 
 class StationPhillip:
-    def __init__(self, **kwargs):
+    def __init__(self, init=True, **kwargs):
         if 'generate' in kwargs:
             kwargs['generate'] = False
             print('StationPhillip does not support generate')
         self.kwargs = kwargs
+        if init:
+            self.stations
+            self.stations_by_eva
+            self.evas_by_name
+            self.evas_by_ds100
 
     @property
     @ttl_lru_cache(CACHE_TIMEOUT_SECONDS, 1)
