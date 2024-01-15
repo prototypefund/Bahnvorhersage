@@ -1,25 +1,33 @@
-from datetime import date, datetime
-from gtfs.stop_times import StopTimes
-from gtfs.trips import Trips
+from datetime import date, datetime, UTC
+from itertools import pairwise
+from typing import Dict, List, Tuple
+
+import sqlalchemy
+from sqlalchemy.orm import Session as SessionType
+
+from database.engine import sessionfactory
 from gtfs.calendar_dates import CalendarDates
 from gtfs.routes import Routes
-import sqlalchemy
-from typing import List, Tuple, Dict
-from collections import namedtuple
-from itertools import pairwise
-from router.constants import (
-    MINIMAL_DISTANCE_DIFFERENCE,
-    TRAIN_SPEED_MS,
-    NO_TRIP_ID,
-    MAX_SECONDS_DRIVING_AWAY,
-    MAX_EXPECTED_DELAY_SECONDS,
-)
-from database.engine import sessionfactory
-from sqlalchemy.orm import Session as SessionType
-from helpers.StationPhillip import StationPhillip
-from tqdm import tqdm
+from gtfs.stop_times import StopTimes
+from gtfs.trips import Trips
 from helpers.profiler import profile
-
+from helpers.StationPhillip import StationPhillip
+from router.constants import (
+    MAX_EXPECTED_DELAY_SECONDS,
+    MAX_SECONDS_DRIVING_AWAY,
+    MINIMAL_DISTANCE_DIFFERENCE,
+    NO_TRIP_ID,
+    NO_STOP_ID,
+    TRAIN_SPEED_MS,
+)
+from router.datatypes import (
+    AlternativeReachability,
+    Connection,
+    Reachability,
+    Transfer,
+)
+from router.printing import print_journeys
+from bisect import bisect_left
 
 # TODO:
 # - search all alternatives
@@ -32,58 +40,12 @@ from helpers.profiler import profile
 # - make frontend
 
 
-Connection = namedtuple(
-    'Connection',
-    [
-        'departure_time',
-        'arrival_time',
-        'departure_stop_id',
-        'arrival_stop_id',
-        'trip_id',
-        'is_regional',
-        'dist_traveled',
-    ],
-)
-
-JourneyIdentifier = namedtuple(
-    'JourneyIdentifier',
-    [
-        'departure_time',
-        'arrival_time',
-        'transfers',
-        'dist_traveled',
-        'is_regional',
-        'current_trip_id',
-        'min_heuristic',
-        'j_ident_id',
-        'last_j_ident_id',
-        'last_stop_id',
-        'last_departure_time',
-    ],
-)
-
-AlternativeJourneyIdentifier = namedtuple(
-    'AlternativeJourneyIdentifier',
-    [
-        'arrival_time',
-        'departure_time',
-        'transfers',
-        'dist_traveled',
-        'is_regional',
-        'transfer_time_from_delayed_trip',
-        'from_failed_transfer_stop_id',
-        'current_trip_id',
-        'min_heuristic',
-        'j_ident_id',
-        'last_j_ident_id',
-        'last_stop_id',
-        'last_departure_time',
-    ],
-)
+def utc_ts_to_iso(ts: int) -> str:
+    return datetime.fromtimestamp(ts, UTC).isoformat()
 
 
 def is_alternative_pareto_dominated(
-    journey: AlternativeJourneyIdentifier, other: AlternativeJourneyIdentifier
+    reachability: AlternativeReachability, other: AlternativeReachability
 ) -> bool:
     # Starting points always dominate
     if other.current_trip_id == NO_TRIP_ID:
@@ -91,58 +53,61 @@ def is_alternative_pareto_dominated(
 
     worse_count = sum(
         [
-            journey.arrival_time > other.arrival_time,
-            journey.transfers > other.transfers,
-            journey.dist_traveled > (other.dist_traveled + MINIMAL_DISTANCE_DIFFERENCE),
-            journey.is_regional < other.is_regional,
-            journey.transfer_time_from_delayed_trip
+            reachability.ar_ts > other.ar_ts,
+            reachability.transfers > other.transfers,
+            # reachability.dist_traveled
+            # > (other.dist_traveled + MINIMAL_DISTANCE_DIFFERENCE),
+            reachability.is_regio < other.is_regio,
+            reachability.transfer_time_from_delayed_trip
             < other.transfer_time_from_delayed_trip,
-            journey.from_failed_transfer_stop_id < other.from_failed_transfer_stop_id,
+            reachability.from_failed_transfer_stop_id
+            < other.from_failed_transfer_stop_id,
         ]
     )
     if worse_count:
         equal_count = sum(
             [
-                journey.arrival_time == other.arrival_time,
-                journey.transfers == other.transfers,
-                abs(journey.dist_traveled - other.dist_traveled)
-                < MINIMAL_DISTANCE_DIFFERENCE,
-                journey.is_regional == other.is_regional,
-                journey.transfer_time_from_delayed_trip
+                reachability.ar_ts == other.ar_ts,
+                reachability.transfers == other.transfers,
+                # abs(reachability.dist_traveled - other.dist_traveled)
+                # < MINIMAL_DISTANCE_DIFFERENCE,
+                reachability.is_regio == other.is_regio,
+                reachability.transfer_time_from_delayed_trip
                 == other.transfer_time_from_delayed_trip,
-                journey.from_failed_transfer_stop_id
+                reachability.from_failed_transfer_stop_id
                 == other.from_failed_transfer_stop_id,
             ]
         )
 
-        if equal_count + worse_count == 6:
+        if equal_count + worse_count == 5:
             return True
     return False
 
 
-def is_pareto_dominated(journey: JourneyIdentifier, other: JourneyIdentifier) -> bool:
+def is_pareto_dominated(reachability: Reachability, other: Reachability) -> bool:
     # Starting points always dominate
     if other.current_trip_id == NO_TRIP_ID:
         return True
 
     worse_count = sum(
         [
-            journey.departure_time < other.departure_time,
-            journey.arrival_time > other.arrival_time,
-            journey.transfers > other.transfers,
-            journey.dist_traveled > (other.dist_traveled + MINIMAL_DISTANCE_DIFFERENCE),
-            journey.is_regional < other.is_regional,
+            reachability.dp_ts < other.dp_ts,
+            reachability.ar_ts > other.ar_ts,
+            reachability.transfers > other.transfers,
+            reachability.dist_traveled
+            > (other.dist_traveled + MINIMAL_DISTANCE_DIFFERENCE),
+            reachability.is_regio < other.is_regio,
         ]
     )
     if worse_count:
         equal_count = sum(
             [
-                journey.departure_time == other.departure_time,
-                journey.arrival_time == other.arrival_time,
-                journey.transfers == other.transfers,
-                abs(journey.dist_traveled - other.dist_traveled)
+                reachability.dp_ts == other.dp_ts,
+                reachability.ar_ts == other.ar_ts,
+                reachability.transfers == other.transfers,
+                abs(reachability.dist_traveled - other.dist_traveled)
                 < MINIMAL_DISTANCE_DIFFERENCE,
-                journey.is_regional == other.is_regional,
+                reachability.is_regio == other.is_regio,
             ]
         )
 
@@ -195,12 +160,12 @@ def get_connections(service_date: date, session: SessionType) -> List[Connection
 
     connections = [
         Connection(
-            departure_time=int(dp.departure_time.timestamp()),
-            arrival_time=int(ar.arrival_time.timestamp()),
-            departure_stop_id=dp.stop_id,
-            arrival_stop_id=ar.stop_id,
+            dp_ts=int(dp.departure_time.timestamp()),
+            ar_ts=int(ar.arrival_time.timestamp()),
+            dp_stop_id=dp.stop_id,
+            ar_stop_id=ar.stop_id,
             trip_id=dp.trip_id,
-            is_regional=int(routes[dp.trip_id].is_regional()),
+            is_regio=int(routes[dp.trip_id].is_regional()),
             dist_traveled=int(ar.shape_dist_traveled - dp.shape_dist_traveled),
         )
         for dp, ar in pairwise(stop_times)
@@ -209,7 +174,7 @@ def get_connections(service_date: date, session: SessionType) -> List[Connection
 
     connections = sorted(
         connections,
-        key=lambda conn: (conn.departure_time,),
+        key=lambda conn: (conn.dp_ts,),
     )
 
     return connections
@@ -224,246 +189,306 @@ def compute_heuristic(
     return int(distance_m // TRAIN_SPEED_MS)
 
 
-@profile()
 def csa(
     connections: List[Connection],
-    stops: Dict[int, List[JourneyIdentifier]],
+    stops: Dict[int, List[Reachability]],
     heuristics: Dict[int, int],
 ):
-    j_ident_id = 1  # 0 is reserved for the starting point
+    r_ident_id = 1  # 0 is reserved for the starting point
     for connection in connections:
-        for journey in stops[connection.departure_stop_id]:
-            is_same_trip = connection.trip_id == journey.current_trip_id
-            if connection.departure_time > journey.arrival_time or is_same_trip:
+        for previous in stops[connection.dp_stop_id]:
+            is_same_trip = connection.trip_id == previous.current_trip_id
+            if connection.dp_ts > previous.ar_ts or is_same_trip:
                 if (
-                    heuristics[connection.arrival_stop_id] - MAX_SECONDS_DRIVING_AWAY
-                ) > journey.min_heuristic:
+                    heuristics[connection.ar_stop_id] - MAX_SECONDS_DRIVING_AWAY
+                ) > previous.min_heuristic:
                     continue
 
-                new_journey = JourneyIdentifier(
-                    arrival_time=connection.arrival_time,
-                    departure_time=connection.departure_time
-                    if journey.current_trip_id == NO_TRIP_ID
-                    else journey.departure_time,
-                    dist_traveled=journey.dist_traveled + connection.dist_traveled,
-                    is_regional=min(journey.is_regional, connection.is_regional),
+                reachability = Reachability(
+                    ar_ts=connection.ar_ts,
+                    dp_ts=connection.dp_ts
+                    if previous.current_trip_id == NO_TRIP_ID
+                    else previous.dp_ts,
+                    dist_traveled=previous.dist_traveled + connection.dist_traveled,
+                    is_regio=min(previous.is_regio, connection.is_regio),
                     current_trip_id=connection.trip_id,
-                    transfers=journey.transfers
+                    transfers=previous.transfers
                     if is_same_trip
-                    else journey.transfers + 1,
+                    else previous.transfers + 1,
                     min_heuristic=min(
-                        journey.min_heuristic, heuristics[connection.arrival_stop_id]
+                        previous.min_heuristic, heuristics[connection.ar_stop_id]
                     ),
-                    j_ident_id=j_ident_id,
-                    last_j_ident_id=journey.j_ident_id,
-                    last_stop_id=connection.departure_stop_id,
-                    last_departure_time=connection.departure_time,
+                    r_ident_id=r_ident_id,
+                    last_r_ident_id=previous.r_ident_id,
+                    last_stop_id=connection.dp_stop_id,
+                    last_dp_ts=connection.dp_ts,
                 )
-                j_ident_id += 1
-                # Using reversed speeds up the algo by a lot, as journeys are kind of
-                # sorted by departure time. It is more likely for a journey to be dominated
-                # by a journey that departs later.
-                for other_journey in reversed(stops[connection.arrival_stop_id]):
-                    if is_pareto_dominated(new_journey, other_journey):
+                r_ident_id += 1
+                # Using reversed speeds up the algo by a lot, as reachabilities are kind of
+                # sorted by departure time. It is more likely for a reachability to be dominated
+                # by a reachability that departs later.
+                for other in reversed(stops[connection.ar_stop_id]):
+                    if is_pareto_dominated(reachability, other):
                         break
                 else:
-                    dest_journeys = stops[connection.arrival_stop_id]
-                    dest_journeys = [
+                    pareto_set = stops[connection.ar_stop_id]
+                    pareto_set = [
                         j
-                        for j in dest_journeys
-                        if not is_pareto_dominated(j, new_journey)
+                        for j in pareto_set
+                        if not is_pareto_dominated(j, reachability)
                     ]
-                    dest_journeys.append(new_journey)
-                    stops[connection.arrival_stop_id] = dest_journeys
+                    pareto_set.append(reachability)
+                    stops[connection.ar_stop_id] = pareto_set
     return stops
 
 
 def csa_alternative_connections(
     connections: List[Connection],
-    stops: Dict[int, List[AlternativeJourneyIdentifier]],
+    stops: Dict[int, List[AlternativeReachability]],
     heuristics: Dict[int, int],
     delayed_trip_id: int,
     min_delay: int,
     max_delay: int,
     failed_transfer_stop_id: int,
 ):
-    j_ident_id = 1  # 0 reserved for start
+    r_ident_id = 10  # 0 - 9 reserved for start
     for connection in connections:
-        for journey in stops[connection.departure_stop_id]:
-            is_same_trip = connection.trip_id == journey.current_trip_id
-            is_delayed = journey.current_trip_id == delayed_trip_id
+        for previous in stops[connection.dp_stop_id]:
+            is_same_trip = connection.trip_id == previous.current_trip_id
+            is_delayed = previous.current_trip_id == delayed_trip_id
             enough_transfer_time = (
-                connection.departure_time > (journey.arrival_time + min_delay)
+                connection.dp_ts > (previous.ar_ts + min_delay)
                 if is_delayed
-                else connection.departure_time > journey.arrival_time
+                else connection.dp_ts > previous.ar_ts
             )
             if is_same_trip or enough_transfer_time:
                 if (
-                    heuristics[connection.arrival_stop_id] - MAX_SECONDS_DRIVING_AWAY
-                ) > journey.min_heuristic:
+                    heuristics[connection.ar_stop_id] - MAX_SECONDS_DRIVING_AWAY
+                ) > previous.min_heuristic:
                     continue
-
-                from_failed_transfer_stop_id = max(
-                    journey.from_failed_transfer_stop_id,
-                    connection.departure_stop_id == failed_transfer_stop_id,
-                )
 
                 transfer_time_from_delayed_trip = (
                     min(
-                        connection.departure_time - journey.arrival_time,
+                        connection.dp_ts - previous.ar_ts,
                         max_delay,
                     )
-                    if is_delayed and from_failed_transfer_stop_id
-                    else journey.transfer_time_from_delayed_trip
+                    if is_delayed and previous.from_failed_transfer_stop_id
+                    else previous.transfer_time_from_delayed_trip
                 )
 
-                new_journey = AlternativeJourneyIdentifier(
-                    arrival_time=connection.arrival_time,
-                    departure_time=connection.departure_time
-                    if journey.current_trip_id == NO_TRIP_ID
-                    else journey.departure_time,
+                reachability = AlternativeReachability(
+                    ar_ts=connection.ar_ts,
+                    dp_ts=connection.dp_ts
+                    if previous.current_trip_id == NO_TRIP_ID
+                    else previous.dp_ts,
                     current_trip_id=connection.trip_id,
-                    transfers=journey.transfers
-                    if is_same_trip
-                    else journey.transfers + 1,
-                    dist_traveled=journey.dist_traveled + connection.dist_traveled,
-                    is_regional=min(journey.is_regional, connection.is_regional),
+                    transfers=previous.transfers
+                    if is_same_trip or previous.current_trip_id == NO_TRIP_ID
+                    else previous.transfers + 1,
+                    dist_traveled=previous.dist_traveled + connection.dist_traveled,
+                    is_regio=min(previous.is_regio, connection.is_regio),
                     transfer_time_from_delayed_trip=transfer_time_from_delayed_trip,
-                    from_failed_transfer_stop_id=from_failed_transfer_stop_id,
+                    from_failed_transfer_stop_id=previous.from_failed_transfer_stop_id,
                     min_heuristic=min(
-                        journey.min_heuristic, heuristics[connection.arrival_stop_id]
+                        previous.min_heuristic, heuristics[connection.ar_stop_id]
                     ),
-                    j_ident_id=j_ident_id,
-                    last_j_ident_id=journey.j_ident_id,
-                    last_stop_id=connection.departure_stop_id,
-                    last_departure_time=connection.departure_time,
+                    r_ident_id=r_ident_id,
+                    last_r_ident_id=previous.r_ident_id,
+                    last_stop_id=connection.dp_stop_id,
+                    last_dp_ts=connection.dp_ts,
                 )
 
-                j_ident_id += 1
-                # Using reversed speeds up the algo by a lot, as journeys are kind of
-                # sorted by departure time. It is more likely for a journey to be dominated
-                # by a journey that departs later.
-                for other_journey in reversed(stops[connection.arrival_stop_id]):
-                    if is_alternative_pareto_dominated(new_journey, other_journey):
+                r_ident_id += 1
+                # Using reversed speeds up the algo by a lot, as reachabilities are kind of
+                # sorted by departure time. It is more likely for a reachability to be dominated
+                # by a reachability that departs later.
+                for other in reversed(stops[connection.ar_stop_id]):
+                    if is_alternative_pareto_dominated(reachability, other):
                         break
                 else:
-                    dest_journeys = stops[connection.arrival_stop_id]
-                    dest_journeys = [
+                    pareto_set = stops[connection.ar_stop_id]
+                    pareto_set = [
                         j
-                        for j in dest_journeys
-                        if not is_alternative_pareto_dominated(j, new_journey)
+                        for j in pareto_set
+                        if not is_alternative_pareto_dominated(j, reachability)
                     ]
-                    dest_journeys.append(new_journey)
-                    stops[connection.arrival_stop_id] = dest_journeys
+                    pareto_set.append(reachability)
+                    stops[connection.ar_stop_id] = pareto_set
     return stops
 
 
-def get_journey_identifier(
-    stops: Dict[int, List[JourneyIdentifier]], stop_id: int, j_ident_id: int
-):
-    for journey in stops[stop_id]:
-        if journey.j_ident_id == j_ident_id:
-            return journey
-
-
-def extract_journey(
-    stops: Dict[int, List[JourneyIdentifier]],
-    journey: JourneyIdentifier,
-):
-    yield journey
+def extract_reachability_chain(
+    stops: Dict[int, List[Reachability]],
+    destination: Reachability,
+) -> List[Reachability]:
+    journey = [destination]
+    previous = destination
     while True:
-        journey = get_journey_identifier(
-            stops, journey.last_stop_id, journey.last_j_ident_id
-        )
-        if journey.current_trip_id != NO_TRIP_ID:
-            yield journey
+        for current in stops[previous.last_stop_id]:
+            if current.r_ident_id == previous.last_r_ident_id:
+                previous = current
+                break
+        if previous.last_stop_id != NO_STOP_ID:
+            journey.append(previous)
         else:
             break
+    return list(reversed(journey))
+
+
+def extract_reachability_chains(
+    stops: Dict[int, List[Reachability]],
+    destination_stop_id: int,
+) -> List[List[Reachability]]:
+    reachability_chains = []
+    for reachability in stops[destination_stop_id]:
+        reachability_chains.append(extract_reachability_chain(stops, reachability))
+    return reachability_chains
+
+
+def match_connection_to_reachability(
+    connections: List[Connection],
+    reachability: Reachability,
+):
+    start_index = bisect_left(
+        connections, reachability.last_dp_ts, key=lambda c: c.dp_ts
+    )
+    for connection in connections[start_index:]:
+        if connection.trip_id == reachability.current_trip_id:
+            return connection
 
 
 def extract_journeys(
-    stops: Dict[int, List[JourneyIdentifier]],
+    stops: Dict[int, List[Reachability]],
     destination_stop_id: int,
-) -> List[List[JourneyIdentifier]]:
+    connections: List[Connection],
+):
+    reachability_chains = extract_reachability_chains(stops, destination_stop_id)
+
     journeys = []
-    for journey in stops[destination_stop_id]:
-        journeys.append(list(reversed(list(extract_journey(stops, journey)))))
+    for reachability_chain in reachability_chains:
+        journey = []
+        for reachability in reachability_chain:
+            journey.append(match_connection_to_reachability(connections, reachability))
+        journeys.append(journey)
+
     return journeys
 
 
-def human_readable_journey_identifier(journey_identifier: JourneyIdentifier):
-    departure_ts = datetime.fromtimestamp(journey_identifier.departure_time)
-    arrival_ts = datetime.fromtimestamp(journey_identifier.arrival_time)
-    duration_seconds = (
-        journey_identifier.arrival_time - journey_identifier.departure_time
+def clean_alternatives(journey: List[Connection], alternatives: List[List[Connection]]):
+    for i, alternative in enumerate(alternatives):
+        for start_index in range(len(alternative)):
+            if alternative[start_index] not in journey:
+                break
+        alternatives[i] = alternative[start_index:]
+
+    return alternatives
+
+
+def journey_simplification(journey: List[Connection]):
+    simplified_journey = []
+
+    dp_ts = journey[0].dp_ts
+    dp_stop_id = journey[0].dp_stop_id
+    dist_traveled = 0
+
+    for c1, c2 in pairwise(journey):
+        dist_traveled += c1.dist_traveled
+        if c1.trip_id == c2.trip_id:
+            pass
+        else:
+            simplified_journey.append(
+                Connection(
+                    dp_ts=dp_ts,
+                    ar_ts=c1.ar_ts,
+                    dp_stop_id=dp_stop_id,
+                    ar_stop_id=c1.ar_stop_id,
+                    trip_id=c1.trip_id,
+                    is_regio=c1.is_regio,
+                    dist_traveled=dist_traveled,
+                )
+            )
+            dp_ts = c2.dp_ts
+            dp_stop_id = c2.dp_stop_id
+            dist_traveled = 0
+
+    simplified_journey.append(
+        Connection(
+            dp_ts=dp_ts,
+            ar_ts=journey[-1].ar_ts,
+            dp_stop_id=dp_stop_id,
+            ar_stop_id=journey[-1].ar_stop_id,
+            trip_id=journey[-1].trip_id,
+            is_regio=journey[-1].is_regio,
+            dist_traveled=dist_traveled + journey[-1].dist_traveled,
+        )
     )
-    transfers = journey_identifier.transfers
-    dist_traveled = journey_identifier.dist_traveled
 
-    last_departure_ts = datetime.fromtimestamp(journey_identifier.last_departure_time)
-
-    journey_str = f'{departure_ts.strftime("%H:%M")} - {arrival_ts.strftime("%H:%M")} ({duration_seconds//60:n}min, {transfers}x, last_dp:{last_departure_ts.strftime("%H:%M")}, {dist_traveled // 1000:n}km)'
-    return journey_str
+    return simplified_journey
 
 
-def journey_to_str(
-    journey: List[JourneyIdentifier], destination_stop_id: int, stations: StationPhillip
-):
-    departure_ts = datetime.fromtimestamp(journey[0].departure_time)
-    arrival_ts = datetime.fromtimestamp(journey[-1].arrival_time)
-    duration_seconds = journey[-1].arrival_time - journey[0].departure_time
-    transfers = journey[-1].transfers
-    dist_traveled = journey[-1].dist_traveled
-    is_regional = journey[-1].is_regional
+def journey_to_fptf(journey: List[Connection]):
+    fptf_journey = {
+        'type': 'journey',
+        'legs': [],
+    }
 
-    journey_str = f'{departure_ts.strftime("%H:%M")} - {arrival_ts.strftime("%H:%M")} ({duration_seconds//60:n}min, {transfers}x, {dist_traveled // 1000:n}km, regio:{"y" if is_regional else "n"}): '
+    stopovers = []
 
-    last_departure_stop_id = journey[0].last_stop_id
-    last_departure_ts = journey[0].last_departure_time
+    dp_ts = journey[0].dp_ts
+    dp_stop_id = journey[0].dp_stop_id
+    dist_traveled = 0
 
-    for j1, j2 in pairwise(journey):
-        if j1.current_trip_id != j2.current_trip_id:
-            stop_name = stations.get_name(last_departure_stop_id)
-            duration = (j1.arrival_time - last_departure_ts) // 60
-            journey_str += f'{stop_name} -> {datetime.fromtimestamp(last_departure_ts).strftime("%H:%M")} 🭃{duration:n}min {j1.current_trip_id}🭎 {datetime.fromtimestamp(j1.arrival_time).strftime("%H:%M")} -> '
+    for c1, c2 in pairwise(journey):
+        dist_traveled += c1.dist_traveled
+        if c1.trip_id == c2.trip_id:
+            stopovers.append(
+                {
+                    'type': 'stopover',
+                    'stop': c1.ar_stop_id,
+                    'arrival': utc_ts_to_iso(c1.ar_ts),
+                    'departure': utc_ts_to_iso(c2.dp_ts),
+                    'distTraveled': dist_traveled,
+                }
+            )
 
-            last_departure_stop_id = j2.last_stop_id
-            last_departure_ts = j2.last_departure_time
+        else:
+            fptf_journey['legs'].append(
+                {
+                    'origin': dp_stop_id,
+                    'destination': c1.ar_stop_id,
+                    'departure': utc_ts_to_iso(dp_ts),
+                    'arrival': utc_ts_to_iso(c1.ar_ts),
+                    'stopovers': stopovers,
+                    'mode': 'train',
+                    'public': True,
+                    'distTraveled': dist_traveled,
+                    'isRegio': bool(c1.is_regio),
+                }
+            )
+            dp_ts = c2.dp_ts
+            dp_stop_id = c2.dp_stop_id
+            dist_traveled = 0
+            stopovers = []
+    
+    fptf_journey['legs'].append(
+        {
+            'origin': dp_stop_id,
+            'destination': journey[-1].ar_stop_id,
+            'departure': utc_ts_to_iso(dp_ts),
+            'arrival': utc_ts_to_iso(journey[-1].ar_ts),
+            'stopovers': stopovers,
+            'mode': 'train',
+            'public': True,
+            'distTraveled': dist_traveled + journey[-1].dist_traveled,
+            'isRegio': bool(journey[-1].is_regio),
+        }
+    )
 
-    stop_name = stations.get_name(last_departure_stop_id)
-    duration = (journey[-1].arrival_time - last_departure_ts) // 60
-    journey_str += f'{stop_name} -> {datetime.fromtimestamp(last_departure_ts).strftime("%H:%M")} 🭃{duration:n}min {j1.current_trip_id}🭎 {arrival_ts.strftime("%H:%M")} -> '
-
-    journey_str += stations.get_name(destination_stop_id)
-    return journey_str
-
-
-def print_journeys(
-    journeys: List[List[JourneyIdentifier]],
-    destination_stop_id: int,
-    stations: StationPhillip,
-):
-    for journey in journeys:
-        print(journey_to_str(journey, destination_stop_id, stations))
-
-
-Transfer = namedtuple(
-    'Transfer',
-    [
-        'arrival_time',
-        'departure_time',
-        'stop_id',
-        'is_regional',
-        'arriving_trip_id',
-        'previous_transfer_stop_id',
-        'previous_transfer_departure_time',
-        'previous_transfer_arrival_time',
-    ],
-)
+    return fptf_journey
 
 
 def find_alternative_connections(
-    journey: List[JourneyIdentifier],
+    journey: List[Connection],
     connections: List[Connection],
     stations: StationPhillip,
     heuristics: Dict[int, int],
@@ -471,54 +496,71 @@ def find_alternative_connections(
 ):
     transfers: List[Transfer] = []
 
-    last_transfer_station = journey[0].last_stop_id
-    last_transfer_departure_time = journey[0].last_departure_time
-    last_transfer_arrival_time = journey[0].last_departure_time - 1
-    last_transfer_is_regional = 1
+    is_regio = 1
+    last_transfer_station = journey[0].dp_stop_id
+    n_transfers = 0
+    dist_traveled = 0
 
-    for j1, j2 in pairwise(journey):
-        if j1.current_trip_id != j2.current_trip_id:
+    for c1, c2 in pairwise(journey):
+        dist_traveled += c1.dist_traveled
+        if c1.trip_id != c2.trip_id:
+            is_regio = min(is_regio, c1.is_regio)
             transfers.append(
                 Transfer(
-                    arrival_time=j1.arrival_time,
-                    departure_time=j2.last_departure_time,
-                    stop_id=j2.last_stop_id,
-                    is_regional=last_transfer_is_regional,
-                    arriving_trip_id=j1.current_trip_id,
+                    ar_ts=c1.ar_ts,
+                    dp_ts=c2.dp_ts,
+                    stop_id=c2.dp_stop_id,
+                    is_regio=is_regio,
+                    ar_trip_id=c1.trip_id,
                     previous_transfer_stop_id=last_transfer_station,
-                    previous_transfer_departure_time=last_transfer_departure_time,
-                    previous_transfer_arrival_time=last_transfer_arrival_time,
+                    transfers=n_transfers,
+                    dist_traveled=dist_traveled
                 )
             )
-
-            last_transfer_station = j2.last_stop_id
-            last_transfer_departure_time = j2.last_departure_time
-            last_transfer_arrival_time = j1.arrival_time
-            last_transfer_is_regional = j1.is_regional
+            last_transfer_station = c2.dp_stop_id
+            n_transfers += 1
 
     alternatives = []
 
-    for transfer in transfers:
-        transfer_time_missed = transfer.departure_time - transfer.arrival_time
+    for i, transfer in enumerate(transfers):
+        transfer_time_missed = transfer.dp_ts - transfer.ar_ts
         if transfer_time_missed > MAX_EXPECTED_DELAY_SECONDS:
             continue
 
         stops = {stop_id: [] for stop_id in stations.evas}
         stops[transfer.previous_transfer_stop_id].append(
-            AlternativeJourneyIdentifier(
-                arrival_time=transfer.previous_transfer_arrival_time,
-                departure_time=transfer.previous_transfer_arrival_time,
-                current_trip_id=NO_TRIP_ID,
-                transfers=-1,
-                dist_traveled=0,
-                is_regional=1,
+            AlternativeReachability(
+                ar_ts=transfers[i - 1].ar_ts if i > 0 else journey[0].dp_ts - 1,
+                dp_ts=transfers[i - 1].ar_ts if i > 0 else journey[0].dp_ts,
+                current_trip_id=transfers[i - 1].ar_trip_id if i > 0 else NO_TRIP_ID,
+                transfers=transfers[i - 1].transfers if i > 0 else 0,
+                dist_traveled=transfers[i - 1].dist_traveled if i > 0 else 0,
+                is_regio=transfer.is_regio, # transfers[i - 1].is_regio if i > 0 else 1,
                 transfer_time_from_delayed_trip=0,
                 from_failed_transfer_stop_id=0,
+                min_heuristic=heuristics[transfer.previous_transfer_stop_id],
+                r_ident_id=0,
+                last_r_ident_id=0,
+                last_stop_id=NO_STOP_ID,
+                last_dp_ts=0,
+            )
+        )
+
+        stops[transfer.stop_id].append(
+            AlternativeReachability(
+                ar_ts=transfer.ar_ts,
+                dp_ts=transfer.dp_ts,
+                current_trip_id=transfer.ar_trip_id,
+                transfers=transfer.transfers,
+                dist_traveled=transfer.dist_traveled,
+                is_regio=transfer.is_regio, # transfers[i - 1].is_regio if i > 0 else 1,
+                transfer_time_from_delayed_trip=0,
+                from_failed_transfer_stop_id=1,
                 min_heuristic=heuristics[transfer.stop_id],
-                j_ident_id=0,
-                last_j_ident_id=0,
-                last_stop_id=transfer.stop_id,
-                last_departure_time=transfer.previous_transfer_arrival_time,
+                r_ident_id=1,
+                last_r_ident_id=1,
+                last_stop_id=NO_STOP_ID,
+                last_dp_ts=0,
             )
         )
 
@@ -526,21 +568,26 @@ def find_alternative_connections(
             connections=connections,
             stops=stops,
             heuristics=heuristics,
-            delayed_trip_id=transfer.arriving_trip_id,
+            delayed_trip_id=transfer.ar_trip_id,
             min_delay=transfer_time_missed,
             max_delay=MAX_EXPECTED_DELAY_SECONDS,
             failed_transfer_stop_id=transfer.stop_id,
         )
 
-        journeys = extract_journeys(stops, destination_stop_id)
-        print('Alternatives')
-        print_journeys(journeys, destination_stop_id, stations)
+        journeys = extract_journeys(
+            stops=stops,
+            destination_stop_id=destination_stop_id,
+            connections=connections,
+        )
+        alternatives.extend(journeys)
+
+    return alternatives
 
 
 def do_routing(
     start: str,
     destination: str,
-    departure_ts: datetime,
+    dp_ts: datetime,
     session: SessionType,
     stations: StationPhillip,
 ):
@@ -553,22 +600,22 @@ def do_routing(
     }
     stops = {stop_id: [] for stop_id in stations.evas}
     stops[start_stop_id].append(
-        JourneyIdentifier(
-            departure_time=int(departure_ts.timestamp()),
-            arrival_time=int(departure_ts.timestamp()),
+        Reachability(
+            dp_ts=int(dp_ts.timestamp()),
+            ar_ts=int(dp_ts.timestamp()),
             current_trip_id=NO_TRIP_ID,
             transfers=-1,
             min_heuristic=heuristics[start_stop_id],
             dist_traveled=0,
-            is_regional=1,
-            j_ident_id=0,
-            last_j_ident_id=0,
-            last_stop_id=start_stop_id,
-            last_departure_time=int(departure_ts.timestamp()),
+            is_regio=1,
+            r_ident_id=0,
+            last_r_ident_id=0,
+            last_stop_id=NO_STOP_ID,
+            last_dp_ts=int(dp_ts.timestamp()),
         )
     )
 
-    service_date = departure_ts.date()
+    service_date = dp_ts.date()
     import pickle
 
     # connections = get_connections(service_date, session=session)
@@ -577,16 +624,25 @@ def do_routing(
 
     stops = csa(connections, stops, heuristics)
 
-    journeys = extract_journeys(stops, destination_stop_id)
-    print_journeys(journeys, destination_stop_id, stations)
+    journeys = extract_journeys(stops, destination_stop_id, connections)
 
-    find_alternative_connections(
-        journey=journeys[0],
-        connections=connections,
-        stations=stations,
-        heuristics=heuristics,
-        destination_stop_id=destination_stop_id,
-    )
+    alternatives = [
+        find_alternative_connections(
+            journey=journey,
+            connections=connections,
+            stations=stations,
+            heuristics=heuristics,
+            destination_stop_id=destination_stop_id,
+        )
+        for journey in journeys
+    ]
+
+    alternatives = [
+        clean_alternatives(journey=journey, alternatives=alternatives_for_journey)
+        for journey, alternatives_for_journey in zip(journeys, alternatives)
+    ]
+
+    return journeys, alternatives
 
 
 def main():
@@ -595,12 +651,49 @@ def main():
     stations = StationPhillip(prefer_cache=True)
 
     with Session() as session:
-        do_routing(
-            start='Tübingen Hbf',
-            destination='Biberach(Riß)',
-            departure_ts=datetime(2023, 5, 1, 13, 0, 0),
+        journeys, alternatives = do_routing(
+            start='Augsburg Hbf',
+            destination='Tübingen Hbf',
+            dp_ts=datetime(2023, 5, 1, 13, 0, 0),
             session=session,
             stations=stations,
+        )
+
+        journey_and_alternatives = []
+
+        for journey, alternatives_for_journey in zip(journeys, alternatives):
+            # journey = journey_simplification(journey)
+            journey_fptf = journey_to_fptf(journey)
+            alternatives_fptf = [journey_to_fptf(j) for j in alternatives_for_journey]
+
+            journey_and_alternatives.append(
+                {
+                    'journey': journey_fptf,
+                    'alternatives': alternatives_fptf,
+                }
+            )
+
+            print('Journey:')
+            print('--------')
+            print_journeys(
+                journeys=[journey],
+                stations=stations,
+            )
+
+            print('Alternatives:')
+            print('-------------')
+            print_journeys(
+                journeys=alternatives_for_journey,
+                stations=stations,
+            )
+            print('\n\n')
+
+        import json
+
+        json.dump(
+            journey_and_alternatives,
+            open('test.json', 'w'),
+            indent=4,
         )
 
 
