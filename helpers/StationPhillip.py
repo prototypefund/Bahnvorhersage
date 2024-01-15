@@ -163,7 +163,7 @@ class StationPhillip:
         else:
             stations = self.stations
         if index_cols is None:
-            index_cols = ('name', 'eva', 'ds100', 'date')
+            index_cols = ('name', 'eva', 'ds100')
 
         for level in index_cols:
             if level not in stations.index.names:
