@@ -58,6 +58,7 @@ spec:
     - studywatch.de
     - holiday.unexcellent.com
     - plasticycle.de
+    - justmyprojects.de
     secretName: default-tls-secret
   rules:
   - host: "bahnvorhersage.de"
@@ -267,5 +268,15 @@ spec:
           backend:
             service:
               name: sfz-plasticycle
+              port:
+                number: 80
+  - host: "justmyprojects.de"
+    http: &justmyprojects
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-justmyprojects
               port:
                 number: 80
