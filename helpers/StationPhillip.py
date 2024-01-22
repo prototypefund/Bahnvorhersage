@@ -565,7 +565,7 @@ class StationPhillip:
         coords_1 = self.get_location(eva=self.get_eva(name=name1))
         coords_2 = self.get_location(eva=self.get_eva(name=name2))
 
-        return geopy.distance.distance(coords_1, coords_2).meters
+        return geopy.distance.great_circle(coords_1, coords_2).meters
 
     def geographic_distance_by_eva(
         self,
