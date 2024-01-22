@@ -337,7 +337,7 @@ class TimetableStop:
             or 'rtr' in stop
         ):
             raise NotImplementedError(
-                f'Found wieird stop. Please report this to the developers: {stop}'
+                f'Found weird stop. Please report this to the developers: {stop}'
             )
 
         self.arrival = Event(stop['ar'][0]) if 'ar' in stop else None
