@@ -4,6 +4,7 @@ from typing import Dict, List, Tuple
 
 import sqlalchemy
 from sqlalchemy.orm import Session as SessionType
+from tqdm import tqdm
 
 from database.engine import sessionfactory
 from gtfs.calendar_dates import CalendarDates
@@ -19,6 +20,7 @@ from router.constants import (
     NO_TRIP_ID,
     NO_STOP_ID,
     TRAIN_SPEED_MS,
+    MINIMUM_TRANSFER_TIME,
 )
 from router.datatypes import (
     AlternativeReachability,
@@ -30,14 +32,12 @@ from router.printing import print_journeys
 from bisect import bisect_left
 
 # TODO:
-# - search all alternatives
 # - tagesübergänge regeln
 # - clean up code
 # - make data format to for api
 # - sort out splitting and merging trains
 # - numba speedup
 # - make api
-# - make frontend
 
 
 def utc_ts_to_iso(ts: int) -> str:
@@ -55,8 +55,8 @@ def is_alternative_pareto_dominated(
         [
             reachability.ar_ts > other.ar_ts,
             reachability.transfers > other.transfers,
-            # reachability.dist_traveled
-            # > (other.dist_traveled + MINIMAL_DISTANCE_DIFFERENCE),
+            reachability.dist_traveled
+            > (other.dist_traveled + MINIMAL_DISTANCE_DIFFERENCE),
             reachability.is_regio < other.is_regio,
             reachability.transfer_time_from_delayed_trip
             < other.transfer_time_from_delayed_trip,
@@ -69,8 +69,8 @@ def is_alternative_pareto_dominated(
             [
                 reachability.ar_ts == other.ar_ts,
                 reachability.transfers == other.transfers,
-                # abs(reachability.dist_traveled - other.dist_traveled)
-                # < MINIMAL_DISTANCE_DIFFERENCE,
+                abs(reachability.dist_traveled - other.dist_traveled)
+                < MINIMAL_DISTANCE_DIFFERENCE,
                 reachability.is_regio == other.is_regio,
                 reachability.transfer_time_from_delayed_trip
                 == other.transfer_time_from_delayed_trip,
@@ -79,7 +79,7 @@ def is_alternative_pareto_dominated(
             ]
         )
 
-        if equal_count + worse_count == 5:
+        if equal_count + worse_count == 6:
             return True
     return False
 
@@ -198,7 +198,10 @@ def csa(
     for connection in connections:
         for previous in stops[connection.dp_stop_id]:
             is_same_trip = connection.trip_id == previous.current_trip_id
-            if connection.dp_ts > previous.ar_ts or is_same_trip:
+            if (
+                connection.dp_ts >= previous.ar_ts + MINIMUM_TRANSFER_TIME
+                or is_same_trip
+            ):
                 if (
                     heuristics[connection.ar_stop_id] - MAX_SECONDS_DRIVING_AWAY
                 ) > previous.min_heuristic:
@@ -242,26 +245,145 @@ def csa(
     return stops
 
 
+def create_alternative_reachability(
+    connection: Connection,
+    previous: AlternativeReachability,
+    transfer_time_from_delayed_trip: int,
+    min_heuristic: int,
+    r_ident_id: int,
+):
+    return AlternativeReachability(
+        ar_ts=connection.ar_ts,
+        dp_ts=connection.dp_ts
+        if previous.current_trip_id == NO_TRIP_ID
+        else previous.dp_ts,
+        current_trip_id=connection.trip_id,
+        transfers=previous.transfers
+        if previous.current_trip_id == NO_TRIP_ID
+        else previous.transfers + 1,
+        dist_traveled=previous.dist_traveled + connection.dist_traveled,
+        is_regio=min(previous.is_regio, connection.is_regio),
+        transfer_time_from_delayed_trip=transfer_time_from_delayed_trip,
+        from_failed_transfer_stop_id=previous.from_failed_transfer_stop_id,
+        min_heuristic=min_heuristic,
+        r_ident_id=r_ident_id,
+        last_r_ident_id=previous.r_ident_id,
+        last_stop_id=connection.dp_stop_id,
+        last_dp_ts=connection.dp_ts,
+    )
+
+
+def add_connection_to_trip_reachability(
+    reachability: AlternativeReachability, connection: Connection, heuristic: int
+):
+    return AlternativeReachability(
+        ar_ts=connection.ar_ts,
+        dp_ts=reachability.dp_ts,
+        current_trip_id=reachability.current_trip_id,
+        transfers=reachability.transfers,
+        dist_traveled=reachability.dist_traveled + connection.dist_traveled,
+        is_regio=reachability.is_regio,
+        transfer_time_from_delayed_trip=reachability.transfer_time_from_delayed_trip,
+        from_failed_transfer_stop_id=reachability.from_failed_transfer_stop_id,
+        min_heuristic=min(heuristic, reachability.min_heuristic),
+        r_ident_id=reachability.r_ident_id,
+        last_r_ident_id=reachability.last_r_ident_id,
+        last_stop_id=reachability.last_stop_id,
+        last_dp_ts=reachability.last_dp_ts,
+    )
+
+
+def reachability_from_trip_reachability(
+    reachability: AlternativeReachability,
+    r_ident_id: int,
+):
+    return AlternativeReachability(
+        ar_ts=reachability.ar_ts,
+        dp_ts=reachability.dp_ts,
+        current_trip_id=reachability.current_trip_id,
+        transfers=reachability.transfers,
+        dist_traveled=reachability.dist_traveled,
+        is_regio=reachability.is_regio,
+        transfer_time_from_delayed_trip=reachability.transfer_time_from_delayed_trip,
+        from_failed_transfer_stop_id=reachability.from_failed_transfer_stop_id,
+        min_heuristic=reachability.min_heuristic,
+        r_ident_id=r_ident_id,
+        last_r_ident_id=reachability.last_r_ident_id,
+        last_stop_id=reachability.last_stop_id,
+        last_dp_ts=reachability.last_dp_ts,
+    )
+
+
+def add_reachability_to_pareto(
+    reachability: AlternativeReachability,
+    pareto_set: List[AlternativeReachability],
+):
+    # Using reversed speeds up the algo by a lot, as reachabilities are kind of
+    # sorted by departure time. It is more likely for a reachability to be dominated
+    # by a reachability that departs later.
+    for other in reversed(pareto_set):
+        if is_alternative_pareto_dominated(reachability, other):
+            break
+    else:
+        pareto_set = [
+            p
+            for p in pareto_set
+            if not is_alternative_pareto_dominated(p, reachability)
+        ]
+        pareto_set.append(reachability)
+    return pareto_set
+
+
 def csa_alternative_connections(
     connections: List[Connection],
     stops: Dict[int, List[AlternativeReachability]],
+    trips: Dict[int, List[AlternativeReachability]],
     heuristics: Dict[int, int],
     delayed_trip_id: int,
     min_delay: int,
-    max_delay: int,
-    failed_transfer_stop_id: int,
+    destination_stop_id: int,
 ):
+    latest_ar_ts_at_destination = connections[-1].ar_ts
     r_ident_id = 10  # 0 - 9 reserved for start
+
     for connection in connections:
+        if connection.dp_ts > latest_ar_ts_at_destination:
+            break
+        new_reachabilities: List[AlternativeReachability] = []
+
+        if connection.trip_id in trips:
+            # Update trip reachabilities with additional arrival time and distance traveled
+            trips[connection.trip_id] = [
+                add_connection_to_trip_reachability(
+                    trip, connection, heuristics[connection.ar_stop_id]
+                )
+                for trip in trips[connection.trip_id]
+                if not (heuristics[connection.ar_stop_id] - MAX_SECONDS_DRIVING_AWAY)
+                > trip.min_heuristic
+            ]
+
+            for trip_reachability in trips[connection.trip_id]:
+                new_reachabilities.append(
+                    reachability_from_trip_reachability(
+                        trip_reachability,
+                        r_ident_id,
+                    )
+                )
+                r_ident_id += 1
+
         for previous in stops[connection.dp_stop_id]:
             is_same_trip = connection.trip_id == previous.current_trip_id
+            # The previous trip is delayed, so we can only take the connection if there is
+            # enough transfer time (at least min_delay)
             is_delayed = previous.current_trip_id == delayed_trip_id
             enough_transfer_time = (
-                connection.dp_ts > (previous.ar_ts + min_delay)
+                connection.dp_ts >= (previous.ar_ts + min_delay + MINIMUM_TRANSFER_TIME)
                 if is_delayed
-                else connection.dp_ts > previous.ar_ts
+                else connection.dp_ts >= previous.ar_ts + MINIMUM_TRANSFER_TIME
             )
-            if is_same_trip or enough_transfer_time:
+            # Connection is reachable if there is enough transfer time. If it is the same trip,
+            # it was already handled in the trip reachability update.
+            if enough_transfer_time and not is_same_trip:
                 if (
                     heuristics[connection.ar_stop_id] - MAX_SECONDS_DRIVING_AWAY
                 ) > previous.min_heuristic:
@@ -270,50 +392,47 @@ def csa_alternative_connections(
                 transfer_time_from_delayed_trip = (
                     min(
                         connection.dp_ts - previous.ar_ts,
-                        max_delay,
+                        MAX_EXPECTED_DELAY_SECONDS,
                     )
                     if is_delayed and previous.from_failed_transfer_stop_id
                     else previous.transfer_time_from_delayed_trip
                 )
 
-                reachability = AlternativeReachability(
-                    ar_ts=connection.ar_ts,
-                    dp_ts=connection.dp_ts
-                    if previous.current_trip_id == NO_TRIP_ID
-                    else previous.dp_ts,
-                    current_trip_id=connection.trip_id,
-                    transfers=previous.transfers
-                    if is_same_trip or previous.current_trip_id == NO_TRIP_ID
-                    else previous.transfers + 1,
-                    dist_traveled=previous.dist_traveled + connection.dist_traveled,
-                    is_regio=min(previous.is_regio, connection.is_regio),
+                reachability = create_alternative_reachability(
+                    connection=connection,
+                    previous=previous,
                     transfer_time_from_delayed_trip=transfer_time_from_delayed_trip,
-                    from_failed_transfer_stop_id=previous.from_failed_transfer_stop_id,
                     min_heuristic=min(
                         previous.min_heuristic, heuristics[connection.ar_stop_id]
                     ),
                     r_ident_id=r_ident_id,
-                    last_r_ident_id=previous.r_ident_id,
-                    last_stop_id=connection.dp_stop_id,
-                    last_dp_ts=connection.dp_ts,
                 )
 
+                new_reachabilities.append(reachability)
+
                 r_ident_id += 1
-                # Using reversed speeds up the algo by a lot, as reachabilities are kind of
-                # sorted by departure time. It is more likely for a reachability to be dominated
-                # by a reachability that departs later.
-                for other in reversed(stops[connection.ar_stop_id]):
-                    if is_alternative_pareto_dominated(reachability, other):
-                        break
-                else:
-                    pareto_set = stops[connection.ar_stop_id]
-                    pareto_set = [
-                        j
-                        for j in pareto_set
-                        if not is_alternative_pareto_dominated(j, reachability)
-                    ]
-                    pareto_set.append(reachability)
-                    stops[connection.ar_stop_id] = pareto_set
+
+                trips[connection.trip_id] = add_reachability_to_pareto(
+                    reachability, trips.get(connection.trip_id, [])
+                )
+
+        for reachability in new_reachabilities:
+            stops[connection.ar_stop_id] = add_reachability_to_pareto(
+                reachability, stops[connection.ar_stop_id]
+            )
+
+        if connection.ar_stop_id == destination_stop_id and len(new_reachabilities):
+            if any(
+                [
+                    r.from_failed_transfer_stop_id
+                    and r.transfer_time_from_delayed_trip == MAX_EXPECTED_DELAY_SECONDS
+                    for r in stops[connection.ar_stop_id]
+                ]
+            ):
+                latest_ar_ts_at_destination = max(
+                    r.ar_ts for r in stops[connection.ar_stop_id]
+                )
+
     return stops
 
 
@@ -357,21 +476,59 @@ def match_connection_to_reachability(
             return connection
 
 
+def get_next_connection(
+    connections: List[Connection],
+    connection: Connection,
+):
+    start_index = bisect_left(connections, connection.ar_ts, key=lambda c: c.dp_ts)
+    for c in connections[start_index:]:
+        if c.trip_id == connection.trip_id:
+            return c
+
+
 def extract_journeys(
     stops: Dict[int, List[Reachability]],
     destination_stop_id: int,
     connections: List[Connection],
-):
+) -> List[List[Connection]]:
     reachability_chains = extract_reachability_chains(stops, destination_stop_id)
 
     journeys = []
     for reachability_chain in reachability_chains:
-        journey = []
+        sparse_journey: List[Connection] = []
         for reachability in reachability_chain:
-            journey.append(match_connection_to_reachability(connections, reachability))
+            sparse_journey.append(
+                match_connection_to_reachability(connections, reachability)
+            )
+
+        journey: List[Connection] = []
+        if len(sparse_journey) == 1:
+            journey.append(sparse_journey[0])
+        else:
+            for c1, c2 in pairwise(sparse_journey):
+                journey.append(c1)
+                while journey[-1].ar_stop_id != c2.dp_stop_id:
+                    journey.append(get_next_connection(connections, journey[-1]))
+
+            journey.append(c2)
+        while journey[-1].ar_stop_id != destination_stop_id:
+            journey.append(get_next_connection(connections, journey[-1]))
+
         journeys.append(journey)
 
     return journeys
+
+
+def connections_equal(c1: Connection, c2: Connection):
+    return (
+        c1.dp_ts == c2.dp_ts
+        and c1.ar_ts == c2.ar_ts
+        and c1.dp_stop_id == c2.dp_stop_id
+        and c1.ar_stop_id == c2.ar_stop_id
+        # and c1.trip_id == c2.trip_id
+        and c1.is_regio == c2.is_regio
+        and c1.dist_traveled == c2.dist_traveled
+    )
 
 
 def clean_alternatives(journey: List[Connection], alternatives: List[List[Connection]]):
@@ -426,7 +583,31 @@ def journey_simplification(journey: List[Connection]):
     return simplified_journey
 
 
-def journey_to_fptf(journey: List[Connection]):
+def remove_duplicate_journeys(journeys: List[List[Connection]]):
+    journeys = sorted(journeys, key=lambda j: j[0].dp_ts)
+    unique_journeys: List[List[Connection]] = []
+    for journey in journeys:
+        for unique_journey in reversed(unique_journeys):
+            if journey[0].dp_ts > unique_journey[0].dp_ts:
+                unique_journeys.append(journey)
+                break
+            elif len(journey) == len(unique_journey):
+                if all(
+                    [
+                        connections_equal(c1, c2)
+                        for c1, c2 in zip(journey, unique_journey)
+                    ]
+                ):
+                    break
+            unique_journeys.append(journey)
+            break
+        else:
+            unique_journeys.append(journey)
+
+    return unique_journeys
+
+
+def journey_to_fptf(journey: List[Connection], routes: Dict[int, Routes]):
     fptf_journey = {
         'type': 'journey',
         'legs': [],
@@ -452,6 +633,13 @@ def journey_to_fptf(journey: List[Connection]):
             )
 
         else:
+            line = {
+                'type': 'line',
+                'id': c1.trip_id,
+                'name': routes[c1.trip_id].route_short_name,
+                'operator': routes[c1.trip_id].agency_id,
+                'isRegio': bool(c1.is_regio),
+            }
             fptf_journey['legs'].append(
                 {
                     'origin': dp_stop_id,
@@ -462,14 +650,21 @@ def journey_to_fptf(journey: List[Connection]):
                     'mode': 'train',
                     'public': True,
                     'distTraveled': dist_traveled,
-                    'isRegio': bool(c1.is_regio),
+                    'line': line,
                 }
             )
             dp_ts = c2.dp_ts
             dp_stop_id = c2.dp_stop_id
             dist_traveled = 0
             stopovers = []
-    
+
+    line = {
+        'type': 'line',
+        'id': journey[-1].trip_id,
+        'name': routes[journey[-1].trip_id].route_short_name,
+        'operator': routes[journey[-1].trip_id].agency_id,
+        'isRegio': bool(journey[-1].is_regio),
+    }
     fptf_journey['legs'].append(
         {
             'origin': dp_stop_id,
@@ -480,7 +675,7 @@ def journey_to_fptf(journey: List[Connection]):
             'mode': 'train',
             'public': True,
             'distTraveled': dist_traveled + journey[-1].dist_traveled,
-            'isRegio': bool(journey[-1].is_regio),
+            'line': line,
         }
     )
 
@@ -514,7 +709,7 @@ def find_alternative_connections(
                     ar_trip_id=c1.trip_id,
                     previous_transfer_stop_id=last_transfer_station,
                     transfers=n_transfers,
-                    dist_traveled=dist_traveled
+                    dist_traveled=dist_traveled,
                 )
             )
             last_transfer_station = c2.dp_stop_id
@@ -527,15 +722,17 @@ def find_alternative_connections(
         if transfer_time_missed > MAX_EXPECTED_DELAY_SECONDS:
             continue
 
+        ar_ts = transfers[i - 1].ar_ts if i > 0 else journey[0].dp_ts - 1
+
         stops = {stop_id: [] for stop_id in stations.evas}
         stops[transfer.previous_transfer_stop_id].append(
             AlternativeReachability(
-                ar_ts=transfers[i - 1].ar_ts if i > 0 else journey[0].dp_ts - 1,
+                ar_ts=ar_ts,
                 dp_ts=transfers[i - 1].ar_ts if i > 0 else journey[0].dp_ts,
                 current_trip_id=transfers[i - 1].ar_trip_id if i > 0 else NO_TRIP_ID,
                 transfers=transfers[i - 1].transfers if i > 0 else 0,
                 dist_traveled=transfers[i - 1].dist_traveled if i > 0 else 0,
-                is_regio=transfer.is_regio, # transfers[i - 1].is_regio if i > 0 else 1,
+                is_regio=transfer.is_regio,  # transfers[i - 1].is_regio if i > 0 else 1,
                 transfer_time_from_delayed_trip=0,
                 from_failed_transfer_stop_id=0,
                 min_heuristic=heuristics[transfer.previous_transfer_stop_id],
@@ -553,7 +750,7 @@ def find_alternative_connections(
                 current_trip_id=transfer.ar_trip_id,
                 transfers=transfer.transfers,
                 dist_traveled=transfer.dist_traveled,
-                is_regio=transfer.is_regio, # transfers[i - 1].is_regio if i > 0 else 1,
+                is_regio=transfer.is_regio,  # transfers[i - 1].is_regio if i > 0 else 1,
                 transfer_time_from_delayed_trip=0,
                 from_failed_transfer_stop_id=1,
                 min_heuristic=heuristics[transfer.stop_id],
@@ -564,14 +761,18 @@ def find_alternative_connections(
             )
         )
 
+        trips: Dict[int, List[AlternativeReachability]] = dict()
+
+        start_index = bisect_left(connections, ar_ts, key=lambda c: c.dp_ts)
+
         stops = csa_alternative_connections(
-            connections=connections,
+            connections=connections[start_index:],
             stops=stops,
+            trips=trips,
             heuristics=heuristics,
             delayed_trip_id=transfer.ar_trip_id,
             min_delay=transfer_time_missed,
-            max_delay=MAX_EXPECTED_DELAY_SECONDS,
-            failed_transfer_stop_id=transfer.stop_id,
+            destination_stop_id=destination_stop_id,
         )
 
         journeys = extract_journeys(
@@ -584,6 +785,7 @@ def find_alternative_connections(
     return alternatives
 
 
+@profile()
 def do_routing(
     start: str,
     destination: str,
@@ -625,6 +827,7 @@ def do_routing(
     stops = csa(connections, stops, heuristics)
 
     journeys = extract_journeys(stops, destination_stop_id, connections)
+    journeys = remove_duplicate_journeys(journeys)
 
     alternatives = [
         find_alternative_connections(
@@ -634,12 +837,17 @@ def do_routing(
             heuristics=heuristics,
             destination_stop_id=destination_stop_id,
         )
-        for journey in journeys
+        for journey in journeys  # tqdm(journeys, desc='Finding alternatives')
     ]
 
     alternatives = [
         clean_alternatives(journey=journey, alternatives=alternatives_for_journey)
         for journey, alternatives_for_journey in zip(journeys, alternatives)
+    ]
+
+    alternatives = [
+        remove_duplicate_journeys(alternatives_for_journey)
+        for alternatives_for_journey in alternatives
     ]
 
     return journeys, alternatives
@@ -659,12 +867,22 @@ def main():
             stations=stations,
         )
 
+        trip_ids = set()
+        for journey in journeys:
+            for connection in journey:
+                trip_ids.add(connection.trip_id)
+        for alternatives_for_journey in alternatives:
+            for alternative in alternatives_for_journey:
+                for connection in alternative:
+                    trip_ids.add(connection.trip_id)
+
+        routes = get_routes(trip_ids, session)
         journey_and_alternatives = []
 
         for journey, alternatives_for_journey in zip(journeys, alternatives):
             # journey = journey_simplification(journey)
-            journey_fptf = journey_to_fptf(journey)
-            alternatives_fptf = [journey_to_fptf(j) for j in alternatives_for_journey]
+            journey_fptf = journey_to_fptf(journey, routes=routes)
+            alternatives_fptf = [journey_to_fptf(j, routes=routes) for j in alternatives_for_journey]
 
             journey_and_alternatives.append(
                 {

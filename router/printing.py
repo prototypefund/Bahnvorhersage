@@ -4,7 +4,7 @@ from datetime import datetime
 from helpers.StationPhillip import StationPhillip
 from itertools import pairwise
 
-def human_readable_reachability(reachability: Reachability):
+def human_readable_reachability(reachability: Reachability, stations: StationPhillip):
     dp_ts = datetime.fromtimestamp(reachability.dp_ts)
     ar_ts = datetime.fromtimestamp(reachability.ar_ts)
     duration_seconds = reachability.ar_ts - reachability.dp_ts
@@ -13,7 +13,9 @@ def human_readable_reachability(reachability: Reachability):
 
     last_dp_ts = datetime.fromtimestamp(reachability.last_dp_ts)
 
-    journey_str = f'{dp_ts.strftime("%H:%M")} - {ar_ts.strftime("%H:%M")} ({duration_seconds//60:n}min, {transfers}x, last_dp:{last_dp_ts.strftime("%H:%M")}, {dist_traveled // 1000:n}km)'
+    last_station_name = stations.get_name(eva=reachability.last_stop_id)
+
+    journey_str = f'{dp_ts.strftime("%H:%M")} - {ar_ts.strftime("%H:%M")} ({last_station_name}, {duration_seconds//60:n}min, {transfers}x, last_dp:{last_dp_ts.strftime("%H:%M")}, {dist_traveled // 1000:n}km)'
     return journey_str
 
 
