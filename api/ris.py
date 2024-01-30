@@ -53,17 +53,13 @@ class RisStopPlace:
             self.station_id = int(stop_place['stationID'])
         self.lat = float(stop_place['position']['latitude'])
         self.lon = float(stop_place['position']['longitude'])
-        self.country = stop_place['countryCode']
-        self.state = None
-        if 'state' in stop_place:
-            self.state = stop_place['state']
+        self.country = stop_place.get('countryCode', None)
+        self.state = stop_place.get('state', None)
         self.metropolis = None
         if 'metropolis' in stop_place:
             self.metropolis = stop_place['metropolis']['DE']
         self.available_transports = stop_place['availableTransports']
-        self.transport_associations = None
-        if 'transportAssociations' in stop_place:
-            self.transport_associations = stop_place['transportAssociations']
+        self.transport_associations = stop_place.get('transportAssociations', None)
 
 
 def stop_place_by_name(name: str) -> RisStopPlace | None:
@@ -80,7 +76,7 @@ def stop_place_by_name(name: str) -> RisStopPlace | None:
         Either the stop place or None if it could not be found
     """
     r = requests.get(
-        f'https://apis.deutschebahn.com/db-api-marketplace/apis/ris-stations/v1/stop-places/by-name/{urllib.parse.quote(name)}',
+        f'https://apis.deutschebahn.com/db-api-marketplace/apis/ris-stations/v1/stop-places/by-name/{urllib.parse.quote(name, safe="")}',
         headers=get_credentials_header(),
     )
     if r.ok:
