@@ -4,9 +4,10 @@ from flask import Blueprint, current_app, jsonify, make_response, request
 from flask.helpers import send_file
 
 from data_analysis import data_stats
+from router.router_csa import do_routing
 from webserver import per_station_time, streckennetz
 from webserver.connection import get_and_rate_journeys
-from webserver.db_logger import log_activity
+from webserver.db_logger import log_activity, db
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 bp_limited = Blueprint("api_rate_limited", __name__, url_prefix='/api')
@@ -119,6 +120,20 @@ def trip():
     journeys = get_and_rate_journeys(
         start, destination, date, search_for_arrival, only_regional, bike
     )
+    resp = jsonify(journeys)
+    resp.headers.add("Access-Control-Allow-Origin", "*")
+    return resp
+
+
+@bp.route('/journeys', methods=['POST'])
+@log_activity
+def journeys():
+    origin = request.json['origin']
+    destination = request.json['destination']
+    departure = datetime.fromisoformat(request.json['departure'])
+
+    journeys = do_routing(origin, destination, departure, db.session, streckennetz)
+
     resp = jsonify(journeys)
     resp.headers.add("Access-Control-Allow-Origin", "*")
     return resp
