@@ -49,7 +49,9 @@ class StationPhillip:
             stations['valid_from'] = pd.NaT
         if 'valid_to' not in stations.columns:
             stations['valid_to'] = pd.NaT
+        stations['valid_from'] = pd.to_datetime(stations['valid_from'])
         stations['valid_from'] = stations['valid_from'].fillna(pd.Timestamp.min)
+        stations['valid_to'] = pd.to_datetime(stations['valid_to'])
         stations['valid_to'] = stations['valid_to'].fillna(pd.Timestamp.max)
         stations['eva'] = stations['eva'].astype(int)
         stations['name'] = stations['name'].astype(pd.StringDtype())
