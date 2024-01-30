@@ -7,6 +7,7 @@ from router.constants import NO_STOP_ID
 from gtfs.routes import Routes
 
 from datetime import datetime, UTC
+from dataclasses import dataclass
 
 def utc_ts_to_iso(ts: int) -> str:
     return datetime.fromtimestamp(ts, UTC).isoformat()
@@ -180,6 +181,110 @@ def remove_duplicate_journeys(journeys: List[List[Connection]]):
             unique_journeys.append(journey)
 
     return unique_journeys
+
+@dataclass
+class FPTFLine:
+    id_: int
+    name: str
+    operator: str
+    isRegio: bool
+    type: str = 'line'
+
+
+@dataclass
+class FPTFStopover:
+    stop: int
+    arrival: str
+    departure: str
+    distTraveled: int
+    type: str = 'stopover'
+
+
+@dataclass
+class FPTFLeg:
+    origin: int
+    destination: int
+    departure: str
+    arrival: str
+    stopovers: List[FPTFStopover]
+    distTraveled: int
+    line: FPTFLine
+    mode: str = 'train'
+    public: bool = True
+
+@dataclass
+class FPTFJourney:
+    legs: List[FPTFLeg]
+    type: str = 'journey'
+
+    @staticmethod
+    def from_journey(journey: List[Connection], routes: Dict[int, Routes]) -> 'FPTFJourney':
+        legs: List[FPTFLeg] = []
+        stopovers: List[FPTFStopover] = []
+
+        dp_ts = journey[0].dp_ts
+        dp_stop_id = journey[0].dp_stop_id
+        dist_traveled = 0
+
+        for c1, c2 in pairwise(journey):
+            dist_traveled += c1.dist_traveled
+            if c1.trip_id == c2.trip_id:
+                stopovers.append(
+                    FPTFStopover(
+                        stop=c1.ar_stop_id,
+                        arrival=utc_ts_to_iso(c1.ar_ts),
+                        departure=utc_ts_to_iso(c2.dp_ts),
+                        distTraveled=dist_traveled,
+                    )
+                )
+            else:
+                line = FPTFLine(
+                    id_=c1.trip_id,
+                    name=routes[c1.trip_id].route_short_name,
+                    operator=routes[c1.trip_id].agency_id,
+                    isRegio=bool(c1.is_regio),
+                )
+                legs.append(
+                    FPTFLeg(
+                        origin=dp_stop_id,
+                        destination=c1.ar_stop_id,
+                        departure=utc_ts_to_iso(dp_ts),
+                        arrival=utc_ts_to_iso(c1.ar_ts),
+                        stopovers=stopovers,
+                        distTraveled=dist_traveled,
+                        line=line,
+                    )
+                )
+
+                dp_ts = c2.dp_ts
+                dp_stop_id = c2.dp_stop_id
+                dist_traveled = 0
+                stopovers: List[FPTFStopover] = []
+
+        line = FPTFLine(
+            id_=journey[-1].trip_id,
+            name=routes[journey[-1].trip_id].route_short_name,
+            operator=routes[journey[-1].trip_id].agency_id,
+            isRegio=bool(journey[-1].is_regio),
+        )
+        legs.append(
+            FPTFLeg(
+                origin=dp_stop_id,
+                destination=journey[-1].ar_stop_id,
+                departure=utc_ts_to_iso(dp_ts),
+                arrival=utc_ts_to_iso(journey[-1].ar_ts),
+                stopovers=stopovers,
+                distTraveled=dist_traveled + journey[-1].dist_traveled,
+                line=line,
+            )
+        )
+
+        return FPTFJourney(legs=legs)
+    
+@dataclass
+class FPTFJourneyAndAlternatives:
+    journey: FPTFJourney
+    alternatives: List[FPTFJourney]
 
 
 def journey_to_fptf(journey: List[Connection], routes: Dict[int, Routes]):
