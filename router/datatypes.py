@@ -16,24 +16,24 @@ Connection = namedtuple(
     ],
 )
 
-Reachability = namedtuple(
-    'Reachability',
-    [
-        'dp_ts',            # departure time at the origin stop
-        'ar_ts',            # arrival time at this stop
-        'transfers',        # number of transfers on the way to this stop
-        'dist_traveled',    # distance traveled on the way to this stop
-        'is_regio',         # way to this stop is only regio
-        'current_trip_id',  # trip id used to reach this stop
-        'min_heuristic',    # minimum heuristic on the way to this stop
-        'r_ident_id',       # unique id for this reachability
-        'last_r_ident_id',  # id of the reachability that was used to reach this one
-        'last_stop_id',
-        'last_dp_ts',
-    ],
-)
+# Reachability = namedtuple(
+#     'Reachability',
+#     [
+#         'dp_ts',            # departure time at the origin stop
+#         'ar_ts',            # arrival time at this stop
+#         'transfers',        # number of transfers on the way to this stop
+#         'dist_traveled',    # distance traveled on the way to this stop
+#         'is_regio',         # way to this stop is only regio
+#         'current_trip_id',  # trip id used to reach this stop
+#         'min_heuristic',    # minimum heuristic on the way to this stop
+#         'r_ident_id',       # unique id for this reachability
+#         'last_r_ident_id',  # id of the reachability that was used to reach this one
+#         'last_stop_id',
+#         'last_dp_ts',
+#     ],
+# )
 
-AlternativeReachability = namedtuple(
+Reachability = namedtuple(
     'AlternativeReachability',
     [
         'dp_ts',                            # departure time at the origin stop 
