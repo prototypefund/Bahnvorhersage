@@ -76,7 +76,7 @@ def stop_place_by_name(name: str) -> RisStopPlace | None:
         Either the stop place or None if it could not be found
     """
     r = requests.get(
-        f'https://apis.deutschebahn.com/db-api-marketplace/apis/ris-stations/v1/stop-places/by-name/{urllib.parse.quote(name, safe="")}',
+        f'https://apis.deutschebahn.com/db-api-marketplace/apis/ris-stations/v1/stop-places/by-name/{urllib.parse.quote(name, safe="")}?sortBy=QUERY_MATCH&onlyActive=false',
         headers=get_credentials_header(),
     )
     if r.ok:
