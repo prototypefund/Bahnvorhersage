@@ -7,6 +7,8 @@ from typing import Tuple, Dict
 from helpers.StationPhillip import StationPhillip
 from database.upsert import upsert_with_retry
 from tqdm import tqdm
+import datetime
+from rtd_crawler.parser_helpers import db_to_utc
 
 
 def migrate_chunk(
@@ -14,27 +16,33 @@ def migrate_chunk(
     engine: sqlalchemy.engine.Engine,
     chunk: Tuple[int, int],
     stations: StationPhillip,
-    unknown_stations: set
 ):
     old_stops = PlanById.get_stops_from_chunk(session, chunk)
     mew_stops: Dict[int, Dict] = {}
     for old_hash in old_stops:
-        try:
-            stations.get_eva(name=old_stops[old_hash]['station'])
-        except KeyError:
-            if old_stops[old_hash]['station'] not in unknown_stations:
-                unknown_stations.add(old_stops[old_hash]['station'])
-                print('Unknown:', unknown_stations)
-        # new_stop = PlanByIdV2(
-        #     old_stops[old_hash],
-        #     stop_id=stations.get_eva(name=old_stops[old_hash]['station']),
-        # )
-        # mew_stops[new_stop.hash_id] = new_stop.as_dict()
+        # Skip stops before 2021-09-01, because there was a bug that mismatched
+        # the stations. So data points might have the wrong station.
+        ar_pt = old_stops[old_hash].get('ar', [{'pt': None}])[0].get('pt', None)
+        dp_pt = old_stops[old_hash].get('dp', [{'pt': None}])[0].get('pt', None)
+        if ar_pt is not None and db_to_utc(ar_pt) < datetime.datetime(
+            2021, 9, 1, tzinfo=datetime.timezone.utc
+        ):
+            continue
+        if dp_pt is not None and db_to_utc(dp_pt) < datetime.datetime(
+            2021, 9, 1, tzinfo=datetime.timezone.utc
+        ):
+            continue
+        stations.get_eva(name=old_stops[old_hash]['station'])
 
-    # upsert_with_retry(
-    #     engine=engine, table=PlanByIdV2.__table__, rows=list(mew_stops.values())
-    # )
-    return unknown_stations
+        new_stop = PlanByIdV2(
+            old_stops[old_hash],
+            stop_id=stations.get_eva(name=old_stops[old_hash]['station']),
+        )
+        mew_stops[new_stop.hash_id] = new_stop.as_dict()
+
+    upsert_with_retry(
+        engine=engine, table=PlanByIdV2.__table__, rows=list(mew_stops.values())
+    )
 
 
 def migrate():
@@ -45,9 +53,13 @@ def migrate():
     with Session() as session:
         chunk_limits = PlanById.get_chunk_limits(session)
 
-        unknown_stations = set()
         for chunk in tqdm(chunk_limits):
-            unknown_stations = migrate_chunk(session, engine, chunk, stations, unknown_stations)
+            migrate_chunk(
+                session,
+                engine,
+                chunk,
+                stations,
+            )
 
 
 if __name__ == '__main__':
