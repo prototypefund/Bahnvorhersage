@@ -37,6 +37,7 @@ spec:
     - next.bahnvorhersage.de
     - db-rest.bahnvorhersage.de
     - trainconnectionprediction.de
+    - notes.bahnvorhersage.de
     - nextcloud.sfz-eningen.de
     - nextcloud.marcpanse.de
     - paralox-nextcloud.de
@@ -126,6 +127,16 @@ spec:
               name: frontend-service
               port:
                 number: 80
+  - host: "notes.bahnvorhersage.de"
+    http:
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: hedgedoc
+              port:
+                number: 3000
   - host: "overleaf.marcpanse.de"
     http: &overleaf
       paths:
