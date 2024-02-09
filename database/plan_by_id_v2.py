@@ -76,7 +76,7 @@ class PlanByIdV2(Base):
     @staticmethod
     def get_stops_from_chunk(
         session: sqlalchemy.orm.Session, chunk_limits: Tuple[int, int]
-    ) -> Dict[int, dict]:
+    ) -> List['PlanByIdV2']:
         """
         Get stops that have a hash_id within chunk_limits
 
@@ -104,8 +104,8 @@ class PlanByIdV2(Base):
             .all()
         )
 
-        return {stop.hash_id: json.loads(stop.stop) for stop in stops}
-
+        return stops
+    
     @staticmethod
     def get_hash_ids_in_chunk_limits(
         session: sqlalchemy.orm.Session, chunk_limits: Tuple[int, int]
