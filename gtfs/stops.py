@@ -1,9 +1,12 @@
 import enum
+from typing import Dict, Generator, List, Tuple
 
+import geopy.distance
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import BigInteger
 
 from database.base import Base
+from database.engine import sessionfactory
 
 
 class LocationType(enum.Enum):
@@ -54,3 +57,49 @@ class Stops(Base):
             self.parent_station,
             self.platform_code,
         )
+
+
+class StopSteffen:
+    names_to_ids: Dict[str, List[int]]
+    stops: Dict[int, Stops]
+
+    def __init__(self) -> None:
+        stops = self._get_stops()
+
+        self.stops = {stop.stop_id: stop for stop in stops}
+
+        self.names_to_ids = {}
+        for stop in self.stations():
+            if stop.stop_name not in self.names_to_ids:
+                self.names_to_ids[stop.stop_name] = []
+            self.names_to_ids[stop.stop_name].append(stop.stop_id)
+
+    def _get_stops(self) -> List[Stops]:
+        engine, Session = sessionfactory()
+        with Session() as session:
+            stops = session.scalar(Stops).all()
+        engine.dispose()
+        return stops
+
+    def stations(self) -> Generator[Stops, None, None]:
+        for stop in self.stops.values():
+            if stop.location_type == LocationType.STATION:
+                yield stop
+
+    def name_to_ids(self, name: str) -> List[int]:
+        return self.names_to_ids[name]
+
+    def get_stop(self, stop_id: int) -> Stops:
+        return self.stops[stop_id]
+
+    def get_name(self, stop_id: int) -> str:
+        return self.get_stop(stop_id).stop_name
+
+    def get_location(self, stop_id: int) -> Tuple[float, float]:
+        stop = self.get_stop(stop_id)
+        return stop.stop_lat, stop.stop_lon
+
+    def get_distance(self, stop_id1: int, stop_id2: int) -> float:
+        loc1 = self.get_location(stop_id1)
+        loc2 = self.get_location(stop_id2)
+        return geopy.distance.great_circle(loc1, loc2).meters

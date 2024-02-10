@@ -1,17 +1,18 @@
 import os
-import config
-
-from flask import Flask
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-from helpers import logging
-from helpers.StreckennetzSteffi import StreckennetzSteffi
-from data_analysis.per_station import PerStationOverTime
-from webserver.db_logger import db
-from ml_models.predictor import Predictor
 
 # Do not use GUI for matplotlib
 import matplotlib
+from flask import Flask
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+import config
+from data_analysis.per_station import PerStationOverTime
+from helpers import logging
+from helpers.StreckennetzSteffi import StreckennetzSteffi
+from ml_models.predictor import Predictor
+from router.router_csa import RouterCSA
+from webserver.db_logger import db
 
 matplotlib.use('Agg')
 
@@ -27,6 +28,10 @@ logging.info('Initialising predictor')
 predictor = Predictor(n_models=15)
 logging.info('Done!')
 
+logging.info('Initialising router')
+router = RouterCSA()
+logging.info('Done!')
+
 
 def create_app():
     import helpers.bahn_vorhersage
@@ -40,7 +45,7 @@ def create_app():
         static_url_path="",
     )
 
-    from webserverconfig import ProductionConfig, DevelopmentConfig
+    from webserverconfig import DevelopmentConfig, ProductionConfig
 
     if app.config["DEBUG"]:
         app.config.from_object(DevelopmentConfig)

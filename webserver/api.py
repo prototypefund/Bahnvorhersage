@@ -1,13 +1,14 @@
 from datetime import datetime
 
-from flask import Blueprint, current_app, jsonify, make_response, request
+from flask import (Blueprint, abort, current_app, jsonify, make_response,
+                   request)
 from flask.helpers import send_file
 
 from data_analysis import data_stats
-from router.router_csa import do_routing
-from webserver import per_station_time, streckennetz
+from router.exceptions import NoRouteFound, NoTimetableFound
+from webserver import per_station_time, router, streckennetz
 from webserver.connection import get_and_rate_journeys
-from webserver.db_logger import log_activity, db
+from webserver.db_logger import db, log_activity
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 bp_limited = Blueprint("api_rate_limited", __name__, url_prefix='/api')
@@ -132,10 +133,15 @@ def journeys():
     destination = request.json['destination']
     departure = datetime.fromisoformat(request.json['departure'])
 
-    journeys = do_routing(origin, destination, departure, db.session, streckennetz)
+    try:
+        journeys = router.do_routing(origin, destination, departure, db.session)
+    except NoTimetableFound as e:
+        abort(500, e.message)
+    except NoRouteFound as e:
+        abort(500, e.message)
 
     resp = jsonify(journeys)
-    resp.headers.add("Access-Control-Allow-Origin", "*")
+    # resp.headers.add("Access-Control-Allow-Origin", "*")
     return resp
 
 

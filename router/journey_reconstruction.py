@@ -1,16 +1,17 @@
-from typing import List, Dict
 from bisect import bisect_left
-from itertools import pairwise
-
-from router.datatypes import Reachability, Connection
-from router.constants import NO_STOP_ID
-from gtfs.routes import Routes
-
-from datetime import datetime, UTC
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from itertools import pairwise
+from typing import Dict, List
+
+from gtfs.routes import Routes
+from router.constants import NO_STOP_ID
+from router.datatypes import Connection, Reachability
+
 
 def utc_ts_to_iso(ts: int) -> str:
     return datetime.fromtimestamp(ts, UTC).isoformat()
+
 
 def extract_reachability_chain(
     stops: Dict[int, List[Reachability]],
@@ -182,6 +183,7 @@ def remove_duplicate_journeys(journeys: List[List[Connection]]):
 
     return unique_journeys
 
+
 @dataclass
 class FPTFLine:
     id_: int
@@ -212,13 +214,16 @@ class FPTFLeg:
     mode: str = 'train'
     public: bool = True
 
+
 @dataclass
 class FPTFJourney:
     legs: List[FPTFLeg]
     type: str = 'journey'
 
     @staticmethod
-    def from_journey(journey: List[Connection], routes: Dict[int, Routes]) -> 'FPTFJourney':
+    def from_journey(
+        journey: List[Connection], routes: Dict[int, Routes]
+    ) -> 'FPTFJourney':
         legs: List[FPTFLeg] = []
         stopovers: List[FPTFStopover] = []
 
@@ -280,84 +285,9 @@ class FPTFJourney:
         )
 
         return FPTFJourney(legs=legs)
-    
+
+
 @dataclass
 class FPTFJourneyAndAlternatives:
     journey: FPTFJourney
     alternatives: List[FPTFJourney]
-
-
-def journey_to_fptf(journey: List[Connection], routes: Dict[int, Routes]):
-    fptf_journey = {
-        'type': 'journey',
-        'legs': [],
-    }
-
-    stopovers = []
-
-    dp_ts = journey[0].dp_ts
-    dp_stop_id = journey[0].dp_stop_id
-    dist_traveled = 0
-
-    for c1, c2 in pairwise(journey):
-        dist_traveled += c1.dist_traveled
-        if c1.trip_id == c2.trip_id:
-            stopovers.append(
-                {
-                    'type': 'stopover',
-                    'stop': c1.ar_stop_id,
-                    'arrival': utc_ts_to_iso(c1.ar_ts),
-                    'departure': utc_ts_to_iso(c2.dp_ts),
-                    'distTraveled': dist_traveled,
-                }
-            )
-
-        else:
-            line = {
-                'type': 'line',
-                'id': c1.trip_id,
-                'name': routes[c1.trip_id].route_short_name,
-                'operator': routes[c1.trip_id].agency_id,
-                'isRegio': bool(c1.is_regio),
-            }
-            fptf_journey['legs'].append(
-                {
-                    'origin': dp_stop_id,
-                    'destination': c1.ar_stop_id,
-                    'departure': utc_ts_to_iso(dp_ts),
-                    'arrival': utc_ts_to_iso(c1.ar_ts),
-                    'stopovers': stopovers,
-                    'mode': 'train',
-                    'public': True,
-                    'distTraveled': dist_traveled,
-                    'line': line,
-                }
-            )
-            dp_ts = c2.dp_ts
-            dp_stop_id = c2.dp_stop_id
-            dist_traveled = 0
-            stopovers = []
-
-    line = {
-        'type': 'line',
-        'id': journey[-1].trip_id,
-        'name': routes[journey[-1].trip_id].route_short_name,
-        'operator': routes[journey[-1].trip_id].agency_id,
-        'isRegio': bool(journey[-1].is_regio),
-    }
-    fptf_journey['legs'].append(
-        {
-            'origin': dp_stop_id,
-            'destination': journey[-1].ar_stop_id,
-            'departure': utc_ts_to_iso(dp_ts),
-            'arrival': utc_ts_to_iso(journey[-1].ar_ts),
-            'stopovers': stopovers,
-            'mode': 'train',
-            'public': True,
-            'distTraveled': dist_traveled + journey[-1].dist_traveled,
-            'line': line,
-        }
-    )
-
-    return fptf_journey
-

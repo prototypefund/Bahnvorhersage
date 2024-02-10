@@ -1,8 +1,10 @@
-from router.datatypes import Connection, Reachability
-from typing import List
 from datetime import datetime
-from helpers.StationPhillip import StationPhillip
 from itertools import pairwise
+from typing import List
+
+from helpers.StationPhillip import StationPhillip
+from router.datatypes import Connection, Reachability
+
 
 def human_readable_reachability(reachability: Reachability, stations: StationPhillip):
     dp_ts = datetime.fromtimestamp(reachability.dp_ts)
@@ -19,9 +21,7 @@ def human_readable_reachability(reachability: Reachability, stations: StationPhi
     return journey_str
 
 
-def journey_to_str(
-    journey: List[Connection], stations: StationPhillip
-):
+def journey_to_str(journey: List[Connection], stations: StationPhillip):
     dp_ts = datetime.fromtimestamp(journey[0].dp_ts)
     ar_ts = datetime.fromtimestamp(journey[-1].ar_ts)
     duration = journey[-1].ar_ts - journey[0].dp_ts
