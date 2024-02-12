@@ -29,6 +29,11 @@ class GTFSUpserter:
         self.trips = {}
         self.sa_engine, Session = sessionfactory()
 
+        self.stops_changed = False
+        self.agencies_changed = False
+        self.calendar_dates_changed = False
+        self.routes_changed = False
+
         with Session() as session:
             clear_temp_tables(session)
 
@@ -41,6 +46,11 @@ class GTFSUpserter:
         stop_times: Dict[int, Tuple],
         trips: Dict[int, Tuple],
     ):
+        self.stops_changed = stops.items() >= self.stops.items() or self.stops_changed
+        self.agencies_changed = agencies.items() >= self.agecies.items() or self.agencies_changed
+        self.calendar_dates_changed = calendar_dates.items() >= self.calendar_dates.items() or self.calendar_dates_changed
+        self.routes_changed = routes.items() >= self.routes.items() or self.routes_changed
+
         self.stops.update(stops)
         self.agecies.update(agencies)
         self.calendar_dates.update(calendar_dates)
@@ -55,39 +65,42 @@ class GTFSUpserter:
         with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
             futures = []
 
-            futures.append(
-                executor.submit(
-                    upsert_with_retry,
-                    self.sa_engine,
-                    Stops.__table__,
-                    list(self.stops.values()),
+            if self.stops_changed:
+                futures.append(
+                    executor.submit(
+                        upsert_with_retry,
+                        self.sa_engine,
+                        Stops.__table__,
+                        list(self.stops.values()),
+                    )
                 )
-            )
-            futures.append(
-                executor.submit(
-                    upsert_with_retry,
-                    self.sa_engine,
-                    Agency.__table__,
-                    list(self.agecies.values()),
+            if self.agencies_changed:
+                futures.append(
+                    executor.submit(
+                        upsert_with_retry,
+                        self.sa_engine,
+                        Agency.__table__,
+                        list(self.agecies.values()),
+                    )
                 )
-            )
-            futures.append(
-                executor.submit(
-                    upsert_with_retry,
-                    self.sa_engine,
-                    CalendarDates.__table__,
-                    list(self.calendar_dates.values()),
+            if self.calendar_dates_changed:
+                futures.append(
+                    executor.submit(
+                        upsert_with_retry,
+                        self.sa_engine,
+                        CalendarDates.__table__,
+                        list(self.calendar_dates.values()),
+                    )
                 )
-            )
-
-            futures.append(
-                executor.submit(
-                    upsert_with_retry,
-                    self.sa_engine,
-                    Routes.__table__,
-                    list(self.routes.values()),
+            if self.routes_changed:
+                futures.append(
+                    executor.submit(
+                        upsert_with_retry,
+                        self.sa_engine,
+                        Routes.__table__,
+                        list(self.routes.values()),
+                    )
                 )
-            )
 
             futures.append(
                 executor.submit(
@@ -112,9 +125,5 @@ class GTFSUpserter:
                 future.result()
             self.sa_engine.dispose()
 
-        self.stops = {}
-        self.agecies = {}
-        self.calendar_dates = {}
-        self.routes = {}
         self.stop_times = {}
         self.trips = {}

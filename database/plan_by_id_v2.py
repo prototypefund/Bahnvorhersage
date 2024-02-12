@@ -5,6 +5,7 @@ import numpy as np
 import sqlalchemy
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import BIGINT
+import sqlalchemy.orm
 from sqlalchemy.dialects.postgresql import JSON
 
 from database.base import Base
@@ -107,17 +108,23 @@ class PlanByIdV2(Base):
         return stops
     
     @staticmethod
-    def get_hash_ids_in_chunk_limits(
-        session: sqlalchemy.orm.Session, chunk_limits: Tuple[int, int]
-    ) -> List[int]:
-        hash_ids = (
-            session.query(PlanByIdV2.hash_id)
-            .filter(
-                PlanByIdV2.hash_id >= chunk_limits[0], PlanByIdV2.hash_id <= chunk_limits[1]
-            )
-            .all()
-        )
-        return [hash_id[0] for hash_id in hash_ids]
+    def get_stops_from_hash_ids(
+        session: sqlalchemy.orm.Session, hash_ids: List[int]
+    ) -> List['PlanByIdV2']:
+        """
+        Get stops that have a given hash_id
+
+        Parameters
+        ----------
+        hash_ids: list
+            A list of hash_ids to get the corresponding rows from the db.
+
+        Returns
+        -------
+        Sqlalchemy query with the results.
+        """
+        stops = session.query(PlanByIdV2).filter(PlanByIdV2.hash_id.in_(hash_ids)).all()
+        return stops
 
 
 if __name__ == '__main__':

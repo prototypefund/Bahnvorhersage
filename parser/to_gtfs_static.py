@@ -1,8 +1,7 @@
 import concurrent.futures
 import multiprocessing as mp
 import os
-from datetime import datetime
-from typing import Tuple
+from typing import Tuple, List
 
 import sqlalchemy
 from tqdm import tqdm
@@ -10,16 +9,14 @@ import json
 
 from api.iris import TimetableStop
 from database.base import create_all
-from database.engine import get_engine, sessionfactory
+from database.engine import sessionfactory
 from database.plan_by_id_v2 import PlanByIdV2
-from database.upsert import upsert_with_retry
 from gtfs.agency import Agency
 from gtfs.calendar_dates import CalendarDates, ExceptionType
 from gtfs.routes import Routes, RouteType
 from gtfs.stop_times import StopTimes
 from gtfs.stops import LocationType, Stops
 from gtfs.trips import Trips
-from helpers.StationPhillip import StationPhillip
 from helpers.StreckennetzSteffi import StreckennetzSteffi
 from rtd_crawler.hash64 import xxhash64
 from parser.gtfs_upserter import GTFSUpserter
@@ -123,20 +120,18 @@ def stop_to_gtfs(
     return station, platform, agency, calendar_dates, routes, stop_times, trips
 
 
-def parse_chunk(chunk_limits: Tuple[int, int]):
-    """Parse all stops with hash_id within the limits
-
-    Parameters
-    ----------
-    chunk_limits : Tuple[int, int]
-        min and max hash_id to parse in this chunk
-    """
+def parse_chunk(chunk_limits: Tuple[int, int] = None, hash_ids: List[int] = None):
     engine, Session = sessionfactory(
         poolclass=sqlalchemy.pool.NullPool,
     )
 
     with Session() as session:
-        plans = PlanByIdV2.get_stops_from_chunk(session, chunk_limits)
+        if chunk_limits is not None:
+            plans = PlanByIdV2.get_stops_from_chunk(session, chunk_limits)
+        elif hash_ids is not None:
+            plans = PlanByIdV2.get_stops_from_hash_ids(session, hash_ids)
+        else:
+            raise ValueError('Either chunk_limits or hash_ids must be given')
 
     stops = {}
     agencies = {}
@@ -185,7 +180,7 @@ def parse_all():
 
     # # Non-concurrent code for debugging
     # for chunk in tqdm(chunk_limits, total=len(chunk_limits)):
-    #     gtfs_upserter.upsert(*parse_chunk(chunk))
+    #     gtfs_upserter.upsert(*parse_chunk(chunk_limits=chunk))
 
     n_processes = min(40, os.cpu_count())
 
