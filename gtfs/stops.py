@@ -4,6 +4,7 @@ from typing import Dict, Generator, List, Tuple
 import geopy.distance
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import BigInteger
+import sqlalchemy
 
 from database.base import Base
 from database.engine import sessionfactory
@@ -77,7 +78,7 @@ class StopSteffen:
     def _get_stops(self) -> List[Stops]:
         engine, Session = sessionfactory()
         with Session() as session:
-            stops = session.scalar(Stops).all()
+            stops = session.scalars(sqlalchemy.select(Stops)).all()
         engine.dispose()
         return stops
 
