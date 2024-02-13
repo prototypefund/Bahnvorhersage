@@ -14,18 +14,25 @@ from gtfs.stops import Stops, StopSteffen
 from gtfs.trips import Trips
 from helpers.profiler import profile
 from helpers.StationPhillip import StationPhillip
-from router.constants import (MAX_EXPECTED_DELAY_SECONDS,
-                              MAX_METERS_DRIVING_AWAY,
-                              MINIMAL_DISTANCE_DIFFERENCE,
-                              MINIMUM_TRANSFER_TIME, N_ROUTES_TO_FIND,
-                              NO_DELAYED_TRIP_ID, NO_STOP_ID, NO_TRIP_ID)
+from router.constants import (
+    MAX_EXPECTED_DELAY_SECONDS,
+    MAX_METERS_DRIVING_AWAY,
+    MINIMAL_DISTANCE_DIFFERENCE,
+    MINIMUM_TRANSFER_TIME,
+    N_ROUTES_TO_FIND,
+    NO_DELAYED_TRIP_ID,
+    NO_STOP_ID,
+    NO_TRIP_ID,
+)
 from router.datatypes import Connection, Reachability, Transfer
 from router.exceptions import NoRouteFound, NoTimetableFound
-from router.journey_reconstruction import (FPTFJourney,
-                                           FPTFJourneyAndAlternatives,
-                                           clean_alternatives,
-                                           extract_journeys,
-                                           remove_duplicate_journeys)
+from router.journey_reconstruction import (
+    FPTFJourney,
+    FPTFJourneyAndAlternatives,
+    clean_alternatives,
+    extract_journeys,
+    remove_duplicate_journeys,
+)
 from router.printing import print_journeys
 
 # TODO:
@@ -160,6 +167,8 @@ def get_connections(
             trip_id=dp.trip_id,
             is_regio=int(routes[dp.trip_id].is_regional()),
             dist_traveled=int(ar.shape_dist_traveled - dp.shape_dist_traveled),
+            dp_platform_id=dp.stop_id,
+            ar_platform_id=ar.stop_id,
         )
         for dp, ar in pairwise(stop_times)
         if dp.trip_id == ar.trip_id
@@ -416,8 +425,8 @@ class RouterCSA:
         destination_stop_id = self.stop_steffen.names_to_ids[destination][0]
 
         heuristics = {
-            stop.stop_id: self.stop_steffen.get_distance(
-                stop.stop_id, destination_stop_id
+            stop.stop_id: int(
+                self.stop_steffen.get_distance(stop.stop_id, destination_stop_id)
             )
             for stop in self.stop_steffen.stations()
         }
@@ -505,9 +514,13 @@ class RouterCSA:
         for journey, alternatives_for_journey in zip(journeys, alternatives):
             journey_and_alternatives.append(
                 FPTFJourneyAndAlternatives(
-                    journey=FPTFJourney.from_journey(journey, routes=routes),
+                    journey=FPTFJourney.from_journey(
+                        journey, routes=routes, stop_steffen=self.stop_steffen
+                    ),
                     alternatives=[
-                        FPTFJourney.from_journey(alternative, routes=routes)
+                        FPTFJourney.from_journey(
+                            alternative, routes=routes, stop_steffen=self.stop_steffen
+                        )
                         for alternative in alternatives_for_journey
                     ],
                 )
@@ -562,9 +575,9 @@ class RouterCSA:
                 Reachability(
                     ar_ts=ar_ts,
                     dp_ts=transfers[i - 1].ar_ts if i > 0 else journey[0].dp_ts,
-                    current_trip_id=transfers[i - 1].ar_trip_id
-                    if i > 0
-                    else NO_TRIP_ID,
+                    current_trip_id=(
+                        transfers[i - 1].ar_trip_id if i > 0 else NO_TRIP_ID
+                    ),
                     transfers=transfers[i - 1].transfers if i > 0 else 0,
                     dist_traveled=transfers[i - 1].dist_traveled if i > 0 else 0,
                     is_regio=transfer.is_regio,  # transfers[i - 1].is_regio if i > 0 else 1,

@@ -136,9 +136,9 @@ def journeys():
     try:
         journeys = router.do_routing(origin, destination, departure, db.session)
     except NoTimetableFound as e:
-        abort(500, e.message)
+        abort(500, str(e))
     except NoRouteFound as e:
-        abort(500, e.message)
+        abort(500, str(e))
 
     resp = jsonify(journeys)
     # resp.headers.add("Access-Control-Allow-Origin", "*")

@@ -15,8 +15,7 @@ from webserver.transfer_times import get_needed_transfer_times
 
 @dataclass
 class Prediction:
-    connection_score: int
-    transfer_score: list[int]
+    transfer_score: list[float]
     ar_predictions: list[float]
     dp_predictions: list[float]
     transfer_times: list[int]
@@ -54,8 +53,7 @@ def rate_journey(iris_journey: list[dict], fptf_journey: list[dict]) -> Predicti
     )
 
     return Prediction(
-        connection_score=int(round(con_scores.prod() * 100)),
-        transfer_score=list(map(lambda s: int(round(s)), con_scores * 100)),
+        transfer_score=con_scores.tolist(), # list(map(lambda s: int(round(s)), con_scores * 100)),
         ar_predictions=ar_prediction[:, 0].tolist(),
         dp_predictions=dp_prediction[:, 1].tolist(),
         transfer_times=transfer_time.tolist(),
@@ -172,21 +170,10 @@ def get_and_rate_journeys(
 
     for i, prediction in enumerate(map(rate_journey, prediction_data, journeys)):
         prediction: Prediction
-        journeys[i]['connectionScore'] = prediction.connection_score
 
         # This id is used for vue.js to render the list of connections
         journeys[i]['id'] = i
-        journeys[i]['departure'] = journeys[i]['legs'][0]['departure']
-        journeys[i]['plannedDeparture'] = journeys[i]['legs'][0]['plannedDeparture']
-        journeys[i]['arrival'] = journeys[i]['legs'][-1]['arrival']
-        journeys[i]['plannedArrival'] = journeys[i]['legs'][-1]['plannedArrival']
-        journeys[i]['duration'] = (
-            from_utc(journeys[i]['arrival']) - from_utc(journeys[i]['departure'])
-        ).total_seconds()
-        journeys[i]['plannedDuration'] = (
-            from_utc(journeys[i]['plannedArrival'])
-            - from_utc(journeys[i]['plannedDeparture'])
-        ).total_seconds()
+
         journeys[i]['price'] = (
             journeys[i]['price']['amount'] if journeys[i]['price'] is not None else -1
         )
@@ -196,7 +183,6 @@ def get_and_rate_journeys(
         for leg_index, leg in enumerate(journeys[i]['legs']):
             if 'walking' in leg and leg['walking'] == True:
                 walking_legs += 1
-                train_categories.add('Fußweg')
                 continue
             # The last leg has no transfer and thus no transferScore
             if leg_index != len(journeys[i]['legs']) - 1:
@@ -217,8 +203,6 @@ def get_and_rate_journeys(
             ] = prediction.dp_predictions[leg_index - walking_legs]
             train_categories.add(leg['line']['productName'])
 
-        journeys[i]['trainCategories'] = sorted(list(train_categories))
-        journeys[i]['transfers'] = len(journeys[i]['legs']) - 1 - walking_legs
 
     return journeys
 

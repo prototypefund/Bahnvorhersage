@@ -12,6 +12,8 @@ Connection = namedtuple(
         'trip_id',
         'is_regio',
         'dist_traveled',
+        'dp_platform_id',
+        'ar_platform_id',
     ],
 )
 
