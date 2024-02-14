@@ -235,18 +235,8 @@ def manual_edit():
 
 
 def main():
-    station_names = ['Hadsten st', 'Aach Bahnhof, Dornstetten', 'Struer st', 'Roedkaersbro st', 'Horka(Gr)', 'Radece', 'Friedensplatz, Heilbronn', 'Würzburg Hbf (Busbahnhof)', 'Hoejslev st', 'Bjerringbro st', 'Neetze', 'Blanca', 'Hinnerup st', 'Erbstorf', 'Langaa st', 'Stoholm st', 'Obervogelgesang Abzw. Ebenheit', 'Ulstrup st', 'Sassnitz Fährhafen', 'Skive st', 'Wilburgstetten Bf', 'Blumenberg', 'Grötzingen Krappmühlenweg, Karlsruhe', 'Gölshausen Industrie, Bretten', 'Boltersen', 'Scharnebeck', 'Berlin Lessingbrücke', 'Bremen Hbf/ZOB', 'Neu Neetze', 'Finanzamt, Heilbronn', 'Winterthur Wülflingen, Bahnhof', 'Vadu Crisului hc.', 'Erbstorf Ziegelei', 'Brestanica', 'Bleckede', 'Rullstorf', 'Fürstenzell Aspertsham', 'Lörrach Gbf ARZ', 'Vinderup st', 'Viborg st', 'Sparkaer St.', 'Kainzenbad', 'Pfühlpark, Heilbronn', 'Oppendorf Bahnhof, Kiel']
-
-    add_stations_from_derf_json('python/derf_stations.json', station_names)
-    # add_stations_from_ris(station_names)
-
-    # manual_edit()
-
-    # from api.iris import get_stations_from_iris
-    # get_stations_from_iris('Köln Messe/Deutz Gl. 9-10')
-
-    # iris_stations = get_found_iris_stations()
-    # update_stations(iris_stations)
+    iris_stations = get_found_iris_stations()
+    update_stations(iris_stations)
 
 
 if __name__ == '__main__':
