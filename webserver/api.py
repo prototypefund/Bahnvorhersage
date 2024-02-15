@@ -1,7 +1,6 @@
 from datetime import datetime
 
-from flask import (Blueprint, abort, current_app, jsonify, make_response,
-                   request)
+from flask import Blueprint, abort, current_app, jsonify, make_response, request
 from flask.helpers import send_file
 
 from data_analysis import data_stats
@@ -12,6 +11,13 @@ from webserver.db_logger import db, log_activity
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 bp_limited = Blueprint("api_rate_limited", __name__, url_prefix='/api')
+
+CUSTOM_500_ERROR = 505
+
+
+@bp.errorhandler(CUSTOM_500_ERROR)
+def custom_error(e):
+    return jsonify({"error": e.description}), 500
 
 
 @bp.route("/station_list.json", methods=["GET"])
@@ -136,9 +142,9 @@ def journeys():
     try:
         journeys = router.do_routing(origin, destination, departure, db.session)
     except NoTimetableFound as e:
-        abort(500, str(e))
+        abort(CUSTOM_500_ERROR, str(e))
     except NoRouteFound as e:
-        abort(500, str(e))
+        abort(CUSTOM_500_ERROR, str(e))
 
     resp = jsonify(journeys)
     # resp.headers.add("Access-Control-Allow-Origin", "*")

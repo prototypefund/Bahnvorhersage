@@ -175,7 +175,7 @@ def get_connections(
     ]
 
     if not connections:
-        raise NoTimetableFound(f'Could not find any timetable for {service_date}')
+        raise NoTimetableFound(f'Could not find any timetable for {service_date}. Please try another date.')
 
     connections = sorted(
         connections,
