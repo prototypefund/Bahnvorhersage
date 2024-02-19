@@ -17,29 +17,12 @@ Connection = namedtuple(
     ],
 )
 
-# Reachability = namedtuple(
-#     'Reachability',
-#     [
-#         'dp_ts',            # departure time at the origin stop
-#         'ar_ts',            # arrival time at this stop
-#         'transfers',        # number of transfers on the way to this stop
-#         'dist_traveled',    # distance traveled on the way to this stop
-#         'is_regio',         # way to this stop is only regio
-#         'current_trip_id',  # trip id used to reach this stop
-#         'min_heuristic',    # minimum heuristic on the way to this stop
-#         'r_ident_id',       # unique id for this reachability
-#         'last_r_ident_id',  # id of the reachability that was used to reach this one
-#         'last_stop_id',
-#         'last_dp_ts',
-#     ],
-# )
-
 Reachability = namedtuple(
-    'AlternativeReachability',
+    'Reachability',
     [
         'dp_ts',  # departure time at the origin stop
         'ar_ts',  # arrival time at this stop
-        'transfers',  # number of transfers on the way to this stop
+        'changeovers',  # number of changeovers on the way to this stop
         'dist_traveled',  # distance traveled on the way to this stop
         'is_regio',  # way to this stop is only regio
         'transfer_time_from_delayed_trip',  # transfer time after exiting the delayed trip, if any
@@ -50,11 +33,12 @@ Reachability = namedtuple(
         'last_r_ident_id',  # id of the reachability that was used to reach this one
         'last_stop_id',
         'last_dp_ts',
+        'walk_from_delayed_trip',  # walk from the delayed trip to this stop
     ],
 )
 
-Transfer = namedtuple(
-    'Transfer',
+Changeover = namedtuple(
+    'Changeover',
     [
         'ar_ts',
         'dp_ts',
@@ -62,7 +46,7 @@ Transfer = namedtuple(
         'is_regio',
         'ar_trip_id',
         'previous_transfer_stop_id',
-        'transfers',
+        'changeovers',
         'dist_traveled',
     ],
 )

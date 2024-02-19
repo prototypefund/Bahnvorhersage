@@ -6,7 +6,8 @@ from typing import Dict, List
 
 from gtfs.routes import Routes
 from gtfs.stops import StopSteffen
-from router.constants import NO_STOP_ID
+from gtfs.transfers import Transfer
+from router.constants import NO_STOP_ID, WALKING_TRIP_ID
 from router.datatypes import Connection, Reachability
 
 
@@ -64,20 +65,54 @@ def get_next_connection(
             return c
 
 
+def match_transfer_to_reachability(
+    transfers: Dict[int, List[Transfer]],
+    reachability: Reachability,
+    to_stop_id: int,
+):
+    for transfer in transfers[reachability.last_stop_id]:
+        if transfer.to_stop == to_stop_id:
+            return Connection(
+                dp_ts=reachability.last_dp_ts,
+                ar_ts=reachability.ar_ts,
+                dp_stop_id=reachability.last_stop_id,
+                ar_stop_id=to_stop_id,
+                trip_id=WALKING_TRIP_ID,
+                is_regio=True,
+                dist_traveled=transfer.distance,
+                dp_platform_id=reachability.last_stop_id,
+                ar_platform_id=to_stop_id,
+            )
+
+
 def extract_journeys(
     stops: Dict[int, List[Reachability]],
     destination_stop_id: int,
     connections: List[Connection],
+    transfers: Dict[int, List[Transfer]],
 ) -> List[List[Connection]]:
     reachability_chains = extract_reachability_chains(stops, destination_stop_id)
 
     journeys = []
     for reachability_chain in reachability_chains:
         sparse_journey: List[Connection] = []
-        for reachability in reachability_chain:
-            sparse_journey.append(
-                match_connection_to_reachability(connections, reachability)
-            )
+        for i, reachability in enumerate(reachability_chain):
+            if reachability.current_trip_id == WALKING_TRIP_ID:
+                sparse_journey.append(
+                    match_transfer_to_reachability(
+                        transfers=transfers,
+                        reachability=reachability,
+                        to_stop_id=(
+                            destination_stop_id
+                            if i == len(reachability_chain) - 1
+                            else reachability_chain[i + 1].last_stop_id
+                        ),
+                    )
+                )
+            else:
+                sparse_journey.append(
+                    match_connection_to_reachability(connections, reachability)
+                )
 
         journey: List[Connection] = []
         if len(sparse_journey) == 1:
@@ -223,7 +258,8 @@ class FPTFLeg:
     arrivalPlatform: str
     stopovers: List[FPTFStopover]
     distTraveled: int
-    line: FPTFLine
+    line: FPTFLine | None
+    walking: bool = False
     mode: str = 'train'
     public: bool = True
 
@@ -260,6 +296,25 @@ class FPTFJourney:
                         distTraveled=dist_traveled,
                     )
                 )
+            elif c1.trip_id == WALKING_TRIP_ID:
+                ar_stop = stop_steffen.get_stop(stop_id=c1.ar_stop_id)
+                dp_stop = stop_steffen.get_stop(stop_id=c1.dp_stop_id)
+                legs.append(
+                    FPTFLeg(
+                        origin=FPTFStop(id=dp_stop.stop_name, name=dp_stop.stop_name),
+                        destination=FPTFStop(
+                            id=ar_stop.stop_name, name=ar_stop.stop_name
+                        ),
+                        departure=utc_ts_to_iso(c1.dp_ts),
+                        departurePlatform=None,
+                        arrival=utc_ts_to_iso(c1.ar_ts),
+                        arrivalPlatform=None,
+                        stopovers=[],
+                        distTraveled=c1.dist_traveled,
+                        walking=True,
+                        line=None,
+                    )
+                )
             else:
                 line = FPTFLine(
                     id=c1.trip_id,
@@ -291,30 +346,48 @@ class FPTFJourney:
                 dist_traveled = 0
                 stopovers: List[FPTFStopover] = []
 
-        line = FPTFLine(
-            id=journey[-1].trip_id,
-            name=routes[journey[-1].trip_id].route_short_name,
-            operator=routes[journey[-1].trip_id].agency_id,
-            isRegio=bool(journey[-1].is_regio),
-            productName=routes[journey[-1].trip_id].route_short_name.split(' ')[0],
-        )
-        dp_stop = stop_steffen.get_stop(stop_id=dp_stop_id)
-        ar_stop = stop_steffen.get_stop(
-            stop_id=journey[-1].ar_platform_id,
-        )
-        legs.append(
-            FPTFLeg(
-                origin=FPTFStop(id=dp_stop.stop_name, name=dp_stop.stop_name),
-                destination=FPTFStop(id=ar_stop.stop_name, name=ar_stop.stop_name),
-                departure=utc_ts_to_iso(dp_ts),
-                departurePlatform=dp_stop.platform_code,
-                arrival=utc_ts_to_iso(journey[-1].ar_ts),
-                arrivalPlatform=ar_stop.platform_code,
-                stopovers=stopovers,
-                distTraveled=dist_traveled + journey[-1].dist_traveled,
-                line=line,
+        if journey[-1].trip_id == WALKING_TRIP_ID:
+            ar_stop = stop_steffen.get_stop(stop_id=journey[-1].ar_stop_id)
+            dp_stop = stop_steffen.get_stop(stop_id=journey[-1].dp_stop_id)
+            legs.append(
+                FPTFLeg(
+                    origin=FPTFStop(id=dp_stop.stop_name, name=dp_stop.stop_name),
+                    destination=FPTFStop(id=ar_stop.stop_name, name=ar_stop.stop_name),
+                    departure=utc_ts_to_iso(journey[-1].dp_ts),
+                    departurePlatform=dp_stop.platform_code,
+                    arrival=utc_ts_to_iso(journey[-1].ar_ts),
+                    arrivalPlatform=ar_stop.platform_code,
+                    stopovers=[],
+                    distTraveled=journey[-1].dist_traveled,
+                    walking=True,
+                    line=None,
+                )
             )
-        )
+        else:
+            line = FPTFLine(
+                id=journey[-1].trip_id,
+                name=routes[journey[-1].trip_id].route_short_name,
+                operator=routes[journey[-1].trip_id].agency_id,
+                isRegio=bool(journey[-1].is_regio),
+                productName=routes[journey[-1].trip_id].route_short_name.split(' ')[0],
+            )
+            dp_stop = stop_steffen.get_stop(stop_id=dp_stop_id)
+            ar_stop = stop_steffen.get_stop(
+                stop_id=journey[-1].ar_platform_id,
+            )
+            legs.append(
+                FPTFLeg(
+                    origin=FPTFStop(id=dp_stop.stop_name, name=dp_stop.stop_name),
+                    destination=FPTFStop(id=ar_stop.stop_name, name=ar_stop.stop_name),
+                    departure=utc_ts_to_iso(dp_ts),
+                    departurePlatform=dp_stop.platform_code,
+                    arrival=utc_ts_to_iso(journey[-1].ar_ts),
+                    arrivalPlatform=ar_stop.platform_code,
+                    stopovers=stopovers,
+                    distTraveled=dist_traveled + journey[-1].dist_traveled,
+                    line=line,
+                )
+            )
 
         return FPTFJourney(legs=legs)
 
