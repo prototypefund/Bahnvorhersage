@@ -62,4 +62,5 @@ class Routes(Base):
             'RJX',
             'TGV',
             'FLX',
+            'NJ',
         }
