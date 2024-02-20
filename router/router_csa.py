@@ -251,7 +251,6 @@ def add_reachability_to_pareto(
     return pareto_set, was_appended
 
 
-@profile()
 def csa(
     connections: List[Connection],
     stops: Dict[int, List[Reachability]],
@@ -434,13 +433,13 @@ class RouterCSA:
         )
 
         service_date = dp_ts.date()
-        import pickle
+        # import pickle
 
-        # connections = get_connections(
-        #     service_date, session=session, stop_steffen=self.stop_steffen
-        # )
+        connections = get_connections(
+            service_date, session=session, stop_steffen=self.stop_steffen
+        )
         # pickle.dump(connections, open('test_connections.pickle', 'wb'))
-        connections = pickle.load(open('test_connections.pickle', 'rb'))
+        # connections = pickle.load(open('test_connections.pickle', 'rb'))
 
         trips: Dict[int, List[Reachability]] = dict()
 
@@ -653,8 +652,8 @@ def main():
     with Session() as session:
         router = RouterCSA()
         router.do_routing(
-            origin='Augsburg Hbf',
-            destination='Berlin Hbf',
+            origin='Stuttgart-Bad Cannstatt',
+            destination='Herrenberg',
             dp_ts=datetime(2023, 5, 1, 13, 0, 0),
             session=session,
         )

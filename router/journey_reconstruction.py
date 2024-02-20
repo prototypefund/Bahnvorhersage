@@ -247,7 +247,7 @@ class FPTFLine:
             productName=route.route_short_name.split(' ')[0],
             mode='bus' if route.route_type == RouteType.BUS else 'train',
         )
-    
+
     @staticmethod
     def walking() -> 'FPTFLine':
         return FPTFLine(
