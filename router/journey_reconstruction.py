@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from itertools import pairwise
 from typing import Dict, List
 
-from gtfs.routes import Routes
+from gtfs.routes import Routes, RouteType
 from gtfs.stops import StopSteffen
 from gtfs.transfers import Transfer
 from router.constants import NO_STOP_ID, WALKING_TRIP_ID
@@ -234,7 +234,30 @@ class FPTFLine:
     operator: str
     isRegio: bool
     productName: str
+    mode: str
     type: str = 'line'
+
+    @staticmethod
+    def from_route(route: Routes) -> 'FPTFLine':
+        return FPTFLine(
+            id=route.route_id,
+            name=route.route_short_name,
+            operator=route.agency_id,
+            isRegio=route.is_regional(),
+            productName=route.route_short_name.split(' ')[0],
+            mode='bus' if route.route_type == RouteType.BUS else 'train',
+        )
+    
+    @staticmethod
+    def walking() -> 'FPTFLine':
+        return FPTFLine(
+            id=0,
+            name='walking',
+            operator='walking',
+            isRegio=True,
+            productName='walking',
+            mode='walking',
+        )
 
 
 @dataclass
@@ -244,7 +267,7 @@ class FPTFStopover:
     arrivalPlatform: str
     departure: str
     departurePlatform: str
-    distTraveled: int
+    distance: int
     type: str = 'stopover'
 
 
@@ -257,7 +280,7 @@ class FPTFLeg:
     arrival: str
     arrivalPlatform: str
     stopovers: List[FPTFStopover]
-    distTraveled: int
+    distance: int
     line: FPTFLine | None
     walking: bool = False
     mode: str = 'train'
@@ -293,7 +316,7 @@ class FPTFJourney:
                         arrivalPlatform=current_stop.platform_code,
                         departure=utc_ts_to_iso(c2.dp_ts),
                         departurePlatform=current_stop.platform_code,
-                        distTraveled=dist_traveled,
+                        distance=dist_traveled,
                     )
                 )
             elif c1.trip_id == WALKING_TRIP_ID:
@@ -310,19 +333,19 @@ class FPTFJourney:
                         arrival=utc_ts_to_iso(c1.ar_ts),
                         arrivalPlatform=None,
                         stopovers=[],
-                        distTraveled=c1.dist_traveled,
+                        distance=c1.dist_traveled,
                         walking=True,
-                        line=None,
+                        mode='walking',
+                        line=FPTFLine.walking(),
                     )
                 )
+
+                dp_ts = c2.dp_ts
+                dp_stop_id = c2.dp_platform_id
+                dist_traveled = 0
+                stopovers: List[FPTFStopover] = []
             else:
-                line = FPTFLine(
-                    id=c1.trip_id,
-                    name=routes[c1.trip_id].route_short_name,
-                    operator=routes[c1.trip_id].agency_id,
-                    isRegio=bool(c1.is_regio),
-                    productName=routes[c1.trip_id].route_short_name.split(' ')[0],
-                )
+                line = FPTFLine.from_route(routes[c1.trip_id])
                 dp_stop = stop_steffen.get_stop(stop_id=dp_stop_id)
                 ar_stop = stop_steffen.get_stop(stop_id=c1.ar_platform_id)
                 legs.append(
@@ -336,7 +359,7 @@ class FPTFJourney:
                         arrival=utc_ts_to_iso(c1.ar_ts),
                         arrivalPlatform=ar_stop.platform_code,
                         stopovers=stopovers,
-                        distTraveled=dist_traveled,
+                        distance=dist_traveled,
                         line=line,
                     )
                 )
@@ -358,19 +381,14 @@ class FPTFJourney:
                     arrival=utc_ts_to_iso(journey[-1].ar_ts),
                     arrivalPlatform=ar_stop.platform_code,
                     stopovers=[],
-                    distTraveled=journey[-1].dist_traveled,
+                    distance=journey[-1].dist_traveled,
                     walking=True,
-                    line=None,
+                    mode='walking',
+                    line=FPTFLine.walking(),
                 )
             )
         else:
-            line = FPTFLine(
-                id=journey[-1].trip_id,
-                name=routes[journey[-1].trip_id].route_short_name,
-                operator=routes[journey[-1].trip_id].agency_id,
-                isRegio=bool(journey[-1].is_regio),
-                productName=routes[journey[-1].trip_id].route_short_name.split(' ')[0],
-            )
+            line = FPTFLine.from_route(routes[journey[-1].trip_id])
             dp_stop = stop_steffen.get_stop(stop_id=dp_stop_id)
             ar_stop = stop_steffen.get_stop(
                 stop_id=journey[-1].ar_platform_id,
@@ -384,7 +402,7 @@ class FPTFJourney:
                     arrival=utc_ts_to_iso(journey[-1].ar_ts),
                     arrivalPlatform=ar_stop.platform_code,
                     stopovers=stopovers,
-                    distTraveled=dist_traveled + journey[-1].dist_traveled,
+                    distance=dist_traveled + journey[-1].dist_traveled,
                     line=line,
                 )
             )
