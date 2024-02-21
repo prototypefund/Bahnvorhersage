@@ -1,0 +1,18 @@
+# db-rest uses an alpine image whitch does currently does not work with kubernetes
+# https://stackoverflow.com/questions/65181012/does-alpine-have-known-dns-issue-within-kubernetes
+# Therefore we use copy the db-rest image into a debian based image
+
+FROM derhuerst/db-rest:6 as builder
+
+FROM node:18-bullseye
+WORKDIR /app
+
+# add source code
+COPY --from=builder /app .
+
+EXPOSE 3000
+
+ENV HOSTNAME db-rest.bahnvorhersage.de
+ENV PORT 3000
+
+CMD ["node", "index.js"]

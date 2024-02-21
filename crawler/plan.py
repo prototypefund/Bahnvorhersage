@@ -18,11 +18,11 @@ import traceback
 from datetime import datetime, timedelta, date
 
 
-def hour_in_five_hours(hours = 5) -> int:
+def hour_in_n_hours(hours) -> int:
     return (datetime.now() + timedelta(hours=hours)).time().hour
 
 
-def date_in_five_hours(hours = 5) -> int:
+def date_in_n_hours(hours) -> int:
     return (datetime.now() + timedelta(hours=hours)).date()
 
 
@@ -72,15 +72,15 @@ def main():
     stations = StationPhillip()
     redis_client = Redis.from_url(redis_url)
 
-    hour = hour_in_five_hours(hours=4)
-    date = date_in_five_hours(hours=4)
+    hour = hour_in_n_hours(hours=11)
+    date = date_in_n_hours(hours=11)
 
     while True:
-        if hour == hour_in_five_hours():
+        if hour == hour_in_n_hours(hours=12):
             time.sleep(20)
         else:
-            hour = hour_in_five_hours()
-            date = date_in_five_hours()
+            hour = hour_in_n_hours(hours=12)
+            date = date_in_n_hours(hours=12)
             try:
                 start_time = time.time()
                 get_and_process_plan(

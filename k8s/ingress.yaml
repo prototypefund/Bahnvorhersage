@@ -37,6 +37,7 @@ spec:
     - next.bahnvorhersage.de
     - db-rest.bahnvorhersage.de
     - trainconnectionprediction.de
+    - notes.bahnvorhersage.de
     - nextcloud.sfz-eningen.de
     - nextcloud.marcpanse.de
     - paralox-nextcloud.de
@@ -58,6 +59,7 @@ spec:
     - studywatch.de
     - holiday.unexcellent.com
     - plasticycle.de
+    - justmyprojects.de
     secretName: default-tls-secret
   rules:
   - host: "bahnvorhersage.de"
@@ -125,6 +127,16 @@ spec:
               name: frontend-service
               port:
                 number: 80
+  - host: "notes.bahnvorhersage.de"
+    http:
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: hedgedoc
+              port:
+                number: 3000
   - host: "overleaf.marcpanse.de"
     http: &overleaf
       paths:
@@ -267,5 +279,15 @@ spec:
           backend:
             service:
               name: sfz-plasticycle
+              port:
+                number: 80
+  - host: "justmyprojects.de"
+    http: &justmyprojects
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: sfz-justmyprojects
               port:
                 number: 80

@@ -5,7 +5,6 @@ from sqlalchemy.dialects.postgresql import Insert, insert
 from helpers.batcher import batcher
 import random
 import time
-import io
 from sqlalchemy.orm import Session
 
 
@@ -96,37 +95,3 @@ def upsert_with_retry(
                         time.sleep(120)
                     else:
                         raise ex
-
-
-def upsert_copy_from(
-    table: sqlalchemy.schema.Table,
-    temp_table: sqlalchemy.schema.Table,
-    csv: str,
-    engine: sqlalchemy.engine.Engine,
-):
-    # Use copy from to insert the date into a temporary table
-    sql_cnxn = engine.raw_connection()
-    cursor = sql_cnxn.cursor()
-
-    fbuf = io.StringIO(csv)
-    cursor.copy_from(fbuf, temp_table.fullname, sep=',', null='')
-    sql_cnxn.commit()
-    cursor.close()
-    sql_cnxn.close()
-
-    # INSTERT INTO table SELECT * FROM temp_table ON CONFLICT DO UPDATE
-    # Insert the data from the temporary table into the real table using raw sql
-    # update_cols = [c.name for c in table.c if c not in list(table.primary_key.columns)]
-
-    sql_insert = f"""
-        INSERT INTO {table.fullname}
-        SELECT * FROM {temp_table.fullname}
-        ON CONFLICT ({', '.join(table.primary_key.columns.keys())}) DO NOTHING
-    """
-    # SET {', '.join([f'{col} = excluded.{col}' for col in update_cols])}
-    sql_clear = f"TRUNCATE {temp_table.fullname}"
-
-    with Session(engine) as session:
-        session.execute(sqlalchemy.text(sql_insert))
-        session.execute(sqlalchemy.text(sql_clear))
-        session.commit()

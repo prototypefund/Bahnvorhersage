@@ -74,7 +74,7 @@ class PlanById(Base):
         minimum = session.query(sqlalchemy.func.min(PlanById.hash_id)).scalar()
         maximum = session.query(sqlalchemy.func.max(PlanById.hash_id)).scalar()
         count = session.query(PlanById.hash_id).count()
-        n_divisions = count // 20_000
+        n_divisions = count // 500_000
         divisions = np.linspace(minimum, maximum, n_divisions, dtype=int)
         chunk_limits = [
             (int(divisions[i]), int(divisions[i + 1]))

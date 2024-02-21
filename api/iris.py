@@ -310,10 +310,8 @@ class TimetableStop:
     """A stop is a part of a Timetable."""
 
     arrival: Event | None
-    depature: Event | None
+    departure: Event | None
     connection: Connection
-    eva: int
-    station_name: str
     historic_delay: HistoricDelay
     historic_platform_change: HistoricPlatformChange
     raw_id: str
@@ -337,14 +335,12 @@ class TimetableStop:
             or 'rtr' in stop
         ):
             raise NotImplementedError(
-                f'Found wieird stop. Please report this to the developers: {stop}'
+                f'Found weird stop. Please report this to the developers: {stop}'
             )
 
         self.arrival = Event(stop['ar'][0]) if 'ar' in stop else None
-        self.depature = Event(stop['dp'][0]) if 'dp' in stop else None
+        self.departure = Event(stop['dp'][0]) if 'dp' in stop else None
         self.connection = Connection(stop['conn']) if 'conn' in stop else None
-        self.eva = int(stop['eva']) if 'eva' in stop else None
-        self.station_name = stop['station']
         self.historic_delay = HistoricDelay(stop['hd']) if 'hd' in stop else None
         self.historic_platform_change = (
             HistoricPlatformChange(stop['hpc']) if 'hpc' in stop else None
@@ -361,8 +357,8 @@ class TimetableStop:
         return (
             self.trip_label.category == 'Bus' or self.arrival.line == 'SEV'
             if self.arrival is not None
-            else False or self.depature.line == 'SEV'
-            if self.depature is not None
+            else False or self.departure.line == 'SEV'
+            if self.departure is not None
             else False
         )
 
