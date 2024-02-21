@@ -30,11 +30,16 @@ class Station:
 
 
 class StationPhillip:
-    def __init__(self, **kwargs):
+    def __init__(self, init=True, **kwargs):
         if 'generate' in kwargs:
             kwargs['generate'] = False
             print('StationPhillip does not support generate')
         self.kwargs = kwargs
+        if init:
+            self.stations
+            self.stations_by_eva
+            self.evas_by_name
+            self.evas_by_ds100
 
     @property
     @ttl_lru_cache(CACHE_TIMEOUT_SECONDS, 1)
@@ -44,7 +49,9 @@ class StationPhillip:
             stations['valid_from'] = pd.NaT
         if 'valid_to' not in stations.columns:
             stations['valid_to'] = pd.NaT
+        stations['valid_from'] = pd.to_datetime(stations['valid_from'])
         stations['valid_from'] = stations['valid_from'].fillna(pd.Timestamp.min)
+        stations['valid_to'] = pd.to_datetime(stations['valid_to'])
         stations['valid_to'] = stations['valid_to'].fillna(pd.Timestamp.max)
         stations['eva'] = stations['eva'].astype(int)
         stations['name'] = stations['name'].astype(pd.StringDtype())
@@ -158,7 +165,7 @@ class StationPhillip:
         else:
             stations = self.stations
         if index_cols is None:
-            index_cols = ('name', 'eva', 'ds100', 'date')
+            index_cols = ('name', 'eva', 'ds100')
 
         for level in index_cols:
             if level not in stations.index.names:
@@ -560,7 +567,7 @@ class StationPhillip:
         coords_1 = self.get_location(eva=self.get_eva(name=name1))
         coords_2 = self.get_location(eva=self.get_eva(name=name2))
 
-        return geopy.distance.distance(coords_1, coords_2).meters
+        return geopy.distance.great_circle(coords_1, coords_2).meters
 
     def geographic_distance_by_eva(
         self,

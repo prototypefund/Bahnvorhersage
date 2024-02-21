@@ -175,11 +175,6 @@ data/rtd_buffer
 config.py
 config_docker.py
 
-#don't leak our data
-streckendaten/
-data/
-data_buffer/
-
 #ignore logs
 website.log*
 # cache/

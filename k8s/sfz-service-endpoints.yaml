@@ -393,3 +393,27 @@ subsets:
   - name: http
     port: 8040
     protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sfz-justmyprojects
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: sfz-justmyprojects
+subsets:
+- addresses:
+  - ip: 192.168.178.24
+  ports:
+  - name: http
+    port: 8800
+    protocol: TCP

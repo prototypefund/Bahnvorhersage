@@ -1,7 +1,8 @@
+from datetime import datetime
+
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import BigInteger, String
-from datetime import datetime
 
 from database.base import Base
 
@@ -10,7 +11,7 @@ class StopTimes(Base):
     __tablename__ = 'gtfs_stop_times'
 
     trip_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    stop_id: Mapped[int] = mapped_column(primary_key=True)
+    stop_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     stop_sequence: Mapped[int]
     arrival_time: Mapped[datetime] = mapped_column(nullable=True)
     departure_time: Mapped[datetime] = mapped_column(nullable=True)
@@ -44,7 +45,7 @@ class StopTimesTemp(Base):
     __tablename__ = 'gtfs_stop_times_temp'
 
     trip_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    stop_id: Mapped[int] = mapped_column(primary_key=True)
+    stop_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     stop_sequence: Mapped[int]
     arrival_time: Mapped[datetime] = mapped_column(nullable=True)
     departure_time: Mapped[datetime] = mapped_column(nullable=True)

@@ -7,9 +7,9 @@ from tqdm import tqdm
 from collections.abc import Iterator
 
 from api.iris import IrisStation, search_iris_multiple, stations_equal
-from api.ris import stop_place_by_eva
+from api.ris import stop_place_by_eva, stop_place_by_name
 from config import redis_url
-from database import cached_table_push
+from database.cached_table_fetch import cached_table_push
 from helpers.StationPhillip import StationPhillip
 
 
@@ -182,6 +182,56 @@ def add_ris_info(
             ] = ris_station.transport_associations
 
     return stations
+
+
+def add_stations_from_ris(names: set):
+    new_stations = []
+    for name in tqdm(names, desc='Searching RIS for unknown stations'):
+        ris_station = stop_place_by_name(name)
+        if ris_station is not None:
+            new_stations.append(ris_station)
+        else:
+            print(f'No RIS station found for {name}')
+
+    new_stations = pd.DataFrame(new_stations)
+
+    station_df = StationPhillip().stations.reset_index(drop=True).drop(columns=['index'])
+    station_df = pd.concat([station_df, new_stations], ignore_index=True)
+
+    station_df.drop_duplicates(subset=['name', 'eva', 'ds100'], inplace=True)
+    cached_table_push(station_df, 'stations', fast=False)
+
+
+def add_stations_from_derf_json(path: str, names: set):
+    import json
+    derf_json = json.load(open(path, 'r'))
+    derf_json = [
+        {
+            'name': station['name'],
+            'eva': station['eva'],
+            'ds100': station['ds100'],
+            'lat': station['latlong'][0],
+            'lon': station['latlong'][1]
+        } for station in derf_json if station['name'] in names
+    ]
+    derf_stations = pd.DataFrame.from_records(derf_json)
+
+    station_df = StationPhillip().stations.reset_index(drop=True).drop(columns=['index'])
+    station_df = pd.concat([station_df, derf_stations], ignore_index=True)
+
+    station_df.drop_duplicates(subset=['name', 'eva', 'ds100'], inplace=True)
+    cached_table_push(station_df, 'stations', fast=False)
+
+def manual_edit():
+    stations = StationPhillip()
+    stations.stations.reset_index(drop=True).drop(columns=['index']).to_csv('stations-edit-mode.csv', sep=';', index=False)
+
+    print('You can now edit the stations in stations-edit-mode.csv')
+    input('Press enter to continue')
+
+    modified_stations = pd.read_csv('stations-edit-mode.csv', sep=';', index_col=False)
+    cached_table_push(modified_stations, 'stations', fast=False)
+
 
 
 def main():

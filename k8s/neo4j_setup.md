@@ -28,3 +28,10 @@ Enable Metallb for neo4j load balancer to work:
 microk8s enable metallb 
 # Enter IP range: 192.168.200.1-192.168.200.255
 ```
+
+## Maintenace
+
+Restart neo4j:
+```sh
+kubectl rollout restart statefulset.apps/my-neo4j-release -n neo4j
+```
