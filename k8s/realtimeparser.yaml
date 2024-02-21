@@ -20,7 +20,7 @@ spec:
       containers:
       - image: trainconnectionprediction/bahnvorhersage:latest
         command: ["python3"]
-        args: ["-m", "rtd_crawler.realtimeparser", "--parse_continues"]
+        args: ["-m", "parser.to_gtfs_static_continues"]
         imagePullPolicy: Always
         name: tcp
         resources: {}
