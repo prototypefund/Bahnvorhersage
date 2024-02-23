@@ -58,7 +58,7 @@ def is_regio_dominance(reachability: Reachability, other: Reachability):
         return DOMINANCE_EQUAL
 
 
-def is_transfer_time_from_delayed_trip_dominance(
+def transfer_time_from_delayed_trip_dominance(
     reachability: Reachability, other: Reachability
 ):
     if (
@@ -84,27 +84,44 @@ def is_from_failed_transfer_stop_id_dominance(
         return DOMINANCE_WORSE
     else:
         return DOMINANCE_EQUAL
+    
+def last_changeover_duration_dominance(reachability: Reachability, other: Reachability):
+    # Last changeover duration is a criteria to sort out reachabilities in the following case:
+    # Routing from stop a to stop e:
+    # Train 1: 🭃🭎 -> a -> b -> c -> d 
+    # Train 2:      🭃🭎 -> b -> c -> d -> e
+    # Changeovers at b, c and d make sense, so we want to pick the changeover with
+    # the longest duration, in order to increase journey reliability.
+    # Due to this we only compare reachabilities with the same dp_ts and ar_ts.
+    if reachability.ar_ts == other.ar_ts and reachability.dp_ts == other.dp_ts:
+        if reachability.last_changeover_duration < other.last_changeover_duration:
+            return DOMINANCE_WORSE
+    return DOMINANCE_EQUAL
 
 
 def relaxed_pareto_dominated(reachability: Reachability, other: Reachability) -> bool:
     # Starting points always dominate
     if other.current_trip_id == NO_TRIP_ID:
         return True
-
-    dominations = set(
-        (
-            dp_ts_dominance(reachability, other),
-            ar_ts_dominance(reachability, other),
-            changeovers_dominance(reachability, other),
-            dist_traveled_dominance(reachability, other),
-            is_regio_dominance(reachability, other),
-        )
+    
+    domination_functions = (
+        dp_ts_dominance,
+        ar_ts_dominance,
+        changeovers_dominance,
+        is_regio_dominance,
+        dist_traveled_dominance,
+        last_changeover_duration_dominance,
     )
 
-    if DOMINANCE_WORSE in dominations and DOMINANCE_BETTER not in dominations:
-        return True
+    worse = False
+    for domination_function in domination_functions:
+        domination = domination_function(reachability, other)
+        if domination == DOMINANCE_BETTER:
+            return False
+        elif domination == DOMINANCE_WORSE:
+            worse = True
 
-    return False
+    return worse
 
 
 def relaxed_alternative_pareto_dominated(
@@ -113,19 +130,23 @@ def relaxed_alternative_pareto_dominated(
     # Starting points always dominate
     if other.current_trip_id == NO_TRIP_ID:
         return True
-
-    dominations = set(
-        (
-            ar_ts_dominance(reachability, other),
-            changeovers_dominance(reachability, other),
-            dist_traveled_dominance(reachability, other),
-            is_regio_dominance(reachability, other),
-            is_transfer_time_from_delayed_trip_dominance(reachability, other),
-            is_from_failed_transfer_stop_id_dominance(reachability, other),
-        )
+    
+    domination_functions = (
+        ar_ts_dominance,
+        changeovers_dominance,
+        is_regio_dominance,
+        dist_traveled_dominance,
+        transfer_time_from_delayed_trip_dominance,
+        is_from_failed_transfer_stop_id_dominance,
+        last_changeover_duration_dominance,
     )
 
-    if DOMINANCE_WORSE in dominations and DOMINANCE_BETTER not in dominations:
-        return True
+    worse = False
+    for domination_function in domination_functions:
+        domination = domination_function(reachability, other)
+        if domination == DOMINANCE_BETTER:
+            return False
+        elif domination == DOMINANCE_WORSE:
+            worse = True
 
-    return False
+    return worse

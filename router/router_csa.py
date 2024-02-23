@@ -138,6 +138,7 @@ def create_alternative_reachability(
         last_stop_id=connection.dp_stop_id,
         last_dp_ts=connection.dp_ts,
         walk_from_delayed_trip=False,
+        last_changeover_duration=connection.dp_ts - previous.ar_ts
     )
 
 
@@ -163,6 +164,7 @@ def add_transfer_to_reachability(
         last_stop_id=transfer.from_stop,
         last_dp_ts=reachability.ar_ts,
         walk_from_delayed_trip=from_delayed,
+        last_changeover_duration=reachability.last_changeover_duration
     )
 
 
@@ -184,6 +186,7 @@ def add_connection_to_trip_reachability(
         last_stop_id=reachability.last_stop_id,
         last_dp_ts=reachability.last_dp_ts,
         walk_from_delayed_trip=False,
+        last_changeover_duration=reachability.last_changeover_duration
     )
 
 
@@ -206,6 +209,7 @@ def reachability_from_trip_reachability(
         last_stop_id=reachability.last_stop_id,
         last_dp_ts=reachability.last_dp_ts,
         walk_from_delayed_trip=False,
+        last_changeover_duration=reachability.last_changeover_duration
     )
 
 
@@ -429,6 +433,7 @@ class RouterCSA:
                 last_stop_id=NO_STOP_ID,
                 last_dp_ts=int(dp_ts.timestamp()),
                 walk_from_delayed_trip=False,
+                last_changeover_duration=0,
             )
         )
 
@@ -597,6 +602,7 @@ class RouterCSA:
                     last_stop_id=NO_STOP_ID,
                     last_dp_ts=0,
                     walk_from_delayed_trip=False,
+                    last_changeover_duration=0
                 )
             )
 
@@ -616,6 +622,7 @@ class RouterCSA:
                     last_stop_id=NO_STOP_ID,
                     last_dp_ts=0,
                     walk_from_delayed_trip=False,
+                    last_changeover_duration=0
                 )
             )
 
