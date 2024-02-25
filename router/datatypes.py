@@ -34,7 +34,7 @@ Reachability = namedtuple(
         'last_stop_id',
         'last_dp_ts',
         'walk_from_delayed_trip',  # walk from the delayed trip to this stop
-        'last_changeover_duration' # Changeover duration at last changeover
+        'last_changeover_duration',  # Changeover duration at last changeover
     ],
 )
 

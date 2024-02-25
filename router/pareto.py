@@ -84,11 +84,12 @@ def is_from_failed_transfer_stop_id_dominance(
         return DOMINANCE_WORSE
     else:
         return DOMINANCE_EQUAL
-    
+
+
 def last_changeover_duration_dominance(reachability: Reachability, other: Reachability):
     # Last changeover duration is a criteria to sort out reachabilities in the following case:
     # Routing from stop a to stop e:
-    # Train 1: 🭃🭎 -> a -> b -> c -> d 
+    # Train 1: 🭃🭎 -> a -> b -> c -> d
     # Train 2:      🭃🭎 -> b -> c -> d -> e
     # Changeovers at b, c and d make sense, so we want to pick the changeover with
     # the longest duration, in order to increase journey reliability.
@@ -103,13 +104,13 @@ def relaxed_pareto_dominated(reachability: Reachability, other: Reachability) ->
     # Starting points always dominate
     if other.current_trip_id == NO_TRIP_ID:
         return True
-    
+
     domination_functions = (
         dp_ts_dominance,
         ar_ts_dominance,
         changeovers_dominance,
         is_regio_dominance,
-        dist_traveled_dominance,
+        # dist_traveled_dominance,
         last_changeover_duration_dominance,
     )
 
@@ -130,7 +131,7 @@ def relaxed_alternative_pareto_dominated(
     # Starting points always dominate
     if other.current_trip_id == NO_TRIP_ID:
         return True
-    
+
     domination_functions = (
         ar_ts_dominance,
         changeovers_dominance,

@@ -1,11 +1,12 @@
 import concurrent.futures
+import json
 import multiprocessing as mp
 import os
-from typing import Tuple, List
+from parser.gtfs_upserter import GTFSUpserter
+from typing import List, Tuple
 
 import sqlalchemy
 from tqdm import tqdm
-import json
 
 from api.iris import TimetableStop
 from database.base import create_all
@@ -19,7 +20,6 @@ from gtfs.stops import LocationType, Stops
 from gtfs.trips import Trips
 from helpers.StreckennetzSteffi import StreckennetzSteffi
 from rtd_crawler.hash64 import xxhash64
-from parser.gtfs_upserter import GTFSUpserter
 
 """ Clear dangeling connections to db
 SELECT pg_terminate_backend(pid)
@@ -47,7 +47,11 @@ def stop_to_gtfs(
     service_id = xxhash64(stop.date_id.date().isoformat())
 
     station_name = streckennetz.get_name(eva=plan.stop_id)
-    platform_code = stop.arrival.planned_platform if stop.arrival is not None else stop.departure.planned_platform
+    platform_code = (
+        stop.arrival.planned_platform
+        if stop.arrival is not None
+        else stop.departure.planned_platform
+    )
     stop_id = xxhash64(str(plan.stop_id) + '_' + platform_code)
 
     station_coords = streckennetz.get_location(eva=plan.stop_id)
@@ -141,7 +145,9 @@ def parse_chunk(chunk_limits: Tuple[int, int] = None, hash_ids: List[int] = None
     trips = {}
 
     for plan in plans:
-        station, platform, agency, calendar_date, route, stop_time, trip = stop_to_gtfs(plan)
+        station, platform, agency, calendar_date, route, stop_time, trip = stop_to_gtfs(
+            plan
+        )
 
         stops[station.stop_id] = station.as_tuple()
         stops[platform.stop_id] = platform.as_tuple()

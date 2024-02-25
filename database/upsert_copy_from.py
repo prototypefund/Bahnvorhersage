@@ -39,6 +39,11 @@ def upsert_copy_from(
     csv: str,
     engine: sqlalchemy.engine.Engine,
 ):
+    sql_clear = f"TRUNCATE {temp_table.fullname}"
+    with Session(engine) as session:
+        session.execute(sqlalchemy.text(sql_clear))
+        session.commit()
+
     # Use copy from to insert the date into a temporary table
     sql_cnxn = engine.raw_connection()
     cursor = sql_cnxn.cursor()
@@ -59,9 +64,8 @@ def upsert_copy_from(
         ON CONFLICT ({', '.join(table.primary_key.columns.keys())}) DO UPDATE
         SET {', '.join([f'{col} = excluded.{col}' for col in update_cols])}
     """
-    sql_clear = f"TRUNCATE {temp_table.fullname}"
 
     with Session(engine) as session:
         session.execute(sqlalchemy.text(sql_insert))
-        session.execute(sqlalchemy.text(sql_clear))
+        # session.execute(sqlalchemy.text(sql_clear))
         session.commit()

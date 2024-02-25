@@ -1,14 +1,18 @@
-from database import unparsed
+import sys
 import time
 import traceback
-import sys
-from config import redis_url
-from redis import Redis
-from parser.to_gtfs_static import parse_chunk
 from parser.gtfs_upserter import GTFSUpserter
+from parser.to_gtfs_static import parse_chunk
+
+from redis import Redis
+
+from config import redis_url
+from database import unparsed
 
 
-def parse_unparsed(redis_client: Redis, last_stream_id: bytes, upserter: GTFSUpserter) -> bytes:
+def parse_unparsed(
+    redis_client: Redis, last_stream_id: bytes, upserter: GTFSUpserter
+) -> bytes:
     last_stream_id, unparsed_hash_ids = unparsed.get_plan(redis_client, last_stream_id)
     if unparsed_hash_ids:
         print('parsing', len(unparsed_hash_ids), 'unparsed events')
