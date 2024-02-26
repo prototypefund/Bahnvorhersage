@@ -1,15 +1,17 @@
-from database.engine import sessionfactory
-from typing import Dict, Tuple
 import concurrent.futures
-from database.upsert_copy_from import upsert_copy_from, tuples_to_csv
+from typing import Dict, Tuple
+
 import sqlalchemy
 import sqlalchemy.orm
+
+from database.engine import sessionfactory
 from database.upsert import upsert_with_retry
-from gtfs.stops import Stops
+from database.upsert_copy_from import tuples_to_csv, upsert_copy_from
 from gtfs.agency import Agency
 from gtfs.calendar_dates import CalendarDates
 from gtfs.routes import Routes
 from gtfs.stop_times import StopTimes, StopTimesTemp
+from gtfs.stops import Stops
 from gtfs.trips import Trips, TripTemp
 
 
@@ -47,9 +49,16 @@ class GTFSUpserter:
         trips: Dict[int, Tuple],
     ):
         self.stops_changed = stops.items() >= self.stops.items() or self.stops_changed
-        self.agencies_changed = agencies.items() >= self.agecies.items() or self.agencies_changed
-        self.calendar_dates_changed = calendar_dates.items() >= self.calendar_dates.items() or self.calendar_dates_changed
-        self.routes_changed = routes.items() >= self.routes.items() or self.routes_changed
+        self.agencies_changed = (
+            agencies.items() >= self.agecies.items() or self.agencies_changed
+        )
+        self.calendar_dates_changed = (
+            calendar_dates.items() >= self.calendar_dates.items()
+            or self.calendar_dates_changed
+        )
+        self.routes_changed = (
+            routes.items() >= self.routes.items() or self.routes_changed
+        )
 
         self.stops.update(stops)
         self.agecies.update(agencies)

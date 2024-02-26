@@ -1,19 +1,36 @@
-from database import unparsed
+import sys
 import time
 import traceback
-import sys
-from config import redis_url
-from redis import Redis
-from parser.to_gtfs_static import parse_chunk
 from parser.gtfs_upserter import GTFSUpserter
+from parser.to_gtfs_static import parse_chunk
+from parser.gtfs_static_to_csa_connections import to_csa_connections
+
+from redis import Redis
+
+from config import redis_url
+from database import unparsed
+from database.engine import sessionfactory
+from gtfs.stops import StopSteffen
 
 
-def parse_unparsed(redis_client: Redis, last_stream_id: bytes, upserter: GTFSUpserter) -> bytes:
+def parse_unparsed(
+    redis_client: Redis, last_stream_id: bytes, upserter: GTFSUpserter
+) -> bytes:
     last_stream_id, unparsed_hash_ids = unparsed.get_plan(redis_client, last_stream_id)
     if unparsed_hash_ids:
         print('parsing', len(unparsed_hash_ids), 'unparsed events')
-        upserter.upsert(*parse_chunk(hash_ids=unparsed_hash_ids))
+        parsing_result = parse_chunk(hash_ids=unparsed_hash_ids)
+        upserter.upsert(*parsing_result)
         upserter.flush()
+
+        stop_steffen = StopSteffen()
+        engine, Session = sessionfactory()
+        calendar_dates = parsing_result[2]
+        dates = set(date for _, date, _ in calendar_dates.values())
+        for date in dates:
+            print('parsing ', date, ' to csa connections')
+            to_csa_connections(date, stop_steffen, engine, Session)
+
     return last_stream_id
 
 

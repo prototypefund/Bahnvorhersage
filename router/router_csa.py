@@ -1,5 +1,6 @@
 from bisect import bisect_left
-from datetime import date, datetime
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from itertools import pairwise
 from typing import Dict, List, Tuple
 
@@ -9,16 +10,19 @@ from tqdm import tqdm
 
 from database.engine import sessionfactory
 from gtfs.calendar_dates import CalendarDates
+from gtfs.connections import Connections as DBConnections
 from gtfs.routes import Routes
 from gtfs.stop_times import StopTimes
 from gtfs.stops import StopSteffen
 from gtfs.transfers import Transfer, get_transfers
 from gtfs.trips import Trips
 from helpers.profiler import profile
-from router.constants import (MAX_EXPECTED_DELAY_SECONDS,
-                              MAX_METERS_DRIVING_AWAY, MINIMUM_TRANSFER_TIME,
-                              N_ROUTES_TO_FIND, NO_DELAYED_TRIP_ID, NO_STOP_ID,
-                              NO_TRIP_ID, WALKING_TRIP_ID)
+from router.constants import (ADDITIONAL_SEARCH_WINDOW_HOURS,
+                              MAX_EXPECTED_DELAY_SECONDS,
+                              MAX_METERS_DRIVING_AWAY, MAX_SEARCH_WINDOW_HOURS,
+                              MINIMUM_TRANSFER_TIME, N_ROUTES_TO_FIND,
+                              NO_DELAYED_TRIP_ID, NO_STOP_ID, NO_TRIP_ID,
+                              STANDART_SEARCH_WINDOW_HOURS, WALKING_TRIP_ID)
 from router.datatypes import Changeover, Connection, Reachability
 from router.exceptions import NoRouteFound, NoTimetableFound
 from router.journey_reconstruction import (FPTFJourney,
@@ -33,22 +37,6 @@ from router.printing import print_journeys
 # TODO:
 # - tagesübergänge regeln
 # - sort out splitting and merging trains
-
-
-def _get_stop_times(service_date: date, session: SessionType) -> List[StopTimes]:
-    stmt = (
-        sqlalchemy.select(StopTimes)
-        .join(Trips, StopTimes.trip_id == Trips.trip_id)
-        .join(CalendarDates, Trips.service_id == CalendarDates.service_id)
-        .where(
-            CalendarDates.date == service_date,
-        )
-        .order_by(StopTimes.trip_id, StopTimes.stop_sequence)
-    )
-
-    stop_times = session.scalars(stmt).all()
-
-    return stop_times
 
 
 def _get_routes_from_db(
@@ -69,43 +57,6 @@ def get_routes(trip_ids: List[int], session: SessionType) -> Dict[int, Routes]:
     routes = {trip_id: route for route, trip_id in routes}
 
     return routes
-
-
-def get_connections(
-    service_date: date, session: SessionType, stop_steffen: StopSteffen
-) -> List[Connection]:
-    stop_times = _get_stop_times(service_date, session)
-
-    trip_ids = set(stop_time.trip_id for stop_time in stop_times)
-    routes = get_routes(trip_ids, session)
-
-    connections = [
-        Connection(
-            dp_ts=int(dp.departure_time.timestamp()),
-            ar_ts=int(ar.arrival_time.timestamp()),
-            dp_stop_id=stop_steffen.get_stop(dp.stop_id).parent_station,
-            ar_stop_id=stop_steffen.get_stop(ar.stop_id).parent_station,
-            trip_id=dp.trip_id,
-            is_regio=int(routes[dp.trip_id].is_regional()),
-            dist_traveled=int(ar.shape_dist_traveled - dp.shape_dist_traveled),
-            dp_platform_id=dp.stop_id,
-            ar_platform_id=ar.stop_id,
-        )
-        for dp, ar in pairwise(stop_times)
-        if dp.trip_id == ar.trip_id
-    ]
-
-    if not connections:
-        raise NoTimetableFound(
-            f'Could not find any timetable for {service_date}. Please try another date.'
-        )
-
-    connections = sorted(
-        connections,
-        key=lambda conn: (conn.dp_ts,),
-    )
-
-    return connections
 
 
 def create_alternative_reachability(
@@ -138,6 +89,7 @@ def create_alternative_reachability(
         last_stop_id=connection.dp_stop_id,
         last_dp_ts=connection.dp_ts,
         walk_from_delayed_trip=False,
+        last_changeover_duration=connection.dp_ts - previous.ar_ts,
     )
 
 
@@ -163,6 +115,7 @@ def add_transfer_to_reachability(
         last_stop_id=transfer.from_stop,
         last_dp_ts=reachability.ar_ts,
         walk_from_delayed_trip=from_delayed,
+        last_changeover_duration=reachability.last_changeover_duration,
     )
 
 
@@ -184,6 +137,7 @@ def add_connection_to_trip_reachability(
         last_stop_id=reachability.last_stop_id,
         last_dp_ts=reachability.last_dp_ts,
         walk_from_delayed_trip=False,
+        last_changeover_duration=reachability.last_changeover_duration,
     )
 
 
@@ -206,6 +160,7 @@ def reachability_from_trip_reachability(
         last_stop_id=reachability.last_stop_id,
         last_dp_ts=reachability.last_dp_ts,
         walk_from_delayed_trip=False,
+        last_changeover_duration=reachability.last_changeover_duration,
     )
 
 
@@ -261,14 +216,13 @@ def csa(
     min_delay: int,
     destination_stop_id: int,
     search_alternatives: bool,
+    r_ident_id: int,
+    early_stopping_ts: int,
 ):
-    latest_ar_ts_at_destination = connections[-1].ar_ts + MINIMUM_TRANSFER_TIME
-    r_ident_id = 10  # 0 - 9 reserved for start
-
     for connection in connections:
         # Early stopping criteria
-        if connection.dp_ts > latest_ar_ts_at_destination:
-            break
+        if connection.dp_ts > early_stopping_ts:
+            return stops, True, early_stopping_ts, r_ident_id
 
         new_reachabilities: List[Reachability] = []
 
@@ -367,6 +321,7 @@ def csa(
                     )
 
         if connection.ar_stop_id == destination_stop_id and len(new_reachabilities):
+            # Generate stopping condition for early stopping
             if search_alternatives:
                 # If a route to the destination was found that has as much transfer time
                 # from the delayed trip as the maximum expected delay, we can stop searching
@@ -379,23 +334,83 @@ def csa(
                         for r in stops[destination_stop_id]
                     ]
                 ):
-                    latest_ar_ts_at_destination = max(
-                        r.ar_ts for r in stops[destination_stop_id]
-                    )
+                    early_stopping_ts = max(r.ar_ts for r in stops[destination_stop_id])
             else:
                 if len(stops[destination_stop_id]) >= N_ROUTES_TO_FIND:
-                    latest_ar_ts_at_destination = list(
+                    early_stopping_ts = list(
                         sorted(r.ar_ts for r in stops[destination_stop_id])
                     )[N_ROUTES_TO_FIND - 1]
 
-    return stops
+    return stops, False, early_stopping_ts, r_ident_id
+
+
+@dataclass
+class RoutingParams:
+    origin: str
+    destination: str
+    origin_stop_id: int
+    destination_stop_id: int
+    dp_ts: datetime
+    session: SessionType
+    n_hours_to_future: int
+    heuristics: Dict[int, int]
+    connections: List[Connection]
 
 
 class RouterCSA:
     def __init__(self):
         self.stop_steffen = StopSteffen()
         self.transfers = get_transfers()
+        self.params: RoutingParams = None
 
+    def run_csa(
+        self,
+        stops: Dict[int, List[Reachability]],
+        search_alternatives: bool,
+        delayed_trip_id: int = NO_DELAYED_TRIP_ID,
+        min_delay: int = 0,
+    ) -> Dict[int, List[Reachability]]:
+        trips: Dict[int, List[Reachability]] = dict()
+        new_connections = self.params.connections
+        r_ident_id = 10  # 0-9 are reserved for special cases
+
+        while True:
+            early_stopping_ts = new_connections[-1].ar_ts + MINIMUM_TRANSFER_TIME
+            stops, routing_finished, early_stopping_ts, r_ident_id = csa(
+                connections=new_connections,
+                stops=stops,
+                trips=trips,
+                transfers=self.transfers,
+                heuristics=self.params.heuristics,
+                delayed_trip_id=delayed_trip_id,
+                min_delay=min_delay,
+                destination_stop_id=self.params.destination_stop_id,
+                search_alternatives=search_alternatives,
+                early_stopping_ts=early_stopping_ts,
+                r_ident_id=r_ident_id,
+            )
+            if (
+                routing_finished
+                or self.params.n_hours_to_future >= MAX_SEARCH_WINDOW_HOURS
+            ):
+                break
+            else:
+                new_connections = DBConnections.get_for_routing(
+                    session=self.params.session,
+                    from_ts=self.params.dp_ts
+                    + timedelta(hours=self.params.n_hours_to_future),
+                    to_ts=self.params.dp_ts
+                    + timedelta(
+                        hours=self.params.n_hours_to_future
+                        + ADDITIONAL_SEARCH_WINDOW_HOURS
+                    ),
+                )
+                self.params.n_hours_to_future += ADDITIONAL_SEARCH_WINDOW_HOURS
+                self.params.connections.extend(new_connections)
+
+        return stops
+
+    @profile()
     def do_routing(
         self,
         origin: str,
@@ -403,17 +418,30 @@ class RouterCSA:
         dp_ts: datetime,
         session: SessionType,
     ) -> List[FPTFJourneyAndAlternatives]:
-        origin_stop_id = self.stop_steffen.names_to_ids[origin][0]
         destination_stop_id = self.stop_steffen.names_to_ids[destination][0]
+        self.params = RoutingParams(
+            origin=origin,
+            destination=destination,
+            origin_stop_id=self.stop_steffen.names_to_ids[origin][0],
+            destination_stop_id=destination_stop_id,
+            dp_ts=dp_ts,
+            session=session,
+            n_hours_to_future=STANDART_SEARCH_WINDOW_HOURS,
+            heuristics={
+                stop.stop_id: int(
+                    self.stop_steffen.get_distance(stop.stop_id, destination_stop_id)
+                )
+                for stop in self.stop_steffen.stations()
+            },
+            connections=DBConnections.get_for_routing(
+                session=session,
+                from_ts=dp_ts,
+                to_ts=dp_ts + timedelta(hours=STANDART_SEARCH_WINDOW_HOURS),
+            ),
+        )
 
-        heuristics = {
-            stop.stop_id: int(
-                self.stop_steffen.get_distance(stop.stop_id, destination_stop_id)
-            )
-            for stop in self.stop_steffen.stations()
-        }
         stops = {stop.stop_id: [] for stop in self.stop_steffen.stations()}
-        stops[origin_stop_id].append(
+        stops[self.params.origin_stop_id].append(
             Reachability(
                 dp_ts=int(dp_ts.timestamp()),
                 ar_ts=int(dp_ts.timestamp()),
@@ -423,40 +451,23 @@ class RouterCSA:
                 transfer_time_from_delayed_trip=0,
                 from_failed_transfer_stop_id=0,
                 current_trip_id=NO_TRIP_ID,
-                min_heuristic=heuristics[origin_stop_id],
+                min_heuristic=self.params.heuristics[self.params.origin_stop_id],
                 r_ident_id=0,
                 last_r_ident_id=0,
                 last_stop_id=NO_STOP_ID,
                 last_dp_ts=int(dp_ts.timestamp()),
                 walk_from_delayed_trip=False,
+                last_changeover_duration=0,
             )
         )
 
-        service_date = dp_ts.date()
-        # import pickle
-
-        connections = get_connections(
-            service_date, session=session, stop_steffen=self.stop_steffen
-        )
-        # pickle.dump(connections, open('test_connections.pickle', 'wb'))
-        # connections = pickle.load(open('test_connections.pickle', 'rb'))
-
-        trips: Dict[int, List[Reachability]] = dict()
-
-        stops = csa(
-            connections=connections,
-            stops=stops,
-            trips=trips,
-            transfers=self.transfers,
-            heuristics=heuristics,
-            delayed_trip_id=NO_DELAYED_TRIP_ID,
-            min_delay=0,
-            destination_stop_id=destination_stop_id,
-            search_alternatives=False,
-        )
+        stops = self.run_csa(stops, search_alternatives=False)
 
         journeys = extract_journeys(
-            stops, destination_stop_id, connections, transfers=self.transfers
+            stops,
+            self.params.destination_stop_id,
+            self.params.connections,
+            transfers=self.transfers,
         )
 
         if len(journeys) == 0:
@@ -477,9 +488,6 @@ class RouterCSA:
         alternatives = [
             self.find_alternative_connections(
                 journey=journey,
-                connections=connections,
-                heuristics=heuristics,
-                destination_stop_id=destination_stop_id,
             )
             for journey in journeys
         ]
@@ -494,50 +502,14 @@ class RouterCSA:
             for alternatives_for_journey in alternatives
         ]
 
-        # Format for API
-        trip_ids = set()
-        for journey in journeys:
-            for connection in journey:
-                trip_ids.add(connection.trip_id)
-        for alternatives_for_journey in alternatives:
-            for alternative in alternatives_for_journey:
-                for connection in alternative:
-                    trip_ids.add(connection.trip_id)
+        journeys_and_alternatives = self.to_fptf(journeys, alternatives)
 
-        routes = get_routes(trip_ids, session)
-
-        for journey, alternatives_for_journey in zip(journeys, alternatives):
-            print('Journey:')
-            print_journeys([journey], self.stop_steffen, routes=routes)
-
-            print('Alternatives:')
-            print_journeys(alternatives_for_journey, self.stop_steffen, routes=routes)
-
-        journey_and_alternatives: List[FPTFJourneyAndAlternatives] = []
-
-        for journey, alternatives_for_journey in zip(journeys, alternatives):
-            journey_and_alternatives.append(
-                FPTFJourneyAndAlternatives(
-                    journey=FPTFJourney.from_journey(
-                        journey, routes=routes, stop_steffen=self.stop_steffen
-                    ),
-                    alternatives=[
-                        FPTFJourney.from_journey(
-                            alternative, routes=routes, stop_steffen=self.stop_steffen
-                        )
-                        for alternative in alternatives_for_journey
-                    ],
-                )
-            )
-
-        return journey_and_alternatives
+        self.params = None
+        return journeys_and_alternatives
 
     def find_alternative_connections(
         self,
         journey: List[Connection],
-        connections: List[Connection],
-        heuristics: Dict[int, int],
-        destination_stop_id: int,
     ):
         changeovers: List[Changeover] = []
 
@@ -591,12 +563,15 @@ class RouterCSA:
                     is_regio=transfer.is_regio,
                     transfer_time_from_delayed_trip=0,
                     from_failed_transfer_stop_id=0,
-                    min_heuristic=heuristics[transfer.previous_transfer_stop_id],
+                    min_heuristic=self.params.heuristics[
+                        transfer.previous_transfer_stop_id
+                    ],
                     r_ident_id=0,
                     last_r_ident_id=0,
                     last_stop_id=NO_STOP_ID,
                     last_dp_ts=0,
                     walk_from_delayed_trip=False,
+                    last_changeover_duration=0,
                 )
             )
 
@@ -610,40 +585,74 @@ class RouterCSA:
                     is_regio=transfer.is_regio,
                     transfer_time_from_delayed_trip=0,
                     from_failed_transfer_stop_id=1,
-                    min_heuristic=heuristics[transfer.stop_id],
+                    min_heuristic=self.params.heuristics[transfer.stop_id],
                     r_ident_id=1,
                     last_r_ident_id=1,
                     last_stop_id=NO_STOP_ID,
                     last_dp_ts=0,
                     walk_from_delayed_trip=False,
+                    last_changeover_duration=0,
                 )
             )
 
-            trips: Dict[int, List[Reachability]] = dict()
-
-            start_index = bisect_left(connections, ar_ts, key=lambda c: c.dp_ts)
-
-            stops = csa(
-                connections=connections[start_index:],
-                stops=stops,
-                trips=trips,
-                transfers=self.transfers,
-                heuristics=heuristics,
+            stops = self.run_csa(
+                stops,
+                search_alternatives=True,
                 delayed_trip_id=transfer.ar_trip_id,
                 min_delay=transfer_time_missed,
-                destination_stop_id=destination_stop_id,
-                search_alternatives=True,
             )
 
             journeys = extract_journeys(
                 stops=stops,
-                destination_stop_id=destination_stop_id,
-                connections=connections,
+                destination_stop_id=self.params.destination_stop_id,
+                connections=self.params.connections,
                 transfers=self.transfers,
             )
             alternatives.extend(journeys)
 
         return alternatives
+
+    def to_fptf(
+        self,
+        journeys: List[List[Connection]],
+        alternatives: List[List[List[Connection]]],
+    ) -> List[FPTFJourneyAndAlternatives]:
+        trip_ids = set()
+        for journey in journeys:
+            for connection in journey:
+                trip_ids.add(connection.trip_id)
+        for alternatives_for_journey in alternatives:
+            for alternative in alternatives_for_journey:
+                for connection in alternative:
+                    trip_ids.add(connection.trip_id)
+
+        routes = get_routes(trip_ids, self.params.session)
+
+        for journey, alternatives_for_journey in zip(journeys, alternatives):
+            print('Journey:')
+            print_journeys([journey], self.stop_steffen, routes=routes)
+
+            print('Alternatives:')
+            print_journeys(alternatives_for_journey, self.stop_steffen, routes=routes)
+
+        journey_and_alternatives: List[FPTFJourneyAndAlternatives] = []
+
+        for journey, alternatives_for_journey in zip(journeys, alternatives):
+            journey_and_alternatives.append(
+                FPTFJourneyAndAlternatives(
+                    journey=FPTFJourney.from_journey(
+                        journey, routes=routes, stop_steffen=self.stop_steffen
+                    ),
+                    alternatives=[
+                        FPTFJourney.from_journey(
+                            alternative, routes=routes, stop_steffen=self.stop_steffen
+                        )
+                        for alternative in alternatives_for_journey
+                    ],
+                )
+            )
+
+        return journey_and_alternatives
 
 
 def main():
@@ -652,9 +661,9 @@ def main():
     with Session() as session:
         router = RouterCSA()
         router.do_routing(
-            origin='Stuttgart-Bad Cannstatt',
-            destination='Herrenberg',
-            dp_ts=datetime(2023, 5, 1, 13, 0, 0),
+            origin='Augsburg Hbf',
+            destination='Berlin Hbf',
+            dp_ts=datetime(2024, 1, 3, 13, 0, 0),
             session=session,
         )
 
