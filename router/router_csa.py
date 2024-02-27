@@ -441,6 +441,9 @@ class RouterCSA:
             ),
         )
 
+        if len(self.params.connections) == 0:
+            raise NoTimetableFound('No timetable found for given date and time')
+
         stops = {stop.stop_id: [] for stop in self.stop_steffen.stations()}
         stops[self.params.origin_stop_id].append(
             Reachability(
@@ -663,11 +666,12 @@ def main():
         router = RouterCSA()
         router.do_routing(
             origin='Tübingen Hbf',
-            destination='Augsburg Hbf',
+            destination='Ulm Hbf',
             dp_ts=datetime(2024, 2, 27, 13, 0, 0),
             session=session,
         )
 
 
 if __name__ == '__main__':
+    import helpers.bahn_vorhersage
     main()
