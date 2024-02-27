@@ -1,16 +1,15 @@
 import enum
-from typing import Dict, Generator, List, Tuple
+from typing import List
 
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.types import BigInteger
+from sqlalchemy.types import BigInteger, DateTime
 import sqlalchemy
-from datetime import datetime
+from datetime import datetime, UTC
 from rtd_crawler.hash64 import xxhash64
 from sqlalchemy.orm import Session as SessionType
 
 from database.base import Base
 from database.engine import sessionfactory
-from helpers.profiler import profile
 from router.datatypes import Connection as CSAConnectionTuple
 
 
@@ -18,10 +17,10 @@ class Connections(Base):
     __tablename__ = 'csa_connections'
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    dp_ts: Mapped[datetime] = mapped_column(index=True)
-    ar_ts: Mapped[datetime]
-    planned_dp_ts: Mapped[datetime]
-    planned_ar_ts: Mapped[datetime]
+    dp_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    ar_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    planned_dp_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    planned_ar_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     dp_stop_id: Mapped[int] = mapped_column(BigInteger)
     ar_stop_id: Mapped[int] = mapped_column(BigInteger)
     trip_id: Mapped[int] = mapped_column(BigInteger)
@@ -136,10 +135,10 @@ class ConnectionsTemp(Base):
     __tablename__ = 'csa_connections_temp'
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    dp_ts: Mapped[datetime] = mapped_column(index=True)
-    ar_ts: Mapped[datetime]
-    planned_dp_ts: Mapped[datetime]
-    planned_ar_ts: Mapped[datetime]
+    dp_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    ar_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    planned_dp_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    planned_ar_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     dp_stop_id: Mapped[int] = mapped_column(BigInteger)
     ar_stop_id: Mapped[int] = mapped_column(BigInteger)
     trip_id: Mapped[int] = mapped_column(BigInteger)

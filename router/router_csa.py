@@ -405,12 +405,13 @@ class RouterCSA:
                         + ADDITIONAL_SEARCH_WINDOW_HOURS
                     ),
                 )
+                if len(new_connections) == 0:
+                    break
                 self.params.n_hours_to_future += ADDITIONAL_SEARCH_WINDOW_HOURS
                 self.params.connections.extend(new_connections)
 
         return stops
 
-    @profile()
     def do_routing(
         self,
         origin: str,
@@ -628,12 +629,12 @@ class RouterCSA:
 
         routes = get_routes(trip_ids, self.params.session)
 
-        for journey, alternatives_for_journey in zip(journeys, alternatives):
-            print('Journey:')
-            print_journeys([journey], self.stop_steffen, routes=routes)
+        # for journey, alternatives_for_journey in zip(journeys, alternatives):
+        #     print('Journey:')
+        #     print_journeys([journey], self.stop_steffen, routes=routes)
 
-            print('Alternatives:')
-            print_journeys(alternatives_for_journey, self.stop_steffen, routes=routes)
+        #     print('Alternatives:')
+        #     print_journeys(alternatives_for_journey, self.stop_steffen, routes=routes)
 
         journey_and_alternatives: List[FPTFJourneyAndAlternatives] = []
 
@@ -661,9 +662,9 @@ def main():
     with Session() as session:
         router = RouterCSA()
         router.do_routing(
-            origin='Augsburg Hbf',
-            destination='Berlin Hbf',
-            dp_ts=datetime(2024, 1, 3, 13, 0, 0),
+            origin='Tübingen Hbf',
+            destination='Augsburg Hbf',
+            dp_ts=datetime(2024, 2, 27, 13, 0, 0),
             session=session,
         )
 

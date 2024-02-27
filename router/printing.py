@@ -9,7 +9,7 @@ from router.datatypes import Connection, Reachability
 
 
 def human_readable_reachability(reachability: Reachability, stop_steffen: StopSteffen):
-    dp_ts = datetime.fromtimestamp(reachability.dp_ts)
+    dp_ts = datetime.fromtimestamp(reachability.dp_ts) # TODO: probably not handling timezones correctly
     ar_ts = datetime.fromtimestamp(reachability.ar_ts)
     duration_seconds = reachability.ar_ts - reachability.dp_ts
     changeovers = reachability.changeovers
@@ -26,7 +26,7 @@ def human_readable_reachability(reachability: Reachability, stop_steffen: StopSt
 def journey_to_str(
     journey: List[Connection], stop_steffen: StopSteffen, routes: Dict[int, Routes]
 ):
-    dp_ts = datetime.fromtimestamp(journey[0].dp_ts)
+    dp_ts = datetime.fromtimestamp(journey[0].dp_ts) # TODO: probably not handling timezones correctly
     ar_ts = datetime.fromtimestamp(journey[-1].ar_ts)
     duration = journey[-1].ar_ts - journey[0].dp_ts
     dist_traveled = sum([c.dist_traveled for c in journey])
