@@ -38,8 +38,8 @@ class Connections(Base):
         trip_id: int,
     ) -> int:
         return xxhash64(
-            str(planned_dp_ts)
-            + str(planned_ar_ts)
+            planned_dp_ts.isoformat()
+            + planned_ar_ts.isoformat()
             + str(dp_stop_id)
             + str(ar_stop_id)
             + str(trip_id)
