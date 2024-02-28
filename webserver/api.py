@@ -39,26 +39,6 @@ def get_station_list():
     return resp
 
 
-# For compatibility with older versions of the website
-@bp.route("/connect", methods=["GET"])
-@log_activity
-def connect_legacy():
-    """
-    Gets called when the website is loaded
-    And gets some data from and about the user
-    It returns the trainstations for the autofill forms
-
-    Returns
-    -------
-    flask generated json
-        list: a list of strings with all the known train stations
-    """
-    resp = jsonify({"stations": streckennetz.sta_list})
-    # Cache for 1 week
-    resp.cache_control.max_age = 60 * 60 * 24 * 7
-    return resp
-
-
 @bp_limited.route("/stations.json")
 @log_activity
 def station_dump():
@@ -132,12 +112,14 @@ def trip():
     return resp
 
 
-@bp.route('/journeys', methods=['POST'])
+@bp_limited.route('/journeys', methods=['POST'])
 @log_activity
 def journeys():
     origin = request.json['origin']
     destination = request.json['destination']
     departure = datetime.fromisoformat(request.json['departure'])
+
+    current_app.logger.info(f'Routing from {origin} to {destination} at {departure}')
 
     try:
         journeys = router.do_routing(origin, destination, departure, db.session)
