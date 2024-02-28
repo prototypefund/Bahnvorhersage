@@ -7,7 +7,8 @@ from typing import Dict, List
 from gtfs.routes import Routes, RouteType
 from gtfs.stops import StopSteffen
 from gtfs.transfers import Transfer
-from router.constants import NO_STOP_ID, WALKING_TRIP_ID
+from router.constants import (MINIMUM_TRANSFER_TIME, NO_STOP_ID,
+                              WALK_FROM_ORIGIN_TRIP_ID, WALKING_TRIP_ID)
 from router.datatypes import Connection, Reachability
 
 
@@ -69,20 +70,35 @@ def match_transfer_to_reachability(
     transfers: Dict[int, List[Transfer]],
     reachability: Reachability,
     to_stop_id: int,
+    is_from_origin: bool = False,
+    next_dp_ts: int = None,
 ):
     for transfer in transfers[reachability.last_stop_id]:
         if transfer.to_stop == to_stop_id:
-            return Connection(
-                dp_ts=reachability.last_dp_ts,
-                ar_ts=reachability.ar_ts,
-                dp_stop_id=reachability.last_stop_id,
-                ar_stop_id=to_stop_id,
-                trip_id=WALKING_TRIP_ID,
-                is_regio=True,
-                dist_traveled=transfer.distance,
-                dp_platform_id=reachability.last_stop_id,
-                ar_platform_id=to_stop_id,
-            )
+            if is_from_origin:
+                return Connection(
+                    dp_ts=next_dp_ts - transfer.duration - MINIMUM_TRANSFER_TIME,
+                    ar_ts=next_dp_ts - MINIMUM_TRANSFER_TIME,
+                    dp_stop_id=reachability.last_stop_id,
+                    ar_stop_id=to_stop_id,
+                    trip_id=WALKING_TRIP_ID,
+                    is_regio=True,
+                    dist_traveled=transfer.distance,
+                    dp_platform_id=reachability.last_stop_id,
+                    ar_platform_id=to_stop_id,
+                )
+            else:
+                return Connection(
+                    dp_ts=reachability.last_dp_ts,
+                    ar_ts=reachability.ar_ts,
+                    dp_stop_id=reachability.last_stop_id,
+                    ar_stop_id=to_stop_id,
+                    trip_id=WALKING_TRIP_ID,
+                    is_regio=True,
+                    dist_traveled=transfer.distance,
+                    dp_platform_id=reachability.last_stop_id,
+                    ar_platform_id=to_stop_id,
+                )
 
 
 def extract_journeys(
@@ -106,6 +122,24 @@ def extract_journeys(
                             destination_stop_id
                             if i == len(reachability_chain) - 1
                             else reachability_chain[i + 1].last_stop_id
+                        ),
+                    )
+                )
+            elif reachability.current_trip_id == WALK_FROM_ORIGIN_TRIP_ID:
+                sparse_journey.append(  # TODO
+                    match_transfer_to_reachability(
+                        transfers=transfers,
+                        reachability=reachability,
+                        to_stop_id=(
+                            destination_stop_id
+                            if i == len(reachability_chain) - 1
+                            else reachability_chain[i + 1].last_stop_id
+                        ),
+                        is_from_origin=True,
+                        next_dp_ts=(
+                            reachability.ar_ts + MINIMUM_TRANSFER_TIME
+                            if i == len(reachability_chain) - 1
+                            else reachability_chain[i + 1].last_dp_ts
                         ),
                     )
                 )

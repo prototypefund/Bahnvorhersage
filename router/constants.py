@@ -6,12 +6,13 @@ MAX_SECONDS_DRIVING_AWAY = int(
 N_MINIMAL_ROUTES_TO_DESTINATION = 8
 MAX_TRANSFERS = 4
 EXTRA_DURATION_FOR_SHORTER_ROUTE = (
-    1.1  # 10% longer for shorter route (geo-distance) is acceptable
+    1.1  # 10% longer duration for a shorter route (geo-distance) is acceptable
 )
 
 NO_TRIP_ID = 0
 NO_DELAYED_TRIP_ID = 1
 WALKING_TRIP_ID = 2
+WALK_FROM_ORIGIN_TRIP_ID = 3
 
 NO_STOP_ID = 0
 MAX_EXPECTED_DELAY_SECONDS = 60 * 30

@@ -9,10 +9,8 @@ from sqlalchemy.orm import Session as SessionType
 from tqdm import tqdm
 
 from database.engine import sessionfactory
-from gtfs.calendar_dates import CalendarDates
 from gtfs.connections import Connections as DBConnections
 from gtfs.routes import Routes
-from gtfs.stop_times import StopTimes
 from gtfs.stops import StopSteffen
 from gtfs.transfers import Transfer, get_transfers
 from gtfs.trips import Trips
@@ -22,7 +20,8 @@ from router.constants import (ADDITIONAL_SEARCH_WINDOW_HOURS,
                               MAX_METERS_DRIVING_AWAY, MAX_SEARCH_WINDOW_HOURS,
                               MINIMUM_TRANSFER_TIME, N_ROUTES_TO_FIND,
                               NO_DELAYED_TRIP_ID, NO_STOP_ID, NO_TRIP_ID,
-                              STANDART_SEARCH_WINDOW_HOURS, WALKING_TRIP_ID)
+                              STANDART_SEARCH_WINDOW_HOURS,
+                              WALK_FROM_ORIGIN_TRIP_ID, WALKING_TRIP_ID)
 from router.datatypes import Changeover, Connection, Reachability
 from router.exceptions import NoRouteFound, NoTimetableFound
 from router.journey_reconstruction import (FPTFJourney,
@@ -35,7 +34,6 @@ from router.pareto import (relaxed_alternative_pareto_dominated,
 from router.printing import print_journeys
 
 # TODO:
-# - tagesübergänge regeln
 # - sort out splitting and merging trains
 
 
@@ -59,24 +57,30 @@ def get_routes(trip_ids: List[int], session: SessionType) -> Dict[int, Routes]:
     return routes
 
 
-def create_alternative_reachability(
+def create_reachability(
     connection: Connection,
     previous: Reachability,
     transfer_time_from_delayed_trip: int,
     min_heuristic: int,
     r_ident_id: int,
 ):
+    if previous.current_trip_id == NO_TRIP_ID:
+        dp_ts = connection.dp_ts
+    elif previous.current_trip_id == WALK_FROM_ORIGIN_TRIP_ID:
+        # If the previous trip was a walk from the origin, it is possible to depart
+        # later at the origin, so that the connection is just reachable.
+        walk_duration = previous.ar_ts - previous.dp_ts
+        dp_ts = connection.dp_ts - walk_duration - MINIMUM_TRANSFER_TIME
+    else:
+        dp_ts = previous.dp_ts
     return Reachability(
         ar_ts=connection.ar_ts,
-        dp_ts=(
-            connection.dp_ts
-            if previous.current_trip_id == NO_TRIP_ID
-            else previous.dp_ts
-        ),
+        dp_ts=dp_ts,
         current_trip_id=connection.trip_id,
         changeovers=(
             previous.changeovers
             if previous.current_trip_id == NO_TRIP_ID
+            or previous.current_trip_id == WALK_FROM_ORIGIN_TRIP_ID
             else previous.changeovers + 1
         ),
         dist_traveled=previous.dist_traveled + connection.dist_traveled,
@@ -103,7 +107,11 @@ def add_transfer_to_reachability(
     return Reachability(
         ar_ts=reachability.ar_ts + transfer.duration,
         dp_ts=reachability.dp_ts,
-        current_trip_id=WALKING_TRIP_ID,
+        current_trip_id=(
+            WALK_FROM_ORIGIN_TRIP_ID
+            if reachability.current_trip_id == NO_TRIP_ID
+            else WALKING_TRIP_ID
+        ),
         changeovers=reachability.changeovers,
         dist_traveled=reachability.dist_traveled + transfer.distance,
         is_regio=reachability.is_regio,
@@ -275,7 +283,7 @@ def csa(
                     else previous.transfer_time_from_delayed_trip
                 )
 
-                reachability = create_alternative_reachability(
+                reachability = create_reachability(
                     connection=connection,
                     previous=previous,
                     transfer_time_from_delayed_trip=transfer_time_from_delayed_trip,
@@ -367,12 +375,12 @@ class RouterCSA:
         self,
         stops: Dict[int, List[Reachability]],
         search_alternatives: bool,
+        r_ident_id: int = 10,  # 0-9 are reserved for special cases
         delayed_trip_id: int = NO_DELAYED_TRIP_ID,
         min_delay: int = 0,
     ) -> Dict[int, List[Reachability]]:
         trips: Dict[int, List[Reachability]] = dict()
         new_connections = self.params.connections
-        r_ident_id = 10  # 0-9 are reserved for special cases
 
         while True:
             early_stopping_ts = new_connections[-1].ar_ts + MINIMUM_TRANSFER_TIME
@@ -410,6 +418,13 @@ class RouterCSA:
                 self.params.n_hours_to_future += ADDITIONAL_SEARCH_WINDOW_HOURS
                 self.params.connections.extend(new_connections)
 
+        # Filter out reachabilities at the destination, that arrive after early_stopping_ts,
+        # as these might not represent an optimal journey
+        stops[self.params.destination_stop_id] = [
+            r
+            for r in stops[self.params.destination_stop_id]
+            if r.ar_ts <= early_stopping_ts
+        ]
         return stops
 
     def do_routing(
@@ -445,27 +460,43 @@ class RouterCSA:
             raise NoTimetableFound('No timetable found for given date and time')
 
         stops = {stop.stop_id: [] for stop in self.stop_steffen.stations()}
-        stops[self.params.origin_stop_id].append(
-            Reachability(
-                dp_ts=int(dp_ts.timestamp()),
-                ar_ts=int(dp_ts.timestamp()),
-                changeovers=0,
-                dist_traveled=0,
-                is_regio=1,
-                transfer_time_from_delayed_trip=0,
-                from_failed_transfer_stop_id=0,
-                current_trip_id=NO_TRIP_ID,
-                min_heuristic=self.params.heuristics[self.params.origin_stop_id],
-                r_ident_id=0,
-                last_r_ident_id=0,
-                last_stop_id=NO_STOP_ID,
-                last_dp_ts=int(dp_ts.timestamp()),
-                walk_from_delayed_trip=False,
-                last_changeover_duration=0,
-            )
+        origin_reachability = Reachability(
+            dp_ts=int(dp_ts.timestamp()),
+            ar_ts=int(dp_ts.timestamp()),
+            changeovers=0,
+            dist_traveled=0,
+            is_regio=1,
+            transfer_time_from_delayed_trip=0,
+            from_failed_transfer_stop_id=0,
+            current_trip_id=NO_TRIP_ID,
+            min_heuristic=self.params.heuristics[self.params.origin_stop_id],
+            r_ident_id=0,
+            last_r_ident_id=0,
+            last_stop_id=NO_STOP_ID,
+            last_dp_ts=int(dp_ts.timestamp()),
+            walk_from_delayed_trip=False,
+            last_changeover_duration=0,
         )
+        stops[self.params.origin_stop_id].append(origin_reachability)
+        # Relax walking segments here from origin
+        r_ident_id = 10
+        if self.params.origin_stop_id in self.transfers:
+            for transfer in self.transfers[self.params.origin_stop_id]:
+                walk = add_transfer_to_reachability(
+                    reachability=origin_reachability,
+                    transfer=transfer,
+                    from_delayed=0,
+                    heuristic=self.params.heuristics[transfer.to_stop],
+                    r_ident_id=r_ident_id,
+                )
+                r_ident_id += 1
+                stops[transfer.to_stop], _ = add_reachability_to_pareto(
+                    walk,
+                    stops[transfer.to_stop],
+                    is_alternative=False,
+                )
 
-        stops = self.run_csa(stops, search_alternatives=False)
+        stops = self.run_csa(stops, search_alternatives=False, r_ident_id=r_ident_id)
 
         journeys = extract_journeys(
             stops,
@@ -665,8 +696,8 @@ def main():
     with Session() as session:
         router = RouterCSA()
         router.do_routing(
-            origin='Tübingen Hbf',
-            destination='Ulm Hbf',
+            origin='Berlin Hbf',
+            destination='Augsburg Hbf',
             dp_ts=datetime(2024, 2, 27, 13, 0, 0),
             session=session,
         )
@@ -674,4 +705,5 @@ def main():
 
 if __name__ == '__main__':
     import helpers.bahn_vorhersage
+
     main()
