@@ -5,7 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import BigInteger, DateTime
 import sqlalchemy
 from datetime import datetime, UTC
-from rtd_crawler.hash64 import xxhash64
+from helpers.hash64 import xxhash64
 from sqlalchemy.orm import Session as SessionType
 
 from database.base import Base

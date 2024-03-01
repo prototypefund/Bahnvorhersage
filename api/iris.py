@@ -9,7 +9,7 @@ import lxml.etree as etree
 import pandas as pd
 import requests
 
-from rtd_crawler.hash64 import xxhash64
+from helpers.hash64 import xxhash64
 from rtd_crawler.parser_helpers import db_to_utc, parse_id, parse_path
 from rtd_crawler.xml_parser import xml_to_json
 from helpers.retry import retry

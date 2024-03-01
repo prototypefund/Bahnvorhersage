@@ -19,7 +19,7 @@ from gtfs.stop_times import StopTimes
 from gtfs.stops import LocationType, Stops
 from gtfs.trips import Trips
 from helpers.StreckennetzSteffi import StreckennetzSteffi
-from rtd_crawler.hash64 import xxhash64
+from helpers.hash64 import xxhash64
 
 """ Clear dangeling connections to db
 SELECT pg_terminate_backend(pid)

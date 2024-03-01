@@ -2,7 +2,7 @@ from typing import Callable, Optional
 
 import geopandas as gpd
 import pandas as pd
-from rtd_crawler.hash64 import xxhash64
+from helpers.hash64 import xxhash64
 
 from config import CACHE_PATH
 from database.engine import DB_CONNECT_STRING, get_engine

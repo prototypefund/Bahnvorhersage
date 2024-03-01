@@ -4,7 +4,7 @@ from sqlalchemy.orm import Mapped, mapped_column, Session
 from sqlalchemy.types import BigInteger, JSON
 from typing import Dict
 import json
-from rtd_crawler.hash64 import xxhash64
+from helpers.hash64 import xxhash64
 
 
 class UniqueChange(Base):

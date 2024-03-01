@@ -9,7 +9,7 @@ import sqlalchemy.orm
 from sqlalchemy.dialects.postgresql import JSON
 
 from database.base import Base
-from rtd_crawler.hash64 import xxhash64
+from helpers.hash64 import xxhash64
 
 
 class PlanByIdV2(Base):
