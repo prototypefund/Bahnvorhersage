@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 from config import redis_url
 from database import PlanById, sessionfactory
-from rtd_crawler.parser_helpers import parse_path
+from api.iris import parse_path
 
 
 def extract_station_names(

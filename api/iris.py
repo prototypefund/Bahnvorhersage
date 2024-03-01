@@ -4,13 +4,14 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, date
 from typing import List, Literal, Set, Union, Dict
+import pytz
 
 import lxml.etree as etree
 import pandas as pd
 import requests
 
 from helpers.hash64 import xxhash64
-from rtd_crawler.parser_helpers import db_to_utc, parse_id, parse_path
+from rtd_crawler.parser_helpers import db_to_utc
 from rtd_crawler.xml_parser import xml_to_json
 from helpers.retry import retry
 
@@ -20,6 +21,53 @@ CHANGES_URL = 'https://iris.noncd.db.de/iris-tts/timetable/fchg/'
 RECENT_CHANGES_URL = 'https://iris.noncd.db.de/iris-tts/timetable/rchg/'
 
 IRIS_TIMEOUT = 90
+
+
+def db_to_utc(dt: str | None) -> datetime | None:
+    """
+    Convert bahn time in format: '%y%m%d%H%M' to datetime.
+    As it is fastest to directly construct a datetime object from this, no strptime is used.
+
+    Args:
+        dt (str): bahn time format
+
+    Returns:
+        datetime.datetime: converted bahn time
+    """
+    if dt is None:
+        return None
+    local_datetime = datetime(
+        int('20' + dt[0:2]), int(dt[2:4]), int(dt[4:6]), int(dt[6:8]), int(dt[8:10])
+    )
+    local_tz = pytz.timezone('Europe/Berlin')
+    local_datetime = local_tz.localize(local_datetime)
+    utc_datetime = local_datetime.astimezone(pytz.utc)
+    return utc_datetime
+
+
+
+def parse_path(path: Union[str, None]) -> Union[List[str], None]:
+    if path is None or not path:
+        return None
+    return path.split('|')
+
+
+def parse_id(id: str) -> tuple[int, datetime, int]:
+    """
+    Parse a stop_id into its components
+
+    Parameters
+    ----------
+    id : str
+        A stop_id
+
+    Returns
+    -------
+    tuple[int, datetime, int]
+        trip_id, date_id, stop_id
+    """
+    trip_id, date_id, stop_id = id.rsplit('-', 2)
+    return int(trip_id), db_to_utc(date_id), int(stop_id)
 
 
 class EventStatus(enum.Enum):
