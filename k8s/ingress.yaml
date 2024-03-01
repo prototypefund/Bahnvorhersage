@@ -29,6 +29,16 @@ metadata:
 
     ingress.kubernetes.io/ssl-redirect: "true"
 
+    # Set gateway timeout to 5 minutes
+    # for the NGINX's nginx-ingress 
+    nginx.org/proxy-connect-timeout: 300s
+    nginx.org/proxy-read-timeout: 300s
+    nginx.org/proxy-send-timeout: 300s
+    # for the default ingress-nginx
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+
 spec:
   tls:
   - hosts:
@@ -36,7 +46,6 @@ spec:
     - www.bahnvorhersage.de
     - next.bahnvorhersage.de
     - db-rest.bahnvorhersage.de
-    - trainconnectionprediction.de
     - notes.bahnvorhersage.de
     - nextcloud.sfz-eningen.de
     - nextcloud.marcpanse.de
@@ -79,8 +88,6 @@ spec:
               name: frontend-service
               port:
                 number: 80
-  - host: "trainconnectionprediction.de"
-    http: *prod_webserver
   - host: "www.bahnvorhersage.de"
     http: *prod_webserver
   - host: "next.bahnvorhersage.de"
@@ -110,23 +117,6 @@ spec:
               name: db-rest-service
               port:
                 number: 3000
-  - host: "trainconnectionprediction.de"
-    http:
-      paths:
-        - path: /api/
-          pathType: Prefix
-          backend:
-            service:
-              name: webserver-service
-              port:
-                number: 5000
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: frontend-service
-              port:
-                number: 80
   - host: "notes.bahnvorhersage.de"
     http:
       paths:
