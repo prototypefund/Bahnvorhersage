@@ -11,8 +11,7 @@ import pandas as pd
 import requests
 
 from helpers.hash64 import xxhash64
-from rtd_crawler.parser_helpers import db_to_utc
-from rtd_crawler.xml_parser import xml_to_json
+from helpers.xml_parser import xml_to_json
 from helpers.retry import retry
 
 
