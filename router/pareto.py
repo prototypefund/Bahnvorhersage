@@ -1,5 +1,8 @@
-from router.constants import (EXTRA_DURATION_FOR_SHORTER_ROUTE,
-                              MINIMAL_DISTANCE_DIFFERENCE, NO_TRIP_ID)
+from router.constants import (
+    EXTRA_DURATION_FOR_SHORTER_ROUTE,
+    MINIMAL_DISTANCE_DIFFERENCE,
+    NO_TRIP_ID,
+)
 from router.datatypes import Reachability
 
 DOMINANCE_WORSE = 1

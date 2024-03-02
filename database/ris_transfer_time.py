@@ -185,14 +185,14 @@ def add_connection_time(tx: Session, transfer: RisTransfer):
     tx.run(
         from_platform_query
         + to_platform_query
-        + '''
+        + """
         MERGE (from)-[c:TRANSFER { 
             identical_physical_platform: $identical_physical_platform,
-        '''
+        """
         + transfer_attributes
-        + '''
+        + """
             source: $source
-        }]-(to)''',
+        }]-(to)""",
         from_eva=transfer.from_eva,
         from_platform=transfer.from_platform,
         to_eva=transfer.to_eva,

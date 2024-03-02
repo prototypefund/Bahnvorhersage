@@ -1,10 +1,11 @@
-import pandas as pd
-from helpers import RtdRay
 from datetime import datetime, timedelta
-from ml_models.xgboost_multi_model import Predictor, split_ar_dp, train_models
-from data_analysis.over_time import OverTime, add_rolling_mean
+
 import matplotlib.dates as mdates
-from helpers import groupby_index_to_flat
+import pandas as pd
+
+from data_analysis.over_time import OverTime, add_rolling_mean
+from helpers import RtdRay, groupby_index_to_flat
+from ml_models.xgboost_multi_model import Predictor, split_ar_dp, train_models
 
 date = datetime(2022, 9, 1)
 predictor = Predictor()
@@ -36,15 +37,15 @@ class OverDayPrediction(OverTime):
 
         ar_ml_rtd, dp_ml_rtd = split_ar_dp(ml_rtd)
 
-        del ar_ml_rtd["ar_delay"]
-        del ar_ml_rtd["dp_delay"]
-        del ar_ml_rtd["ar_cs"]
-        del ar_ml_rtd["dp_cs"]
+        del ar_ml_rtd['ar_delay']
+        del ar_ml_rtd['dp_delay']
+        del ar_ml_rtd['ar_cs']
+        del ar_ml_rtd['dp_cs']
 
-        del dp_ml_rtd["ar_delay"]
-        del dp_ml_rtd["dp_delay"]
-        del dp_ml_rtd["ar_cs"]
-        del dp_ml_rtd["dp_cs"]
+        del dp_ml_rtd['ar_delay']
+        del dp_ml_rtd['dp_delay']
+        del dp_ml_rtd['ar_cs']
+        del dp_ml_rtd['dp_cs']
 
         ar_on_time = predictor.predict_ar(ar_ml_rtd)
         dp_on_time = predictor.predict_dp(dp_ml_rtd)
@@ -138,9 +139,11 @@ class OverDayPrediction(OverTime):
 
 
 if __name__ == '__main__':
-    from helpers import bahn_vorhersage
+    from helpers.bahn_vorhersage import COLORFUL_ART
 
-    print("Training new ml models...")
+    print(COLORFUL_ART)
+
+    print('Training new ml models...')
     train_models(
         min_date=date - timedelta(days=7 * 6),
         max_date=date,

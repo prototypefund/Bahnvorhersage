@@ -1,5 +1,6 @@
 import datetime
-from typing import List, Literal, Optional, Tuple, Union, Set
+from dataclasses import dataclass
+from typing import List, Literal, Optional, Tuple, Union
 
 import geopy.distance
 import pandas as pd
@@ -7,8 +8,6 @@ import pandas as pd
 from config import CACHE_TIMEOUT_SECONDS
 from database.cached_table_fetch import cached_table_fetch
 from helpers import ttl_lru_cache
-
-from dataclasses import dataclass
 
 DateSelector = Union[
     datetime.datetime, List[datetime.datetime], Literal['latest'], Literal['all']
@@ -593,7 +592,9 @@ class StationPhillip:
 
 
 if __name__ == '__main__':
-    import helpers.bahn_vorhersage
+    from helpers.bahn_vorhersage import COLORFUL_ART
+
+    print(COLORFUL_ART)
 
     stations = StationPhillip(prefer_cache=False)
 

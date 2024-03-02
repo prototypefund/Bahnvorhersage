@@ -2,9 +2,9 @@ import enum
 from typing import Dict, Generator, List, Tuple
 
 import geopy.distance
+import sqlalchemy
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import BigInteger
-import sqlalchemy
 
 from database.base import Base
 from database.engine import sessionfactory

@@ -1,12 +1,10 @@
-from bisect import bisect_left
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from itertools import pairwise
 from typing import Dict, List, Tuple
 
 import sqlalchemy
 from sqlalchemy.orm import Session as SessionType
-from tqdm import tqdm
 
 from database.engine import sessionfactory
 from gtfs.connections import Connections as DBConnections
@@ -14,24 +12,30 @@ from gtfs.routes import Routes
 from gtfs.stops import StopSteffen
 from gtfs.transfers import Transfer, get_transfers
 from gtfs.trips import Trips
-from helpers.profiler import profile
-from router.constants import (ADDITIONAL_SEARCH_WINDOW_HOURS,
-                              MAX_EXPECTED_DELAY_SECONDS,
-                              MAX_METERS_DRIVING_AWAY, MAX_SEARCH_WINDOW_HOURS,
-                              MINIMUM_TRANSFER_TIME, N_ROUTES_TO_FIND,
-                              NO_DELAYED_TRIP_ID, NO_STOP_ID, NO_TRIP_ID,
-                              STANDART_SEARCH_WINDOW_HOURS,
-                              WALK_FROM_ORIGIN_TRIP_ID, WALKING_TRIP_ID)
+from router.constants import (
+    ADDITIONAL_SEARCH_WINDOW_HOURS,
+    MAX_EXPECTED_DELAY_SECONDS,
+    MAX_METERS_DRIVING_AWAY,
+    MAX_SEARCH_WINDOW_HOURS,
+    MINIMUM_TRANSFER_TIME,
+    N_ROUTES_TO_FIND,
+    NO_DELAYED_TRIP_ID,
+    NO_STOP_ID,
+    NO_TRIP_ID,
+    STANDART_SEARCH_WINDOW_HOURS,
+    WALK_FROM_ORIGIN_TRIP_ID,
+    WALKING_TRIP_ID,
+)
 from router.datatypes import Changeover, Connection, Reachability
 from router.exceptions import NoRouteFound, NoTimetableFound
-from router.journey_reconstruction import (FPTFJourney,
-                                           FPTFJourneyAndAlternatives,
-                                           clean_alternatives,
-                                           extract_journeys,
-                                           remove_duplicate_journeys)
-from router.pareto import (relaxed_alternative_pareto_dominated,
-                           relaxed_pareto_dominated)
-from router.printing import print_journeys
+from router.journey_reconstruction import (
+    FPTFJourney,
+    FPTFJourneyAndAlternatives,
+    clean_alternatives,
+    extract_journeys,
+    remove_duplicate_journeys,
+)
+from router.pareto import relaxed_alternative_pareto_dominated, relaxed_pareto_dominated
 
 # TODO:
 # - sort out splitting and merging trains
@@ -704,6 +708,8 @@ def main():
 
 
 if __name__ == '__main__':
-    import helpers.bahn_vorhersage
+    from helpers.bahn_vorhersage import COLORFUL_ART
+
+    print(COLORFUL_ART)
 
     main()

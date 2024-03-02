@@ -1,34 +1,32 @@
 import itertools
 import math
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Dict, Iterable, List, Tuple
 
-from helpers import pairwise
-
+import geoalchemy2
 import geopandas as gpd
 import geopy.distance
+import igraph as ig
 import matplotlib.pyplot as plt
 import numpy as np
-import osmnx as ox
 import pandas as pd
 import shapely
-from osmnx import _downloader, settings
-from shapely.geometry import LineString, MultiPoint, Point, Polygon, MultiLineString
-from tqdm import tqdm
-from concurrent.futures import ProcessPoolExecutor, as_completed
-import igraph as ig
-import xxhash
 import sqlalchemy
-import geoalchemy2
+import xxhash
+from osmnx import _downloader, settings
+from shapely.geometry import LineString, MultiPoint, Point, Polygon
+from tqdm import tqdm
 
 from database.cached_table_fetch import cached_table_fetch_postgis
 from database.engine import get_engine
+from helpers import pairwise
 from helpers.StationPhillip import StationPhillip
 
 RAIL_FILTER = (
-    f'["railway"~"rail|tram|narrow_gauge|light_rail|subway"]'
-    f'["railway"!~"proposed|construction|disused|abandoned|razed|miniature"]'
-    f'["service"!~"yard|spur"]'
-    f'["gauge"~"750|760|800|900|1000|1435|1445|1450|1458|1520|1524|1620|1668|750;1435|1435;750|760;1435|1435;760|1000;1435|1435;1000|1435;1520|1520;1435|1435;1668"]'
+    '["railway"~"rail|tram|narrow_gauge|light_rail|subway"]'
+    '["railway"!~"proposed|construction|disused|abandoned|razed|miniature"]'
+    '["service"!~"yard|spur"]'
+    '["gauge"~"750|760|800|900|1000|1435|1445|1450|1458|1520|1524|1620|1668|750;1435|1435;750|760;1435|1435;760|1000;1435|1435;1000|1435;1520|1520;1435|1435;1668"]'
 )
 
 USEFUL_TAGS_RAIL_WAYS = [
@@ -230,7 +228,7 @@ def simplify(nodes, edges) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
                 'halt',
             ]:
                 # Do not simplify nodes that will already be simplified
-                if (node.index in node_indices_to_touch):
+                if node.index in node_indices_to_touch:
                     continue
                 if edges_mergeable(node.all_edges()[0], node.all_edges()[1]):
                     node_indices_to_touch.add(node.index)
@@ -720,6 +718,8 @@ def main():
 
 
 if __name__ == '__main__':
-    import helpers.bahn_vorhersage
+    from helpers.bahn_vorhersage import COLORFUL_ART
+
+    print(COLORFUL_ART)
 
     main()

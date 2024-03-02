@@ -123,7 +123,7 @@ def plot_simple_ar(stats: pd.DataFrame, save_as: Optional[str] = None):
         label='Baseline',
     )
 
-    ax.set_title(f'Arrival', fontsize=50)
+    ax.set_title('Arrival', fontsize=50)
     ax.tick_params(axis='both', labelsize=20)
     ax.set_ylabel('Accuracy', fontsize=30)
     ax.set_xlabel('Minute', fontsize=30)
@@ -157,7 +157,7 @@ def plot_simple_dp(stats: pd.DataFrame, save_as: Optional[str] = None):
         label='Baseline',
     )
 
-    ax.set_title(f'Departure', fontsize=50)
+    ax.set_title('Departure', fontsize=50)
     ax.tick_params(axis='both', labelsize=20)
     ax.set_ylabel('Accuracy', fontsize=30)
     ax.set_xlabel('Minute', fontsize=30)
@@ -175,26 +175,26 @@ def plot_simple_dp(stats: pd.DataFrame, save_as: Optional[str] = None):
 
 
 if __name__ == '__main__':
-    data = json.load(open("cache/test copy.json", "r"))
+    data = json.load(open('cache/test copy.json'))
     parsed = []
 
     for key in data:
         for minute in range(15):
             minute_model = {}
             for model in data[key]:
-                if model["minute"] == minute:
+                if model['minute'] == minute:
                     minute_model.update(
                         {
                             model['ar_or_dp'] + '_' + k: model[k]
                             for k in model
-                            if k != "ar_or_dp"
+                            if k != 'ar_or_dp'
                         }
                     )
-            parsed.append({"date": key, **minute_model})
+            parsed.append({'date': key, **minute_model})
 
     stats = pd.DataFrame(parsed)
-    stats["date"] = pd.to_datetime(stats["date"])
-    stats = stats.sort_values(by="date")
+    stats['date'] = pd.to_datetime(stats['date'])
+    stats = stats.sort_values(by='date')
 
     stats = stats[~stats['date'].isin({datetime(2022, 5, 31), datetime(2022, 6, 27)})]
 

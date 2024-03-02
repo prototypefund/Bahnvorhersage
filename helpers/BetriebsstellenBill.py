@@ -59,7 +59,7 @@ class BetriebsstellenBill:
             geometry=gpd.points_from_xy(
                 betriebsstellen_with_location.lon, betriebsstellen_with_location.lat
             ),
-        ).set_crs("EPSG:4326")
+        ).set_crs('EPSG:4326')
 
     def get_name(self, ds100: Union[str, Any]) -> Union[str, pd.Series]:
         """Get the name of a Betriebsstelle or multiple Betriebsstellen
@@ -135,6 +135,6 @@ class BetriebsstellenBill:
                 return locations
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     betriebsstellen = BetriebsstellenBill()
     print('len:', len(betriebsstellen))

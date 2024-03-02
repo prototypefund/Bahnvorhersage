@@ -29,7 +29,7 @@ def scatterplot_trend_line(
     ax.set_xlim(x.min(), x.max())
     ax.grid(True)
 
-    ax.scatter(x=x, y=y, color="blue", alpha=0.05, edgecolor='none')
+    ax.scatter(x=x, y=y, color='blue', alpha=0.05, edgecolor='none')
     ax.set_ylim(-10, 20)
     # calc the trendline
     z = np.polyfit(x, y, 1)
@@ -38,11 +38,11 @@ def scatterplot_trend_line(
         [x.min(), x.max()],
         p([x.min(), x.max()]),
         color='red',
-        label="y=%.6fx+(%.6f)" % (z[0], z[1]),
+        label=f'y={z[0]:.6f}x+({z[1]:.6f})',
     )
     ax.legend(loc='upper left', fontsize=20)
     # the line equation:
-    print(title, 'line equation:', "y=%.6fx+(%.6f)" % (z[0], z[1]))
+    print(title, 'line equation:', f'y={z[0]:.6f}x+({z[1]:.6f})')
 
     if save_as:
         fig.set_size_inches(13.6, 7)
@@ -79,7 +79,7 @@ def con_score_stats(con_score: np.array, real_transfer_time: np.array):
         )
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     with Client(n_workers=n_dask_workers, threads_per_worker=2) as client:
         pred = Predictor()
         con_ray = ConnectionRay()

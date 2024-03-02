@@ -18,8 +18,8 @@ from gtfs.routes import Routes, RouteType
 from gtfs.stop_times import StopTimes
 from gtfs.stops import LocationType, Stops
 from gtfs.trips import Trips
-from helpers.StreckennetzSteffi import StreckennetzSteffi
 from helpers.hash64 import xxhash64
+from helpers.StreckennetzSteffi import StreckennetzSteffi
 
 """ Clear dangeling connections to db
 SELECT pg_terminate_backend(pid)
@@ -39,8 +39,8 @@ def stop_to_gtfs(
     line = stop.arrival.line if stop.arrival is not None else stop.departure.line
     if line is None:
         line = stop.trip_label.number
-    route_short_name = f"{stop.trip_label.category} {line}"
-    route_long_name = f"{stop.trip_label.category} {stop.trip_label.number}"
+    route_short_name = f'{stop.trip_label.category} {line}'
+    route_long_name = f'{stop.trip_label.category} {stop.trip_label.number}'
 
     trip_id = xxhash64(str(stop.trip_id) + '_' + stop.date_id.isoformat())
     route_id = xxhash64(route_long_name)
@@ -223,7 +223,9 @@ def main():
     parse_all()
 
 
-if __name__ == "__main__":
-    import helpers.bahn_vorhersage
+if __name__ == '__main__':
+    from helpers.bahn_vorhersage import COLORFUL_ART
+
+    print(COLORFUL_ART)
 
     main()

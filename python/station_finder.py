@@ -4,9 +4,9 @@ import sqlalchemy
 from redis import Redis
 from tqdm import tqdm
 
+from api.iris import parse_path
 from config import redis_url
 from database import PlanById, sessionfactory
-from api.iris import parse_path
 
 
 def extract_station_names(
@@ -29,7 +29,7 @@ def extract_station_names(
     -------
     Set[str]
         Set of station names
-    """    
+    """
     station_names = set()
 
     stops = PlanById.get_stops_from_chunk(session, chunk_limits)
@@ -66,7 +66,7 @@ def find_stations() -> Set[str]:
 
         for chunk_limits in tqdm(db_chunk_limits, desc='Finding stations'):
             station_names.update(extract_station_names(session, chunk_limits))
-            print('Found {} stations'.format(len(station_names)))
+            print(f'Found {len(station_names)} stations')
 
     return station_names
 

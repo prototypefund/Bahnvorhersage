@@ -16,8 +16,8 @@ from gtfs.trips import Trips, TripTemp
 
 
 def clear_temp_tables(session: sqlalchemy.orm.Session):
-    session.execute(sqlalchemy.text(f"TRUNCATE {StopTimesTemp.__table__.fullname}"))
-    session.execute(sqlalchemy.text(f"TRUNCATE {TripTemp.__table__.fullname}"))
+    session.execute(sqlalchemy.text(f'TRUNCATE {StopTimesTemp.__table__.fullname}'))
+    session.execute(sqlalchemy.text(f'TRUNCATE {TripTemp.__table__.fullname}'))
     session.commit()
 
 

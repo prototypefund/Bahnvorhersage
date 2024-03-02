@@ -3,8 +3,7 @@ import datetime
 import pandas as pd
 import pangres
 import sqlalchemy
-from sqlalchemy import (BIGINT, Boolean, Column, DateTime, Float, Integer,
-                        String, Text)
+from sqlalchemy import BIGINT, Boolean, Column, DateTime, Float, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, JSON
 
 from config import RTD_TABLENAME
@@ -232,7 +231,9 @@ sql_types = {
 
 if __name__ == '__main__':
     from database.engine import sessionfactory
-    from helpers import bahn_vorhersage
+    from helpers.bahn_vorhersage import COLORFUL_ART
+
+    print(COLORFUL_ART)
 
     Rtd()
 

@@ -32,11 +32,29 @@ dependencies = [
     "tqdm==4.66.1",
     "tueplots==0.0.10",
     "xgboost==2.0.0",
-    "xxhash==3.4.1"
+    "xxhash==3.4.1",
 ]
 
 [tool.setuptools]
-packages = ['api', 'gtfs', 'parser', 'router', 'helpers', 'crawler', 'database', 'ml_models', 'webserver', 'rtd_crawler', 'update_butler', 'data_analysis', 'model_analysis']
+packages = [
+    'api',
+    'gtfs',
+    'parser',
+    'router',
+    'helpers',
+    'crawler',
+    'database',
+    'ml_models',
+    'webserver',
+    'rtd_crawler',
+    'update_butler',
+    'data_analysis',
+    'model_analysis',
+]
 
-[tool.black]
-skip-string-normalization = true
+[tool.ruff.format]
+quote-style = "single"
+docstring-code-format = true
+
+[tool.ruff.lint]
+extend-select = ["I001", "UP"]

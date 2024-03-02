@@ -15,4 +15,4 @@ def xxhash64(to_hash: str) -> int:
     int
         Hashed input as int64
     """
-    return xxhash.xxh3_64_intdigest(to_hash) - ((2 ** 63))
+    return xxhash.xxh3_64_intdigest(to_hash) - (2**63)

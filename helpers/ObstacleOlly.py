@@ -36,7 +36,7 @@ class ObstacleOlly(StreckennetzSteffi):
         super().__init__(**kwargs)
         self.kwargs = kwargs
 
-        self.ds100_regex = r".*\(([A-Z\s]+)\)"
+        self.ds100_regex = r'.*\(([A-Z\s]+)\)'
         self.betriebsstellen = BetriebsstellenBill(**kwargs)
 
         self.obstacles = cached_table_fetch('parsed_obstacles', **kwargs).set_index(
@@ -278,8 +278,8 @@ class ObstacleOlly(StreckennetzSteffi):
 
 
 def from_hafas_time(hafas_time):
-    datetime.datetime.strptime(hafas_time, "%Y-%m-%dT%H:%M:%S%z").astimezone(
-        timezone("Europe/Berlin")
+    datetime.datetime.strptime(hafas_time, '%Y-%m-%dT%H:%M:%S%z').astimezone(
+        timezone('Europe/Berlin')
     )
 
 

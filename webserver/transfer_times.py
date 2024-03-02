@@ -1,18 +1,14 @@
-import math
-from datetime import timedelta
 from itertools import pairwise
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List
 
-import numpy as np
 from neo4j import GraphDatabase
 
 from config import NEO4J_AUTH, NEO4J_URI
-from database.ris_transfer_time import (Platform, TransferInfo,
-                                        get_transfer_time)
+from database.ris_transfer_time import Platform, TransferInfo, get_transfer_time
 
 
 def remove_walking_segments(fptf_journey_legs: List[Dict]) -> List[Dict]:
-    return [leg for leg in fptf_journey_legs if leg.get('walking', False) != True]
+    return [leg for leg in fptf_journey_legs if leg.get('walking', False) is not True]
 
 
 def get_needed_transfer_times(fptf_journey_legs: List[Dict]) -> Iterable[TransferInfo]:

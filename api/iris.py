@@ -2,18 +2,17 @@ import enum
 import urllib.parse
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from datetime import datetime, date
-from typing import List, Literal, Set, Union, Dict
-import pytz
+from datetime import date, datetime
+from typing import Dict, List, Literal, Set, Union
 
 import lxml.etree as etree
 import pandas as pd
+import pytz
 import requests
 
 from helpers.hash64 import xxhash64
-from helpers.xml_parser import xml_to_json
 from helpers.retry import retry
-
+from helpers.xml_parser import xml_to_json
 
 PLAN_URL = 'https://iris.noncd.db.de/iris-tts/timetable/plan/'
 CHANGES_URL = 'https://iris.noncd.db.de/iris-tts/timetable/fchg/'
@@ -42,7 +41,6 @@ def db_to_utc(dt: str | None) -> datetime | None:
     local_datetime = local_tz.localize(local_datetime)
     utc_datetime = local_datetime.astimezone(pytz.utc)
     return utc_datetime
-
 
 
 def parse_path(path: Union[str, None]) -> Union[List[str], None]:
@@ -231,7 +229,7 @@ class Event:
     def __init__(self, event: dict) -> None:
         if 'dc' in event:
             raise NotImplementedError(
-                f'Found wieird event. Please report this to the developers: {event}'
+                f'Found weird event. Please report this to the developers: {event}'
             )
 
         self.changed_distant_endpoint = event['cde'] if 'cde' in event else None
@@ -526,7 +524,7 @@ def get_stations_from_iris(search_term: Union[str, int]) -> IrisStation | None:
 
 
 def search_iris_multiple(
-    search_terms: Set[Union[str, int]]
+    search_terms: Set[Union[str, int]],
 ) -> Iterator[Union[IrisStation, None]]:
     """Search IRIS for multiple stations
 
@@ -555,18 +553,20 @@ def _make_iris_request(url: str, session: requests.Session = None) -> List[Dict]
     return xml_str_to_json(r.text)
 
 
-def get_plan(eva: int, date: date, hour: int, session: requests.Session = None) -> List[Dict]:
+def get_plan(
+    eva: int, date: date, hour: int, session: requests.Session = None
+) -> List[Dict]:
     return _make_iris_request(
         PLAN_URL + f"{eva}/{date.strftime('%y%m%d')}/{hour:02d}", session=session
     )
 
 
 def get_all_changes(eva: int, session: requests.Session = None) -> List[Dict]:
-    return _make_iris_request(CHANGES_URL + f"{eva}", session=session)
+    return _make_iris_request(CHANGES_URL + f'{eva}', session=session)
 
 
 def get_recent_changes(eva: int, session: requests.Session = None) -> List[Dict]:
-    return _make_iris_request(RECENT_CHANGES_URL + f"{eva}", session=session)
+    return _make_iris_request(RECENT_CHANGES_URL + f'{eva}', session=session)
 
 
 if __name__ == '__main__':

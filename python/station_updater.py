@@ -1,10 +1,10 @@
+from collections.abc import Iterator
 from datetime import datetime
 from typing import Set, Union
 
 import pandas as pd
 from redis import Redis
 from tqdm import tqdm
-from collections.abc import Iterator
 
 from api.iris import IrisStation, search_iris_multiple, stations_equal
 from api.ris import stop_place_by_eva, stop_place_by_name
@@ -81,23 +81,23 @@ def update_stations(
         else:
             if update_valid_from:
                 if iris_station.creationts > existing_station['valid_from']:
-                    modified_stations.at[
-                        existing_station['index'], 'valid_from'
-                    ] = iris_station.creationts
+                    modified_stations.at[existing_station['index'], 'valid_from'] = (
+                        iris_station.creationts
+                    )
 
             if stations_equal(iris_station, existing_station):
                 # Station itself didn't change, but some data about the station might have changed
-                modified_stations.at[
-                    existing_station['index'], 'meta'
-                ] = iris_station.meta
+                modified_stations.at[existing_station['index'], 'meta'] = (
+                    iris_station.meta
+                )
                 modified_stations.at[existing_station['index'], 'db'] = iris_station.db
             else:
                 # Station changed -> old station is valid till now and new modified
                 # station is valid from now
                 modification_ts = datetime.now()
-                modified_stations.at[
-                    existing_station['index'], 'valid_to'
-                ] = modification_ts
+                modified_stations.at[existing_station['index'], 'valid_to'] = (
+                    modification_ts
+                )
 
                 iris_station.valid_from = modification_ts
                 new_stations.append(iris_station)
@@ -174,12 +174,12 @@ def add_ris_info(
             & (stations['station_id'] == ris_station.station_id)
         ].index
         for index in matching_stations_indices:
-            stations.at[
-                index, 'available_transports'
-            ] = ris_station.available_transports
-            stations.at[
-                index, 'transport_associations'
-            ] = ris_station.transport_associations
+            stations.at[index, 'available_transports'] = (
+                ris_station.available_transports
+            )
+            stations.at[index, 'transport_associations'] = (
+                ris_station.transport_associations
+            )
 
     return stations
 
@@ -195,7 +195,9 @@ def add_stations_from_ris(names: set):
 
     new_stations = pd.DataFrame(new_stations)
 
-    station_df = StationPhillip().stations.reset_index(drop=True).drop(columns=['index'])
+    station_df = (
+        StationPhillip().stations.reset_index(drop=True).drop(columns=['index'])
+    )
     station_df = pd.concat([station_df, new_stations], ignore_index=True)
 
     station_df.drop_duplicates(subset=['name', 'eva', 'ds100'], inplace=True)
@@ -204,34 +206,41 @@ def add_stations_from_ris(names: set):
 
 def add_stations_from_derf_json(path: str, names: set):
     import json
-    derf_json = json.load(open(path, 'r'))
+
+    derf_json = json.load(open(path))
     derf_json = [
         {
             'name': station['name'],
             'eva': station['eva'],
             'ds100': station['ds100'],
             'lat': station['latlong'][0],
-            'lon': station['latlong'][1]
-        } for station in derf_json if station['name'] in names
+            'lon': station['latlong'][1],
+        }
+        for station in derf_json
+        if station['name'] in names
     ]
     derf_stations = pd.DataFrame.from_records(derf_json)
 
-    station_df = StationPhillip().stations.reset_index(drop=True).drop(columns=['index'])
+    station_df = (
+        StationPhillip().stations.reset_index(drop=True).drop(columns=['index'])
+    )
     station_df = pd.concat([station_df, derf_stations], ignore_index=True)
 
     station_df.drop_duplicates(subset=['name', 'eva', 'ds100'], inplace=True)
     cached_table_push(station_df, 'stations', fast=False)
 
+
 def manual_edit():
     stations = StationPhillip()
-    stations.stations.reset_index(drop=True).drop(columns=['index']).to_csv('stations-edit-mode.csv', sep=';', index=False)
+    stations.stations.reset_index(drop=True).drop(columns=['index']).to_csv(
+        'stations-edit-mode.csv', sep=';', index=False
+    )
 
     print('You can now edit the stations in stations-edit-mode.csv')
     input('Press enter to continue')
 
     modified_stations = pd.read_csv('stations-edit-mode.csv', sep=';', index_col=False)
     cached_table_push(modified_stations, 'stations', fast=False)
-
 
 
 def main():

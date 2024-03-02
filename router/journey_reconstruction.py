@@ -7,8 +7,12 @@ from typing import Dict, List
 from gtfs.routes import Routes, RouteType
 from gtfs.stops import StopSteffen
 from gtfs.transfers import Transfer
-from router.constants import (MINIMUM_TRANSFER_TIME, NO_STOP_ID,
-                              WALK_FROM_ORIGIN_TRIP_ID, WALKING_TRIP_ID)
+from router.constants import (
+    MINIMUM_TRANSFER_TIME,
+    NO_STOP_ID,
+    WALK_FROM_ORIGIN_TRIP_ID,
+    WALKING_TRIP_ID,
+)
 from router.datatypes import Connection, Reachability
 
 

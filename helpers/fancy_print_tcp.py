@@ -18,4 +18,4 @@ TrAIn_Connection_Prediction ║   ║
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^╜   ╙^^^^^^^^^^^^^^^^^^^^^^^^^^^
 """
 
-print("\033[92m{}\x1b[0m".format(TCP_SIGN))
+print(f'\033[92m{TCP_SIGN}\x1b[0m')

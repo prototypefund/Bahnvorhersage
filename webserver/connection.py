@@ -53,7 +53,7 @@ def rate_journey(iris_journey: list[dict], fptf_journey: list[dict]) -> Predicti
     )
 
     return Prediction(
-        transfer_score=con_scores.tolist(), # list(map(lambda s: int(round(s)), con_scores * 100)),
+        transfer_score=con_scores.tolist(),  # list(map(lambda s: int(round(s)), con_scores * 100)),
         ar_predictions=ar_prediction[:, 0].tolist(),
         dp_predictions=dp_prediction[:, 1].tolist(),
         transfer_times=transfer_time.tolist(),
@@ -64,7 +64,7 @@ def rate_journey(iris_journey: list[dict], fptf_journey: list[dict]) -> Predicti
 def from_utc(utc_time: str) -> datetime.datetime:
     return (
         datetime.datetime.fromisoformat(utc_time)
-        .astimezone(timezone("Europe/Berlin"))
+        .astimezone(timezone('Europe/Berlin'))
         .replace(tzinfo=None)
     )
 
@@ -128,7 +128,7 @@ def get_journeys(
     }
 
     # Convert to local timezone for API request
-    local_timezone = timezone("Europe/Berlin")
+    local_timezone = timezone('Europe/Berlin')
     date_with_timezone = local_timezone.localize(date)
 
     if search_for_arrival:
@@ -181,28 +181,27 @@ def get_and_rate_journeys(
         walking_legs = 0
         train_categories = set()
         for leg_index, leg in enumerate(journeys[i]['legs']):
-            if 'walking' in leg and leg['walking'] == True:
+            if 'walking' in leg and leg['walking'] is True:
                 walking_legs += 1
                 continue
             # The last leg has no transfer and thus no transferScore
             if leg_index != len(journeys[i]['legs']) - 1:
-                journeys[i]['legs'][leg_index][
-                    'transferScore'
-                ] = prediction.transfer_score[leg_index - walking_legs]
-                journeys[i]['legs'][leg_index][
-                    'neededTransferTime'
-                ] = prediction.needed_transfer_times[leg_index - walking_legs].to_dict()
-                journeys[i]['legs'][leg_index][
-                    'transferTime'
-                ] = prediction.transfer_times[leg_index - walking_legs]
-            journeys[i]['legs'][leg_index][
-                'arrivalPrediction'
-            ] = prediction.ar_predictions[leg_index - walking_legs]
-            journeys[i]['legs'][leg_index][
-                'departurePrediction'
-            ] = prediction.dp_predictions[leg_index - walking_legs]
+                journeys[i]['legs'][leg_index]['transferScore'] = (
+                    prediction.transfer_score[leg_index - walking_legs]
+                )
+                journeys[i]['legs'][leg_index]['neededTransferTime'] = (
+                    prediction.needed_transfer_times[leg_index - walking_legs].to_dict()
+                )
+                journeys[i]['legs'][leg_index]['transferTime'] = (
+                    prediction.transfer_times[leg_index - walking_legs]
+                )
+            journeys[i]['legs'][leg_index]['arrivalPrediction'] = (
+                prediction.ar_predictions[leg_index - walking_legs]
+            )
+            journeys[i]['legs'][leg_index]['departurePrediction'] = (
+                prediction.dp_predictions[leg_index - walking_legs]
+            )
             train_categories.add(leg['line']['productName'])
-
 
     return journeys
 
@@ -220,10 +219,10 @@ def extract_iris_like(journeys: list[dict], train_trips: dict) -> list[dict]:
     segments = []
 
     for leg in journeys['legs']:
-        if 'walking' in leg and leg['walking'] == True:
+        if 'walking' in leg and leg['walking'] is True:
             continue
 
-        if 'cancelled' in leg and leg['cancelled'] == True:
+        if 'cancelled' in leg and leg['cancelled'] is True:
             return None
 
         parsed_segment = {
@@ -305,7 +304,7 @@ def extract_iris_like(journeys: list[dict], train_trips: dict) -> list[dict]:
 def get_trip(trip_id: str) -> dict:
     for _ in range(3):
         r = requests.get(
-            'https://db-rest.bahnvorhersage.de/trips/{}'.format(trip_id),
+            f'https://db-rest.bahnvorhersage.de/trips/{trip_id}',
         )
         if r.ok:
             return r.json()['trip']

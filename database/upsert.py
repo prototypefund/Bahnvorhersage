@@ -1,11 +1,12 @@
+import random
+import time
 from typing import List
 
 import sqlalchemy
 from sqlalchemy.dialects.postgresql import Insert, insert
-from helpers.batcher import batcher
-import random
-import time
 from sqlalchemy.orm import Session
+
+from helpers.batcher import batcher
 
 
 def create_upsert_statement(

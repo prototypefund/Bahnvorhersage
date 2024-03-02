@@ -125,7 +125,7 @@ class OverTime(metaclass=ABCMeta):
         # Use dask Client to do groupby as the groupby is complex and scales well on local cluster.
         from dask.distributed import Client
 
-        with Client(n_workers=n_dask_workers, threads_per_worker=2) as client:
+        with Client(n_workers=n_dask_workers, threads_per_worker=2):
             rtd['agg_time'] = rtd['ar_pt'].fillna(value=rtd['dp_pt'])
             rtd['agg_time'] = rtd['agg_time'].dt.floor(self.resolution)
             rtd['agg_time'] = self.periodic_aggregator(rtd['agg_time'])
@@ -391,7 +391,9 @@ class OverYearWeekly(OverTime):
 
 
 if __name__ == '__main__':
-    import helpers.bahn_vorhersage
+    from helpers.bahn_vorhersage import COLORFUL_ART
+
+    print(COLORFUL_ART)
 
     print('grouping over hour')
     time = OverHour(generate=False)

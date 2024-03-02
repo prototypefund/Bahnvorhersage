@@ -3,10 +3,10 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 import sqlalchemy
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import BIGINT
 import sqlalchemy.orm
+from sqlalchemy import BIGINT
 from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.orm import Mapped, mapped_column
 
 from database.base import Base
 from helpers.hash64 import xxhash64
@@ -106,7 +106,7 @@ class PlanByIdV2(Base):
         )
 
         return stops
-    
+
     @staticmethod
     def get_stops_from_hash_ids(
         session: sqlalchemy.orm.Session, hash_ids: List[int]

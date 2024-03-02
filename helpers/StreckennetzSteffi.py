@@ -2,6 +2,7 @@ import itertools
 import json
 import warnings
 from functools import lru_cache
+from itertools import pairwise
 from typing import List
 
 import igraph
@@ -10,7 +11,6 @@ from redis import Redis
 from config import redis_url
 from database.cached_table_fetch import cached_sql_fetch
 from helpers.hash64 import xxhash64
-from itertools import pairwise
 from helpers.StationPhillip import StationPhillip
 
 
@@ -81,9 +81,7 @@ class StreckennetzSteffi(StationPhillip):
         return min(path_lengths)
 
     @redis_lru_cache_str_float(name='best_distance_cache', maxsize=None)
-    def best_distance(
-        self, source: str, target: str, is_bus: bool
-    ) -> float:
+    def best_distance(self, source: str, target: str, is_bus: bool) -> float:
         try:
             geo_distance = self.geographic_distance(source, target)
 
@@ -119,9 +117,7 @@ class StreckennetzSteffi(StationPhillip):
         else:
             return network_distance
 
-    def route_length(
-        self, waypoints: List[str], is_bus: bool
-    ) -> float:
+    def route_length(self, waypoints: List[str], is_bus: bool) -> float:
         """
         Calculate approximate length of a route, e.g. the sum of the distances
         between the waypoints.
@@ -141,14 +137,14 @@ class StreckennetzSteffi(StationPhillip):
         """
         length = 0
         for source, target in pairwise(waypoints):
-            length += self.best_distance(
-                source=source, target=target, is_bus=is_bus
-            )
+            length += self.best_distance(source=source, target=target, is_bus=is_bus)
         return length
 
 
 if __name__ == '__main__':
-    import helpers.bahn_vorhersage
+    from helpers.bahn_vorhersage import COLORFUL_ART
+
+    print(COLORFUL_ART)
 
     streckennetz_steffi = StreckennetzSteffi(prefer_cache=False)
 

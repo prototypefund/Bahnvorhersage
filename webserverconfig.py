@@ -1,7 +1,7 @@
 from database.engine import DB_CONNECT_STRING
 
 
-class Config(object):
+class Config:
     # Database
     SQLALCHEMY_DATABASE_URI = 'sqlite:///tcp.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False

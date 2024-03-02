@@ -105,5 +105,5 @@ def parse_connections():
         to_csa_connections(service_date, stop_steffen, engine, Session)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     parse_connections()

@@ -12,6 +12,7 @@ from helpers.StationPhillip import StationPhillip
 
 matplotlib.use('TkAgg')
 
+
 def wkb_reverse_hexer(wbk_hex):
     return shapely.wkb.loads(wbk_hex, hex=True)
 
@@ -59,9 +60,7 @@ nodes = gpd.GeoDataFrame(nodes, geometry='geometry')
 station_nodes = nodes.loc[~nodes['type'].isna()]
 
 fig, strecke = create_base_plot(
-    ccrs.Mercator(),
-    streckennetz.total_bounds,
-    color_scheme='light'
+    ccrs.Mercator(), streckennetz.total_bounds, color_scheme='light'
 )
 
 strecke.add_geometries(
@@ -69,7 +68,7 @@ strecke.add_geometries(
     crs=ccrs.Geodetic(),
     facecolor=(0, 0, 0, 0),
     edgecolor='black',
-    linewidth=0.5
+    linewidth=0.5,
 )
 
 

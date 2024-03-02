@@ -2,7 +2,6 @@ import datetime
 import os
 import pickle
 from typing import Literal
-import math
 
 import dask.dataframe as dd
 import numpy as np
@@ -12,8 +11,8 @@ from tqdm import tqdm
 from xgboost import XGBClassifier
 
 from config import ENCODER_PATH, JSON_MODEL_PATH
-from helpers import RtdRay, ttl_lru_cache
-
+from helpers import RtdRay
+from ml_models.predictor import Predictor, load_model
 
 
 def save_model(model: XGBClassifier, minute: int, ar_or_dp: Literal['ar', 'dp']):
@@ -53,12 +52,12 @@ def split_ar_dp(rtd: pd.DataFrame | dd.DataFrame) -> tuple[pd.DataFrame, pd.Data
         ar and dp subsets of the data. These subsets are likely not the same size.
     """
     status_encoder = {
-        'ar': pickle.load(open(ENCODER_PATH.format(encoder="ar_cs"), "rb")),
-        'dp': pickle.load(open(ENCODER_PATH.format(encoder="dp_cs"), "rb")),
+        'ar': pickle.load(open(ENCODER_PATH.format(encoder='ar_cs'), 'rb')),
+        'dp': pickle.load(open(ENCODER_PATH.format(encoder='dp_cs'), 'rb')),
     }
 
-    ar = rtd.loc[~rtd["ar_delay"].isna() | (rtd["ar_cs"] == status_encoder["ar"]["c"])]
-    dp = rtd.loc[~rtd["dp_delay"].isna() | (rtd["dp_cs"] == status_encoder["dp"]["c"])]
+    ar = rtd.loc[~rtd['ar_delay'].isna() | (rtd['ar_cs'] == status_encoder['ar']['c'])]
+    dp = rtd.loc[~rtd['dp_delay'].isna() | (rtd['dp_cs'] == status_encoder['dp']['c'])]
 
     return ar, dp
 
@@ -67,10 +66,10 @@ def train_model(train_x, train_y, **model_parameters):
     # print("Majority Baseline during training:", majority_baseline(train_x, train_y))
     est = XGBClassifier(
         n_jobs=-1,
-        objective="binary:logistic",
-        eval_metric="logloss",
+        objective='binary:logistic',
+        eval_metric='logloss',
         random_state=0,
-        tree_method="gpu_hist",
+        tree_method='gpu_hist',
         use_label_encoder=False,
         **model_parameters,
     )
@@ -84,31 +83,31 @@ def train_models(n_models=15, **load_parameters):
     del train
 
     status_encoder = {
-        'ar': pickle.load(open(ENCODER_PATH.format(encoder="ar_cs"), "rb")),
-        'dp': pickle.load(open(ENCODER_PATH.format(encoder="dp_cs"), "rb")),
+        'ar': pickle.load(open(ENCODER_PATH.format(encoder='ar_cs'), 'rb')),
+        'dp': pickle.load(open(ENCODER_PATH.format(encoder='dp_cs'), 'rb')),
     }
 
     ar_labels = {}
     dp_labels = {}
     for minute in range(n_models):
-        ar_labels[minute] = (ar_train["ar_delay"] <= minute) & (
-            ar_train["ar_cs"] != status_encoder["ar"]["c"]
+        ar_labels[minute] = (ar_train['ar_delay'] <= minute) & (
+            ar_train['ar_cs'] != status_encoder['ar']['c']
         )
-        dp_labels[minute] = (dp_train["dp_delay"] >= (minute)) & (
-            dp_train["dp_cs"] != status_encoder["dp"]["c"]
+        dp_labels[minute] = (dp_train['dp_delay'] >= (minute)) & (
+            dp_train['dp_cs'] != status_encoder['dp']['c']
         )
 
-    del ar_train["ar_delay"]
-    del ar_train["dp_delay"]
-    del ar_train["ar_cs"]
-    del ar_train["dp_cs"]
+    del ar_train['ar_delay']
+    del ar_train['dp_delay']
+    del ar_train['ar_cs']
+    del ar_train['dp_cs']
 
-    del dp_train["ar_delay"]
-    del dp_train["dp_delay"]
-    del dp_train["ar_cs"]
-    del dp_train["dp_cs"]
+    del dp_train['ar_delay']
+    del dp_train['dp_delay']
+    del dp_train['ar_cs']
+    del dp_train['dp_cs']
 
-    newpath = "cache/models"
+    newpath = 'cache/models'
     if not os.path.exists(newpath):
         os.makedirs(newpath)
 
@@ -133,22 +132,22 @@ def train_models(n_models=15, **load_parameters):
     }
     # fmt: on
 
-    for minute in tqdm(range(n_models), desc="Training models"):
-        model_name = f"ar_{minute}"
-        print("Training", model_name, '. . .')
+    for minute in tqdm(range(n_models), desc='Training models'):
+        model_name = f'ar_{minute}'
+        print('Training', model_name, '. . .')
         model = train_model(ar_train, ar_labels[minute], **parameters[minute])
         save_model(model, minute=minute, ar_or_dp='ar')
-        print("Training", model_name, "done.")
+        print('Training', model_name, 'done.')
 
-        model_name = f"dp_{minute}"
-        print("Training", model_name, '. . .')
+        model_name = f'dp_{minute}'
+        print('Training', model_name, '. . .')
         model = train_model(dp_train, dp_labels[minute], **parameters[minute - 1])
         save_model(model, minute=minute, ar_or_dp='dp')
-        print("Training", model_name, "done.")
+        print('Training', model_name, 'done.')
 
 
 def majority_baseline(x, y):
-    clf = DummyClassifier(strategy="most_frequent", random_state=0)
+    clf = DummyClassifier(strategy='most_frequent', random_state=0)
     clf.fit(x, y)
     return clf.score(x, y.astype(np.uint8))
 
@@ -158,39 +157,39 @@ def test_model(model, x, y):
     model_score = model.score(x, y.astype(np.uint8))
 
     return {
-        "baseline": baseline,
-        "accuracy": model_score,
+        'baseline': baseline,
+        'accuracy': model_score,
         'improvement': model_score - baseline,
     }
 
 
 def test_models(n_models=15, **load_parameters):
     status_encoder = {
-        'ar': pickle.load(open(ENCODER_PATH.format(encoder="ar_cs"), "rb")),
-        'dp': pickle.load(open(ENCODER_PATH.format(encoder="dp_cs"), "rb")),
+        'ar': pickle.load(open(ENCODER_PATH.format(encoder='ar_cs'), 'rb')),
+        'dp': pickle.load(open(ENCODER_PATH.format(encoder='dp_cs'), 'rb')),
     }
 
     test = RtdRay.load_for_ml_model(**load_parameters).compute()
     ar_test, dp_test = split_ar_dp(test)
 
-    ar_test_x = ar_test.drop(columns=["ar_delay", "dp_delay", "ar_cs", "dp_cs"])
-    dp_test_x = dp_test.drop(columns=["ar_delay", "dp_delay", "ar_cs", "dp_cs"])
+    ar_test_x = ar_test.drop(columns=['ar_delay', 'dp_delay', 'ar_cs', 'dp_cs'])
+    dp_test_x = dp_test.drop(columns=['ar_delay', 'dp_delay', 'ar_cs', 'dp_cs'])
     del test
 
     test_results = []
 
-    for model_number in tqdm(range(n_models), desc="Testing models"):
-        ar_test_y = (ar_test["ar_delay"] <= model_number) & (
-            ar_test["ar_cs"] != status_encoder["ar"]["c"]
+    for model_number in tqdm(range(n_models), desc='Testing models'):
+        ar_test_y = (ar_test['ar_delay'] <= model_number) & (
+            ar_test['ar_cs'] != status_encoder['ar']['c']
         )
-        model = load_model(minute=model_number, ar_or_dp="ar", gpu=True)
+        model = load_model(minute=model_number, ar_or_dp='ar', gpu=True)
         ar_result = test_model(model, ar_test_x, ar_test_y)
         test_results.append({'minute': model_number, 'ar_or_dp': 'ar', **ar_result})
 
-        dp_test_y = (dp_test["dp_delay"] >= model_number) & (
-            dp_test["dp_cs"] != status_encoder["dp"]["c"]
+        dp_test_y = (dp_test['dp_delay'] >= model_number) & (
+            dp_test['dp_cs'] != status_encoder['dp']['c']
         )
-        model = load_model(minute=model_number, ar_or_dp="dp", gpu=True)
+        model = load_model(minute=model_number, ar_or_dp='dp', gpu=True)
         dp_results = test_model(model, dp_test_x, dp_test_y)
         test_results.append({'minute': model_number, 'ar_or_dp': 'dp', **dp_results})
     return test_results
@@ -213,14 +212,16 @@ def feature_importance(ar_or_dp: Literal['ar', 'dp']):
 
     fig = ax.get_figure()
     fig.set_size_inches(13.6, 8.5)
-    fig.savefig(f"feature_importance_{ar_or_dp}.png", dpi=300, bbox_inches='tight')
+    fig.savefig(f'feature_importance_{ar_or_dp}.png', dpi=300, bbox_inches='tight')
     plt.clf()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     from dask.distributed import Client
 
-    import helpers.bahn_vorhersage
+    from helpers.bahn_vorhersage import COLORFUL_ART
+
+    print(COLORFUL_ART)
 
     # feature_importance('ar')
     # feature_importance('dp')

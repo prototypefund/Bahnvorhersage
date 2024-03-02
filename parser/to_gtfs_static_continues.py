@@ -1,9 +1,9 @@
 import sys
 import time
 import traceback
+from parser.gtfs_static_to_csa_connections import to_csa_connections
 from parser.gtfs_upserter import GTFSUpserter
 from parser.to_gtfs_static import parse_chunk
-from parser.gtfs_static_to_csa_connections import to_csa_connections
 
 from redis import Redis
 

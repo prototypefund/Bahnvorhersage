@@ -1,15 +1,17 @@
 import datetime
+
 import pandas as pd
-from helpers import RtdRay, ttl_lru_cache
-from database.cached_table_fetch import cached_table_fetch
+
 from config import n_dask_workers
+from database.cached_table_fetch import cached_table_fetch
+from helpers import RtdRay, ttl_lru_cache
 
 
 def stats_generator() -> pd.DataFrame:
     print('Generating stats...')
     from dask.distributed import Client
 
-    with Client(n_workers=n_dask_workers, threads_per_worker=2) as client:
+    with Client(n_workers=n_dask_workers, threads_per_worker=2):
         rtd = RtdRay.load_data(
             columns=[
                 'dp_delay',
@@ -110,10 +112,14 @@ def stats_generator() -> pd.DataFrame:
             stats['new_avg_dp_delay'] = float(round(rtd['dp_delay'].mean(), 2))
 
             stats['new_perc_ar_delay'] = float(
-                round(((rtd['ar_delay'] > 5).sum() / (stats['new_num_ar_data'])) * 100, 2)
+                round(
+                    ((rtd['ar_delay'] > 5).sum() / (stats['new_num_ar_data'])) * 100, 2
+                )
             )
             stats['new_perc_dp_delay'] = float(
-                round(((rtd['dp_delay'] > 5).sum() / (stats['new_num_dp_data'])) * 100, 2)
+                round(
+                    ((rtd['dp_delay'] > 5).sum() / (stats['new_num_dp_data'])) * 100, 2
+                )
             )
             stats['new_perc_ar_cancel'] = float(
                 round(
@@ -136,12 +142,14 @@ def stats_generator() -> pd.DataFrame:
                 )
             )
         else:
-            print('WARNING: There was no data found on:', yesterday.strftime('%d.%m.%Y'))
+            print(
+                'WARNING: There was no data found on:', yesterday.strftime('%d.%m.%Y')
+            )
 
         return pd.DataFrame({key: [stats[key]] for key in stats})
 
 
-@ttl_lru_cache(maxsize=1, seconds_to_live=60*60)
+@ttl_lru_cache(maxsize=1, seconds_to_live=60 * 60)
 def load_stats(**kwargs) -> dict:
     """Loads stats from database or local
 

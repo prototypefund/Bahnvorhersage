@@ -88,7 +88,7 @@ class OverDistance:
     def data_generator(self, train_categories: set):
         rtd = load_data(train_categories)
 
-        with Client(n_workers=n_dask_workers, threads_per_worker=2) as client:
+        with Client(n_workers=n_dask_workers, threads_per_worker=2):
             rtd['distance_to_start'] = rtd['distance_to_start'].round(-4).astype(int)
             rtd = (
                 rtd.groupby('distance_to_start')
@@ -122,8 +122,8 @@ class OverDistance:
             rtd['dp_canceled_mean'] = rtd['dp_canceled_sum'] / rtd['dp_delay_count']
 
             rtd['cancellation_rate'] = (
-                (rtd['ar_canceled_mean'] + rtd['dp_canceled_mean']) / 2
-            )
+                rtd['ar_canceled_mean'] + rtd['dp_canceled_mean']
+            ) / 2
 
             rtd.rename(columns={'distance_to_start_count': 'stop_count'}, inplace=True)
 
@@ -164,7 +164,9 @@ class OverDistance:
                 label=self.plot_args[plot_type]['labels'][y_col],
             )
 
-        ax.set_xlim(plot_data['distance_to_start'].min(), plot_data['distance_to_start'].max())
+        ax.set_xlim(
+            plot_data['distance_to_start'].min(), plot_data['distance_to_start'].max()
+        )
         ax.set_ylim(0, plot_data[self.plot_args[plot_type]['y_col']].max().max() * 1.1)
         count_ax.set_ylim(0, plot_data['ar_delay_count'].max() * 1.1)
 
@@ -173,8 +175,8 @@ class OverDistance:
         count_ax.set_ylabel('Stop count')
         fig.legend(
             bbox_to_anchor=(0, 1.02, 1, 0.2),
-            loc="lower left",
-            mode="expand",
+            loc='lower left',
+            mode='expand',
             borderaxespad=0,
             ncol=3,
         )
@@ -186,7 +188,7 @@ class OverDistance:
 
 
 def correlation(train_categories: set):
-    with Client(n_workers=n_dask_workers, threads_per_worker=2) as client:
+    with Client(n_workers=n_dask_workers, threads_per_worker=2):
         rtd = load_data(train_categories)
 
         correlation = rtd[['ar_delay', 'dp_delay', 'distance_to_start']].corr(
