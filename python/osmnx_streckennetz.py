@@ -1,7 +1,7 @@
 import itertools
 import math
+from collections.abc import Iterable
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import Dict, Iterable, List, Tuple
 
 import geoalchemy2
 import geopandas as gpd
@@ -66,7 +66,7 @@ def _convert_node(element, useful_tags):
     return element['id'], node
 
 
-def _convert_path(element: Dict, useful_tags: Iterable[str]) -> List[Dict]:
+def _convert_path(element: dict, useful_tags: Iterable[str]) -> list[dict]:
     tags = {}
 
     # remove any consecutive duplicate elements in the list of nodes
@@ -84,7 +84,7 @@ def _convert_path(element: Dict, useful_tags: Iterable[str]) -> List[Dict]:
     return edges
 
 
-def _add_geometry_to_edges(edges: List[Dict], nodes: Dict[int, Dict]):
+def _add_geometry_to_edges(edges: list[dict], nodes: dict[int, dict]):
     for edge in edges:
         edge['geometry'] = LineString(
             [
@@ -97,7 +97,7 @@ def _add_geometry_to_edges(edges: List[Dict], nodes: Dict[int, Dict]):
     return edges
 
 
-def _parse_osm_nodes_paths(response_json: Dict) -> Tuple[Dict[int, Dict], List[Dict]]:
+def _parse_osm_nodes_paths(response_json: dict) -> tuple[dict[int, dict], list[dict]]:
     nodes = {}
     edges = []
     for element in response_json['elements']:
@@ -112,7 +112,7 @@ def _parse_osm_nodes_paths(response_json: Dict) -> Tuple[Dict[int, Dict], List[D
     return nodes, edges
 
 
-def get_gdf_from_osm(polygon: Polygon) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+def get_gdf_from_osm(polygon: Polygon) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     # download the network data from OSM within buffered polygon
     response_jsons = _downloader._osm_network_download(
         polygon=polygon, network_type=None, custom_filter=RAIL_FILTER
@@ -206,7 +206,7 @@ def edges_mergeable(edge1: ig.Edge, edge2: ig.Edge) -> bool:
     return attributes1 == attributes2
 
 
-def simplify(nodes, edges) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+def simplify(nodes, edges) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     replace_ids = {key: i for i, key in enumerate(nodes['index'])}
     edges['u'] = edges['u'].map(replace_ids.get)
     edges['v'] = edges['v'].map(replace_ids.get)
@@ -358,7 +358,7 @@ def plot_algorithm(
     v=None,
     splitted=None,
     closest_edge=None,
-    more_plots: List[Tuple] = None,
+    more_plots: list[tuple] = None,
 ):
     fig, ax = plt.subplots()
     ax.set_aspect('equal', 'datalim')
@@ -453,7 +453,7 @@ def split_edge(
     line: LineString,
     orth_line: LineString,
     plot: bool = False,
-) -> Dict | None:
+) -> dict | None:
     """Split the geometry of an edge.
 
     Parameters

@@ -1,5 +1,3 @@
-from typing import Set, Tuple
-
 import sqlalchemy
 from redis import Redis
 from tqdm import tqdm
@@ -10,8 +8,8 @@ from database import PlanById, sessionfactory
 
 
 def extract_station_names(
-    session: sqlalchemy.orm.Session, chunk_limits: Tuple[int, int]
-) -> Set[str]:
+    session: sqlalchemy.orm.Session, chunk_limits: tuple[int, int]
+) -> set[str]:
     """
     For each historic delay datapoint, there is a path of stations that
     the train passed through. If a new station is build, it probably
@@ -47,7 +45,7 @@ def extract_station_names(
     return station_names
 
 
-def find_stations() -> Set[str]:
+def find_stations() -> set[str]:
     """
     Find all station names that exist in the historic delay data.
 

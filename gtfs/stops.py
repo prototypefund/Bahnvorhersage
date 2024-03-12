@@ -1,5 +1,5 @@
 import enum
-from typing import Dict, Generator, List, Tuple
+from collections.abc import Generator
 
 import geopy.distance
 import sqlalchemy
@@ -61,8 +61,8 @@ class Stops(Base):
 
 
 class StopSteffen:
-    names_to_ids: Dict[str, List[int]]
-    stops: Dict[int, Stops]
+    names_to_ids: dict[str, list[int]]
+    stops: dict[int, Stops]
 
     def __init__(self) -> None:
         stops = self._get_stops()
@@ -75,7 +75,7 @@ class StopSteffen:
                 self.names_to_ids[stop.stop_name] = []
             self.names_to_ids[stop.stop_name].append(stop.stop_id)
 
-    def _get_stops(self) -> List[Stops]:
+    def _get_stops(self) -> list[Stops]:
         engine, Session = sessionfactory()
         with Session() as session:
             stops = session.scalars(sqlalchemy.select(Stops)).all()
@@ -87,7 +87,7 @@ class StopSteffen:
             if stop.location_type == LocationType.STATION:
                 yield stop
 
-    def name_to_ids(self, name: str) -> List[int]:
+    def name_to_ids(self, name: str) -> list[int]:
         return self.names_to_ids[name]
 
     def get_stop(self, stop_id: int) -> Stops:
@@ -96,7 +96,7 @@ class StopSteffen:
     def get_name(self, stop_id: int) -> str:
         return self.get_stop(stop_id).stop_name
 
-    def get_location(self, stop_id: int) -> Tuple[float, float]:
+    def get_location(self, stop_id: int) -> tuple[float, float]:
         stop = self.get_stop(stop_id)
         return stop.stop_lat, stop.stop_lon
 

@@ -1,5 +1,5 @@
+from collections.abc import Iterable
 from itertools import pairwise
-from typing import Dict, Iterable, List
 
 from neo4j import GraphDatabase
 
@@ -7,11 +7,11 @@ from config import NEO4J_AUTH, NEO4J_URI
 from database.ris_transfer_time import Platform, TransferInfo, get_transfer_time
 
 
-def remove_walking_segments(fptf_journey_legs: List[Dict]) -> List[Dict]:
+def remove_walking_segments(fptf_journey_legs: list[dict]) -> list[dict]:
     return [leg for leg in fptf_journey_legs if leg.get('walking', False) is not True]
 
 
-def get_needed_transfer_times(fptf_journey_legs: List[Dict]) -> Iterable[TransferInfo]:
+def get_needed_transfer_times(fptf_journey_legs: list[dict]) -> Iterable[TransferInfo]:
     fptf_journey_legs = remove_walking_segments(fptf_journey_legs)
 
     with GraphDatabase.driver(NEO4J_URI, auth=NEO4J_AUTH) as driver:

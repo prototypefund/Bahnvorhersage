@@ -1,5 +1,4 @@
 import concurrent.futures
-from typing import Dict, Tuple
 
 import sqlalchemy
 import sqlalchemy.orm
@@ -41,12 +40,12 @@ class GTFSUpserter:
 
     def upsert(
         self,
-        stops: Dict[int, Tuple],
-        agencies: Dict[int, Tuple],
-        calendar_dates: Dict[int, Tuple],
-        routes: Dict[int, Tuple],
-        stop_times: Dict[int, Tuple],
-        trips: Dict[int, Tuple],
+        stops: dict[int, tuple],
+        agencies: dict[int, tuple],
+        calendar_dates: dict[int, tuple],
+        routes: dict[int, tuple],
+        stop_times: dict[int, tuple],
+        trips: dict[int, tuple],
     ):
         self.stops_changed = stops.items() >= self.stops.items() or self.stops_changed
         self.agencies_changed = (

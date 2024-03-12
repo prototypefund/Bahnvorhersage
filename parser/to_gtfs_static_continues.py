@@ -1,9 +1,6 @@
 import sys
 import time
 import traceback
-from parser.gtfs_static_to_csa_connections import to_csa_connections
-from parser.gtfs_upserter import GTFSUpserter
-from parser.to_gtfs_static import parse_chunk
 
 from redis import Redis
 
@@ -11,6 +8,9 @@ from config import redis_url
 from database import unparsed
 from database.engine import sessionfactory
 from gtfs.stops import StopSteffen
+from parser.gtfs_static_to_csa_connections import to_csa_connections
+from parser.gtfs_upserter import GTFSUpserter
+from parser.to_gtfs_static import parse_chunk
 
 
 def parse_unparsed(

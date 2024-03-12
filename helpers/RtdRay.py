@@ -1,6 +1,5 @@
 import datetime
 import pickle
-from typing import Optional
 
 import dask.dataframe as dd
 import pandas as pd
@@ -350,11 +349,11 @@ def upgrade_rtd():
 
 
 def load_data(
-    max_date: Optional[datetime.datetime] = None,
-    min_date: Optional[datetime.datetime] = None,
+    max_date: datetime.datetime | None = None,
+    min_date: datetime.datetime | None = None,
     long_distance_only: bool = False,
     load_categories: bool = True,
-    path: Optional[str] = None,
+    path: str | None = None,
     **kwargs,
 ) -> dd.DataFrame:
     """

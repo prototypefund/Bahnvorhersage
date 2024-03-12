@@ -1,6 +1,5 @@
 import json
 from datetime import datetime
-from typing import Optional
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -9,7 +8,7 @@ import helpers.colormaps as colormaps
 
 
 def plot_ar(
-    stats: pd.DataFrame, min_minute: int, max_minute: int, save_as: Optional[str] = None
+    stats: pd.DataFrame, min_minute: int, max_minute: int, save_as: str | None = None
 ):
     """Plot the accuracy and baseline of AR models for a given range of minutes.
 
@@ -58,7 +57,7 @@ def plot_ar(
 
 
 def plot_dp(
-    stats: pd.DataFrame, min_minute: int, max_minute: int, save_as: Optional[str] = None
+    stats: pd.DataFrame, min_minute: int, max_minute: int, save_as: str | None = None
 ):
     """Plot the accuracy and baseline of DP models for a given range of minutes.
 
@@ -106,7 +105,7 @@ def plot_dp(
         plt.show()
 
 
-def plot_simple_ar(stats: pd.DataFrame, save_as: Optional[str] = None):
+def plot_simple_ar(stats: pd.DataFrame, save_as: str | None = None):
     simple_stats = stats.groupby('ar_minute').mean()
 
     fig, ax = plt.subplots()
@@ -140,7 +139,7 @@ def plot_simple_ar(stats: pd.DataFrame, save_as: Optional[str] = None):
         plt.show()
 
 
-def plot_simple_dp(stats: pd.DataFrame, save_as: Optional[str] = None):
+def plot_simple_dp(stats: pd.DataFrame, save_as: str | None = None):
     simple_stats = stats.groupby('dp_minute').mean()
 
     fig, ax = plt.subplots()

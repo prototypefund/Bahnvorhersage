@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import List
 
 import sqlalchemy
 from sqlalchemy.orm import Mapped, mapped_column
@@ -97,7 +96,7 @@ class Connections(Base):
     @staticmethod
     def get_for_routing(
         session: SessionType, from_ts: datetime, to_ts: datetime
-    ) -> List['Connections']:
+    ) -> list['Connections']:
         stmt = (
             sqlalchemy.select(Connections)
             .where(Connections.dp_ts >= from_ts)

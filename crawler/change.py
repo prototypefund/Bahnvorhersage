@@ -1,7 +1,7 @@
 import concurrent.futures
 import time
 import traceback
-from typing import Callable, List
+from collections.abc import Callable
 
 import requests
 from redis import Redis
@@ -17,7 +17,7 @@ from helpers.batcher import batcher
 from helpers.StationPhillip import StationPhillip
 
 
-def crawler_worker(evas: List[int], download_function: Callable):
+def crawler_worker(evas: list[int], download_function: Callable):
     changes = {}
     with requests.Session() as session:
         for eva in evas:
@@ -32,7 +32,7 @@ def crawler_worker(evas: List[int], download_function: Callable):
 
 
 def get_and_process_changes(
-    evas: List[int], download_function: Callable, engine, redis_client
+    evas: list[int], download_function: Callable, engine, redis_client
 ):
     eva_batches = [
         list(batch) for batch in batcher(evas, station_to_monitor_per_thread)

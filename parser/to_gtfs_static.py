@@ -2,8 +2,6 @@ import concurrent.futures
 import json
 import multiprocessing as mp
 import os
-from parser.gtfs_upserter import GTFSUpserter
-from typing import List, Tuple
 
 import sqlalchemy
 from tqdm import tqdm
@@ -20,6 +18,7 @@ from gtfs.stops import LocationType, Stops
 from gtfs.trips import Trips
 from helpers.hash64 import xxhash64
 from helpers.StreckennetzSteffi import StreckennetzSteffi
+from parser.gtfs_upserter import GTFSUpserter
 
 """ Clear dangeling connections to db
 SELECT pg_terminate_backend(pid)
@@ -34,7 +33,7 @@ streckennetz = StreckennetzSteffi(prefer_cache=False)
 
 def stop_to_gtfs(
     plan: PlanByIdV2,
-) -> Tuple[Stops, Stops, Agency, CalendarDates, Routes, StopTimes, Trips]:
+) -> tuple[Stops, Stops, Agency, CalendarDates, Routes, StopTimes, Trips]:
     stop = TimetableStop(json.loads(plan.plan))
     line = stop.arrival.line if stop.arrival is not None else stop.departure.line
     if line is None:
@@ -124,7 +123,7 @@ def stop_to_gtfs(
     return station, platform, agency, calendar_dates, routes, stop_times, trips
 
 
-def parse_chunk(chunk_limits: Tuple[int, int] = None, hash_ids: List[int] = None):
+def parse_chunk(chunk_limits: tuple[int, int] = None, hash_ids: list[int] = None):
     engine, Session = sessionfactory(
         poolclass=sqlalchemy.pool.NullPool,
     )

@@ -3,7 +3,6 @@ import json
 import warnings
 from functools import lru_cache
 from itertools import pairwise
-from typing import List
 
 import igraph
 from redis import Redis
@@ -117,7 +116,7 @@ class StreckennetzSteffi(StationPhillip):
         else:
             return network_distance
 
-    def route_length(self, waypoints: List[str], is_bus: bool) -> float:
+    def route_length(self, waypoints: list[str], is_bus: bool) -> float:
         """
         Calculate approximate length of a route, e.g. the sum of the distances
         between the waypoints.

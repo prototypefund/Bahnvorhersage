@@ -1,6 +1,5 @@
 import csv
 import io
-from typing import List
 
 import sqlalchemy
 from sqlalchemy.orm import Session
@@ -17,7 +16,7 @@ class psql_csv_dialect(csv.Dialect):
     quoting = csv.QUOTE_MINIMAL
 
 
-def tuples_to_csv(tuples: List[tuple]) -> str:
+def tuples_to_csv(tuples: list[tuple]) -> str:
     """Convert a list of tuples to a csv string
 
     Parameters

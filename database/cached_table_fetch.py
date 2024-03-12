@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from collections.abc import Callable
 
 import geopandas as gpd
 import pandas as pd
@@ -10,7 +10,7 @@ from helpers.hash64 import xxhash64
 
 def cached_table_fetch_postgis(
     tablename: str,
-    prefer_cache: Optional[bool] = False,
+    prefer_cache: bool | None = False,
     **kwargs,
 ) -> gpd.GeoDataFrame:
     cache_path = f'{CACHE_PATH}/{tablename}.parquet'
@@ -36,7 +36,7 @@ def cached_table_fetch_postgis(
 
 def cached_sql_fetch(
     sql: str,
-    prefer_cache: Optional[bool] = False,
+    prefer_cache: bool | None = False,
     **kwargs,
 ) -> gpd.GeoDataFrame:
     cache_name = hex(xxhash64(sql))
@@ -58,9 +58,9 @@ def cached_sql_fetch(
 
 def cached_table_fetch(
     tablename: str,
-    prefer_cache: Optional[bool] = False,
-    generate: Optional[bool] = False,
-    table_generator: Optional[Callable[[], pd.DataFrame]] = None,
+    prefer_cache: bool | None = False,
+    generate: bool | None = False,
+    table_generator: Callable[[], pd.DataFrame] | None = None,
     **kwargs,
 ) -> pd.DataFrame:
     """

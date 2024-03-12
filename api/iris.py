@@ -3,7 +3,7 @@ import urllib.parse
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Dict, List, Literal, Set, Union
+from typing import Literal
 
 import lxml.etree as etree
 import pandas as pd
@@ -43,7 +43,7 @@ def db_to_utc(dt: str | None) -> datetime | None:
     return utc_datetime
 
 
-def parse_path(path: Union[str, None]) -> Union[List[str], None]:
+def parse_path(path: str | None) -> list[str] | None:
     if path is None or not path:
         return None
     return path.split('|')
@@ -211,7 +211,7 @@ class Event:
     changed_distant_endpoint: str
     cancellation_time: datetime
     changed_platform: str
-    changed_path: List[str]
+    changed_path: list[str]
     changed_status: EventStatus
     changed_time: datetime
     distant_change: int
@@ -220,11 +220,11 @@ class Event:
     messages: Message
     planned_distant_endpoint: str
     planned_platform: str
-    planned_path: List[str]
+    planned_path: list[str]
     planned_status: EventStatus
     planned_time: datetime
     transition: str
-    wings: List[str]
+    wings: list[str]
 
     def __init__(self, event: dict) -> None:
         if 'dc' in event:
@@ -302,7 +302,7 @@ class TripReference:
     label and reference trips, if available.
     """
 
-    refered_trips: List[TripLabel]
+    refered_trips: list[TripLabel]
     trip_label: TripLabel
 
 
@@ -417,7 +417,7 @@ class IrisStation:
     valid_from: datetime
     valid_to: datetime
     creationts: datetime
-    meta: List[int] = field(default_factory=list)
+    meta: list[int] = field(default_factory=list)
 
     def __init__(self, iris_station: dict) -> None:
         self.name = iris_station['name']
@@ -435,7 +435,7 @@ class IrisStation:
         self.meta = parse_meta(iris_station.get('meta', ''))
 
 
-def xml_str_to_json(xml_response: str) -> List[Dict]:
+def xml_str_to_json(xml_response: str) -> list[dict]:
     xml_response = etree.fromstring(xml_response.encode())
     return list(xml_to_json(single) for single in xml_response)
 
@@ -456,7 +456,7 @@ def stations_equal(iris_station: IrisStation, station: pd.Series) -> bool:
     )
 
 
-def parse_meta(meta: str) -> List[int]:
+def parse_meta(meta: str) -> list[int]:
     """Parse meta string from IRIS
 
     Parameters
@@ -475,7 +475,7 @@ def parse_meta(meta: str) -> List[int]:
     return list(map(int, meta))
 
 
-def get_stations_from_iris(search_term: Union[str, int]) -> IrisStation | None:
+def get_stations_from_iris(search_term: str | int) -> IrisStation | None:
     """
     Search IRIS for a station either by name or eva number
 
@@ -524,8 +524,8 @@ def get_stations_from_iris(search_term: Union[str, int]) -> IrisStation | None:
 
 
 def search_iris_multiple(
-    search_terms: Set[Union[str, int]],
-) -> Iterator[Union[IrisStation, None]]:
+    search_terms: set[str | int],
+) -> Iterator[IrisStation | None]:
     """Search IRIS for multiple stations
 
     Parameters
@@ -544,7 +544,7 @@ def search_iris_multiple(
 
 
 @retry(max_retries=3)
-def _make_iris_request(url: str, session: requests.Session = None) -> List[Dict]:
+def _make_iris_request(url: str, session: requests.Session = None) -> list[dict]:
     if session is None:
         r = requests.get(url, timeout=IRIS_TIMEOUT)
     else:
@@ -555,17 +555,17 @@ def _make_iris_request(url: str, session: requests.Session = None) -> List[Dict]
 
 def get_plan(
     eva: int, date: date, hour: int, session: requests.Session = None
-) -> List[Dict]:
+) -> list[dict]:
     return _make_iris_request(
         PLAN_URL + f"{eva}/{date.strftime('%y%m%d')}/{hour:02d}", session=session
     )
 
 
-def get_all_changes(eva: int, session: requests.Session = None) -> List[Dict]:
+def get_all_changes(eva: int, session: requests.Session = None) -> list[dict]:
     return _make_iris_request(CHANGES_URL + f'{eva}', session=session)
 
 
-def get_recent_changes(eva: int, session: requests.Session = None) -> List[Dict]:
+def get_recent_changes(eva: int, session: requests.Session = None) -> list[dict]:
     return _make_iris_request(RECENT_CHANGES_URL + f'{eva}', session=session)
 
 

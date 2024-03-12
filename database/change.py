@@ -1,5 +1,4 @@
 import json
-from typing import Dict, List
 
 import sqlalchemy
 from sqlalchemy import BIGINT, Column
@@ -24,7 +23,7 @@ class Change(Base):
             print(f'database.{self.__tablename__} running offline!')
 
     @staticmethod
-    def upsert(session: sqlalchemy.orm.Session, rows: List[dict]):
+    def upsert(session: sqlalchemy.orm.Session, rows: list[dict]):
         return upsert_base(session, Change.__table__, rows)
 
     @staticmethod
@@ -37,8 +36,8 @@ class Change(Base):
 
     @staticmethod
     def get_changes(
-        session: sqlalchemy.orm.Session, hash_ids: List[int]
-    ) -> Dict[int, dict]:
+        session: sqlalchemy.orm.Session, hash_ids: list[int]
+    ) -> dict[int, dict]:
         """
         Get changes that have a given hash_id
 

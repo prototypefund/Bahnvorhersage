@@ -1,5 +1,3 @@
-from typing import Optional
-
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import seaborn as sns
@@ -71,7 +69,7 @@ class DelayAnalysis:
     def plot(
         self,
         loggy=False,
-        save_as: Optional[str] = None,
+        save_as: str | None = None,
     ):
         cols = ['ar', 'dp', 'ar_cancellation', 'dp_cancellation']
         fig, ax1 = plt.subplots()

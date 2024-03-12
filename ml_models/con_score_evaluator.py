@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-from typing import Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,7 +17,7 @@ def scatterplot_trend_line(
     xlabel: str,
     ylabel: str,
     title: str,
-    save_as: Optional[str] = None,
+    save_as: str | None = None,
 ):
     fig, ax = plt.subplots()
 

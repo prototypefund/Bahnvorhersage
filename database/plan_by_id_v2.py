@@ -1,5 +1,4 @@
 import json
-from typing import Dict, List, Tuple
 
 import numpy as np
 import sqlalchemy
@@ -18,7 +17,7 @@ class PlanByIdV2(Base):
     stop_id: Mapped[int]
     plan: Mapped[str] = mapped_column(JSON)
 
-    def __init__(self, plan: Dict, stop_id: int) -> None:
+    def __init__(self, plan: dict, stop_id: int) -> None:
         self.hash_id = xxhash64(plan['id'])
         self.stop_id = stop_id
         self.plan = json.dumps(plan, sort_keys=True)
@@ -32,8 +31,8 @@ class PlanByIdV2(Base):
 
     @staticmethod
     def get_stops(
-        session: sqlalchemy.orm.Session, hash_ids: List[int]
-    ) -> Dict[int, dict]:
+        session: sqlalchemy.orm.Session, hash_ids: list[int]
+    ) -> dict[int, dict]:
         """
         Get stops that have a given hash_id
 
@@ -62,7 +61,7 @@ class PlanByIdV2(Base):
         return session.query(PlanByIdV2).count()
 
     @staticmethod
-    def get_chunk_limits(session: sqlalchemy.orm.Session) -> List[Tuple[int, int]]:
+    def get_chunk_limits(session: sqlalchemy.orm.Session) -> list[tuple[int, int]]:
         minimum = session.query(sqlalchemy.func.min(PlanByIdV2.hash_id)).scalar()
         maximum = session.query(sqlalchemy.func.max(PlanByIdV2.hash_id)).scalar()
         count = session.query(PlanByIdV2.hash_id).count()
@@ -76,8 +75,8 @@ class PlanByIdV2(Base):
 
     @staticmethod
     def get_stops_from_chunk(
-        session: sqlalchemy.orm.Session, chunk_limits: Tuple[int, int]
-    ) -> List['PlanByIdV2']:
+        session: sqlalchemy.orm.Session, chunk_limits: tuple[int, int]
+    ) -> list['PlanByIdV2']:
         """
         Get stops that have a hash_id within chunk_limits
 
@@ -109,8 +108,8 @@ class PlanByIdV2(Base):
 
     @staticmethod
     def get_stops_from_hash_ids(
-        session: sqlalchemy.orm.Session, hash_ids: List[int]
-    ) -> List['PlanByIdV2']:
+        session: sqlalchemy.orm.Session, hash_ids: list[int]
+    ) -> list['PlanByIdV2']:
         """
         Get stops that have a given hash_id
 

@@ -2,7 +2,6 @@ import concurrent.futures
 import time
 import traceback
 from datetime import date, datetime, timedelta
-from typing import List
 
 import requests
 from redis import Redis
@@ -26,7 +25,7 @@ def date_in_n_hours(hours) -> int:
     return (datetime.now() + timedelta(hours=hours)).date()
 
 
-def crawler_worker(evas: List[int], date: date, hour: int):
+def crawler_worker(evas: list[int], date: date, hour: int):
     plans = {}
     with requests.Session() as session:
         for eva in evas:
@@ -40,7 +39,7 @@ def crawler_worker(evas: List[int], date: date, hour: int):
         return plans
 
 
-def get_and_process_plan(evas: List[int], date: date, hour: int, engine, redis_client):
+def get_and_process_plan(evas: list[int], date: date, hour: int, engine, redis_client):
     eva_batches = [
         list(batch) for batch in batcher(evas, station_to_monitor_per_thread)
     ]

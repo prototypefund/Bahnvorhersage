@@ -1,6 +1,5 @@
 import enum
 from collections import namedtuple
-from typing import Dict, List
 
 import geopy.distance
 import sqlalchemy
@@ -62,13 +61,13 @@ class Transfers(Base):
         )
 
 
-def get_transfers() -> Dict[int, List[Transfer]]:
+def get_transfers() -> dict[int, list[Transfer]]:
     engine, Session = sessionfactory()
 
     with Session() as session:
         result = session.scalars(sqlalchemy.select(Transfers)).all()
 
-    transfers: Dict[int, List[Transfer]] = {}
+    transfers: dict[int, list[Transfer]] = {}
     for row in result:
         row: Transfers
         transfer = Transfer(

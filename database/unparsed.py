@@ -1,9 +1,7 @@
-from typing import List, Tuple
-
 from redis import Redis
 
 
-def add_change(redis_client: Redis, hash_ids: List[int]) -> None:
+def add_change(redis_client: Redis, hash_ids: list[int]) -> None:
     if hash_ids:
         pipe = redis_client.pipeline()
         for hash_id in hash_ids:
@@ -16,7 +14,7 @@ def add_change(redis_client: Redis, hash_ids: List[int]) -> None:
         pipe.execute()
 
 
-def add_plan(redis_client: Redis, hash_ids: List[int]) -> None:
+def add_plan(redis_client: Redis, hash_ids: list[int]) -> None:
     if hash_ids:
         pipe = redis_client.pipeline()
         for hash_id in hash_ids:
@@ -29,7 +27,7 @@ def add_plan(redis_client: Redis, hash_ids: List[int]) -> None:
         pipe.execute()
 
 
-def get_change(redis_client: Redis, from_id: bytes) -> Tuple[bytes, List[int]]:
+def get_change(redis_client: Redis, from_id: bytes) -> tuple[bytes, list[int]]:
     resp = redis_client.xread({'unparsed_change': from_id})
     if resp:
         hash_ids = set()
@@ -40,7 +38,7 @@ def get_change(redis_client: Redis, from_id: bytes) -> Tuple[bytes, List[int]]:
         return from_id, []
 
 
-def get_plan(redis_client: Redis, from_id: bytes) -> Tuple[bytes, List[int]]:
+def get_plan(redis_client: Redis, from_id: bytes) -> tuple[bytes, list[int]]:
     resp = redis_client.xread({'unparsed_plan': from_id})
     if resp:
         hash_ids = set()
@@ -51,7 +49,7 @@ def get_plan(redis_client: Redis, from_id: bytes) -> Tuple[bytes, List[int]]:
         return from_id, []
 
 
-def get(redis_client: Redis, from_id: bytes) -> Tuple[bytes, List[int]]:
+def get(redis_client: Redis, from_id: bytes) -> tuple[bytes, list[int]]:
     resp = redis_client.xread({'unparsed': from_id})
     if resp:
         hash_ids = set()

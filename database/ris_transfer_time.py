@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import List, Literal
+from typing import Literal
 
 from neo4j import GraphDatabase, Session
 from tqdm import tqdm
@@ -60,7 +60,7 @@ def neo4j_result_to_connection(result) -> TransferInfo:
     )
 
 
-def fastest_connection(connection: List[TransferInfo]) -> TransferInfo:
+def fastest_connection(connection: list[TransferInfo]) -> TransferInfo:
     return min(
         connection,
         key=lambda connection: connection.frequent_traveller.duration,

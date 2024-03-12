@@ -1,6 +1,6 @@
 import datetime
 from abc import ABCMeta, abstractmethod
-from typing import Literal, Optional
+from typing import Literal
 
 import dask.dataframe as dd
 import matplotlib.dates as mdates
@@ -193,7 +193,7 @@ class OverTime(metaclass=ABCMeta):
         self,
         nticks=6,
         kind: Literal['delay', 'cancellations', 'on_time_percentage'] = 'delay',
-        save_as: Optional[str] = None,
+        save_as: str | None = None,
     ):
         """Plot the data.
 

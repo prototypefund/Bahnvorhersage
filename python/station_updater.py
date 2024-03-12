@@ -1,6 +1,5 @@
 from collections.abc import Iterator
 from datetime import datetime
-from typing import Set, Union
 
 import pandas as pd
 from redis import Redis
@@ -13,7 +12,7 @@ from database.cached_table_fetch import cached_table_push
 from helpers.StationPhillip import StationPhillip
 
 
-def get_found_iris_stations() -> Iterator[Union[IrisStation, None]]:
+def get_found_iris_stations() -> Iterator[IrisStation | None]:
     """
     Get all stations from IRIS that were found in the historic delay
     data or already in the database.
@@ -39,7 +38,7 @@ def get_found_iris_stations() -> Iterator[Union[IrisStation, None]]:
 
 
 def update_stations(
-    iris_stations: Set[IrisStation],
+    iris_stations: set[IrisStation],
 ):
     """
     Add IRIS stations to StationPhillip. This function is complicated,

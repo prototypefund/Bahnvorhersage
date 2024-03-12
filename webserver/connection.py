@@ -1,7 +1,6 @@
 import datetime
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Dict, List
 
 import numpy as np
 import requests
@@ -69,7 +68,7 @@ def from_utc(utc_time: str) -> datetime.datetime:
     )
 
 
-def get_journey(request_data: Dict) -> List[Dict]:
+def get_journey(request_data: dict) -> list[dict]:
     for _ in range(3):
         r = requests.get(
             'https://db-rest.bahnvorhersage.de/journeys', params=request_data

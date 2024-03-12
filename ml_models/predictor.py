@@ -1,7 +1,8 @@
 import math
 import pickle
+from collections.abc import Iterable
 from datetime import timedelta
-from typing import Iterable, Literal, Tuple
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -157,7 +158,7 @@ class Predictor:
         dp_predictions: np.ndarray,
         transfer_times: np.ndarray,
         needed_transfer_times: Iterable[TransferInfo],
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         for i, (minutes, needed_transfer_time) in enumerate(
             zip(transfer_times, needed_transfer_times)
         ):

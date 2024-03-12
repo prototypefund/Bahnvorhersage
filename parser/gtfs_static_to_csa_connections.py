@@ -1,6 +1,5 @@
 from datetime import date, timedelta
 from itertools import pairwise
-from typing import Dict, List, Tuple
 
 import sqlalchemy
 from sqlalchemy.orm import Session as SessionType
@@ -22,7 +21,7 @@ def date_range(start_date: date, end_date: date):
         yield start_date + timedelta(days=n)
 
 
-def _get_stop_times(service_date: date, session: SessionType) -> List[StopTimes]:
+def _get_stop_times(service_date: date, session: SessionType) -> list[StopTimes]:
     stmt = (
         sqlalchemy.select(StopTimes)
         .join(Trips, StopTimes.trip_id == Trips.trip_id)
@@ -39,8 +38,8 @@ def _get_stop_times(service_date: date, session: SessionType) -> List[StopTimes]
 
 
 def _get_routes_from_db(
-    trip_ids: List[int], session: SessionType
-) -> List[Tuple[Routes, int]]:
+    trip_ids: list[int], session: SessionType
+) -> list[tuple[Routes, int]]:
     stmt = (
         sqlalchemy.select(Routes, Trips.trip_id)
         .join(Trips, Routes.route_id == Trips.route_id)
@@ -50,7 +49,7 @@ def _get_routes_from_db(
     return session.execute(stmt).all()
 
 
-def get_routes(trip_ids: List[int], session: SessionType) -> Dict[int, Routes]:
+def get_routes(trip_ids: list[int], session: SessionType) -> dict[int, Routes]:
     routes = _get_routes_from_db(trip_ids, session)
 
     routes = {trip_id: route for route, trip_id in routes}
