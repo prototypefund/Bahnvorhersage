@@ -4,7 +4,8 @@ import pandas as pd
 
 from config import n_dask_workers
 from database.cached_table_fetch import cached_table_fetch
-from helpers import RtdRay, ttl_lru_cache
+from helpers import RtdRay
+from helpers.cache import ttl_lru_cache
 
 
 def stats_generator() -> pd.DataFrame:

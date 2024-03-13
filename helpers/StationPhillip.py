@@ -7,7 +7,7 @@ import pandas as pd
 
 from config import CACHE_TIMEOUT_SECONDS
 from database.cached_table_fetch import cached_table_fetch
-from helpers import ttl_lru_cache
+from helpers.cache import ttl_lru_cache
 
 DateSelector = (
     datetime.datetime | list[datetime.datetime] | Literal['latest'] | Literal['all']

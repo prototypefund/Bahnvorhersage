@@ -7,7 +7,7 @@ import requests
 from pytz import timezone
 
 from database.ris_transfer_time import TransferInfo
-from helpers import ttl_lru_cache
+from helpers.cache import ttl_lru_cache
 from webserver import predictor, streckennetz
 from webserver.transfer_times import get_needed_transfer_times
 

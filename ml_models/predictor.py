@@ -10,8 +10,8 @@ from xgboost import XGBClassifier
 
 from config import ENCODER_PATH, JSON_MODEL_PATH
 from database.ris_transfer_time import TransferInfo
+from helpers.cache import ttl_lru_cache
 from helpers.StreckennetzSteffi import StreckennetzSteffi
-from helpers.ttl_lru_cache import ttl_lru_cache
 
 CATEGORICALS = ['o', 'c', 'n', 'station', 'pp']
 FEATURES = [
