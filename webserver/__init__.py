@@ -7,7 +7,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
 from data_analysis.per_station import PerStationOverTime
-from helpers import logging
+from helpers.logger import logging
 from helpers.StreckennetzSteffi import StreckennetzSteffi
 from ml_models.predictor import Predictor
 from router.router_csa import RouterCSA
