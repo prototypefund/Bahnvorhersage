@@ -124,8 +124,10 @@ def journeys():
     try:
         journeys = router.do_routing(origin, destination, departure, db.session)
     except NoTimetableFound as e:
+        current_app.logger.error(f'No timetable found: {e}')
         abort(CUSTOM_500_ERROR, str(e))
     except NoRouteFound as e:
+        current_app.logger.error(f'No route found: {e}')
         abort(CUSTOM_500_ERROR, str(e))
 
     resp = jsonify(journeys)
