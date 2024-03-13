@@ -61,4 +61,4 @@ quote-style = "single"
 docstring-code-format = true
 
 [tool.ruff.lint]
-extend-select = ["I001", "UP"]
+extend-select = ["I", "UP"]
