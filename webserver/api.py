@@ -15,9 +15,12 @@ bp_limited = Blueprint('api_rate_limited', __name__, url_prefix='/api')
 CUSTOM_500_ERROR = 505
 
 
-@bp.errorhandler(CUSTOM_500_ERROR)
-def custom_error(e):
+def custom_json_error(e: NoRouteFound | NoTimetableFound):
     return jsonify({'error': e.description}), 500
+
+
+bp.register_error_handler(CUSTOM_500_ERROR, custom_json_error)
+bp_limited.register_error_handler(CUSTOM_500_ERROR, custom_json_error)
 
 
 @bp.route('/station_list.json', methods=['GET'])
