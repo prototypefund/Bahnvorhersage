@@ -27,12 +27,9 @@ COPY ./database/ /usr/src/app/database/
 COPY ./gtfs/ /usr/src/app/gtfs/
 COPY ./helpers/ /usr/src/app/helpers/
 COPY ./ml_models/ /usr/src/app/ml_models/
-COPY ./model_analysis/ /usr/src/app/model_analysis/
 COPY ./parser/ /usr/src/app/parser/
 COPY ./python/ /usr/src/app/python/
 COPY ./router/ /usr/src/app/router/
-COPY ./rtd_crawler/ /usr/src/app/rtd_crawler/
-COPY ./update_butler/ /usr/src/app/update_butler/
 COPY ./webserver/ /usr/src/app/webserver/
 COPY __init__.py /usr/src/app/__init__.py
 COPY ./webserverconfig.py /usr/src/app/webserverconfig.py

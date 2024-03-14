@@ -42,18 +42,15 @@ dev = ["pre-commit", "ruff"]
 [tool.setuptools]
 packages = [
     'api',
+    'crawler',
+    'data_analysis',
+    'database',
     'gtfs',
+    'helpers',
+    'ml_models',
     'parser',
     'router',
-    'helpers',
-    'crawler',
-    'database',
-    'ml_models',
     'webserver',
-    'rtd_crawler',
-    'update_butler',
-    'data_analysis',
-    'model_analysis',
 ]
 
 [tool.ruff.format]
