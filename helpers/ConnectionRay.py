@@ -19,15 +19,17 @@ class ConnectionRay(Rtd):
         )
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     from dask.distributed import Client
 
-    import helpers.bahn_vorhersage
+    from helpers.bahn_vorhersage import COLORFUL_ART
+
+    print(COLORFUL_ART)
 
     client = Client(n_workers=2, threads_per_worker=1)
 
     connection_ray = ConnectionRay()
     rtd = connection_ray.load_ar()
-    print('length of data: {} rows'.format(len(rtd)))
+    print(f'length of data: {len(rtd)} rows')
     # RtdRay.refresh_local_buffer()
     # rtd = RtdRay.load_for_ml_model()

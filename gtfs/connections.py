@@ -1,15 +1,13 @@
-import enum
-from typing import List
+from datetime import datetime
 
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.types import BigInteger, DateTime
 import sqlalchemy
-from datetime import datetime, UTC
-from rtd_crawler.hash64 import xxhash64
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.orm import Session as SessionType
+from sqlalchemy.types import BigInteger, DateTime
 
 from database.base import Base
 from database.engine import sessionfactory
+from helpers.hash64 import xxhash64
 from router.datatypes import Connection as CSAConnectionTuple
 
 
@@ -98,7 +96,7 @@ class Connections(Base):
     @staticmethod
     def get_for_routing(
         session: SessionType, from_ts: datetime, to_ts: datetime
-    ) -> List['Connections']:
+    ) -> list['Connections']:
         stmt = (
             sqlalchemy.select(Connections)
             .where(Connections.dp_ts >= from_ts)
@@ -107,13 +105,13 @@ class Connections(Base):
         )
         result = session.scalars(stmt).all()
 
-        'dp_stop_id',
-        'ar_stop_id',
-        'trip_id',
-        'is_regio',
-        'dist_traveled',
-        'dp_platform_id',
-        'ar_platform_id',
+        ('dp_stop_id',)
+        ('ar_stop_id',)
+        ('trip_id',)
+        ('is_regio',)
+        ('dist_traveled',)
+        ('dp_platform_id',)
+        ('ar_platform_id',)
 
         return [
             CSAConnectionTuple(
@@ -150,7 +148,7 @@ class ConnectionsTemp(Base):
     @staticmethod
     def clear(session: SessionType):
         session.execute(
-            sqlalchemy.text(f"TRUNCATE {ConnectionsTemp.__table__.fullname}")
+            sqlalchemy.text(f'TRUNCATE {ConnectionsTemp.__table__.fullname}')
         )
         session.commit()
 

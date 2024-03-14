@@ -9,18 +9,21 @@ from webserver import per_station_time, router, streckennetz
 from webserver.connection import get_and_rate_journeys
 from webserver.db_logger import db, log_activity
 
-bp = Blueprint("api", __name__, url_prefix="/api")
-bp_limited = Blueprint("api_rate_limited", __name__, url_prefix='/api')
+bp = Blueprint('api', __name__, url_prefix='/api')
+bp_limited = Blueprint('api_rate_limited', __name__, url_prefix='/api')
 
 CUSTOM_500_ERROR = 505
 
 
-@bp.errorhandler(CUSTOM_500_ERROR)
-def custom_error(e):
-    return jsonify({"error": e.description}), 500
+def custom_json_error(e: NoRouteFound | NoTimetableFound):
+    return jsonify({'error': e.description}), 500
 
 
-@bp.route("/station_list.json", methods=["GET"])
+bp.register_error_handler(CUSTOM_500_ERROR, custom_json_error)
+bp_limited.register_error_handler(CUSTOM_500_ERROR, custom_json_error)
+
+
+@bp.route('/station_list.json', methods=['GET'])
 @log_activity
 def get_station_list():
     """
@@ -33,13 +36,13 @@ def get_station_list():
     flask generated json
         list: a list of strings with all the known train stations
     """
-    resp = jsonify({"stations": streckennetz.sta_list})
+    resp = jsonify({'stations': streckennetz.sta_list})
     # Cache for 1 week
     resp.cache_control.max_age = 60 * 60 * 24 * 7
     return resp
 
 
-@bp_limited.route("/stations.json")
+@bp_limited.route('/stations.json')
 @log_activity
 def station_dump():
     """Return all station data as json
@@ -63,7 +66,7 @@ def station_dump():
     return r
 
 
-@bp.route("/trip", methods=["POST"])
+@bp.route('/trip', methods=['POST'])
 @log_activity
 def trip():
     """
@@ -87,7 +90,7 @@ def trip():
     """
     start = request.json['start']
     destination = request.json['destination']
-    date = datetime.strptime(request.json['date'], "%d.%m.%Y %H:%M")
+    date = datetime.strptime(request.json['date'], '%d.%m.%Y %H:%M')
 
     # optional:
     search_for_arrival = (
@@ -101,14 +104,14 @@ def trip():
     bike = request.json['bike'] if 'bike' in request.json else False
 
     current_app.logger.info(
-        "Getting connections from " + start + " to " + destination + ", " + str(date)
+        'Getting connections from ' + start + ' to ' + destination + ', ' + str(date)
     )
 
     journeys = get_and_rate_journeys(
         start, destination, date, search_for_arrival, only_regional, bike
     )
     resp = jsonify(journeys)
-    resp.headers.add("Access-Control-Allow-Origin", "*")
+    resp.headers.add('Access-Control-Allow-Origin', '*')
     return resp
 
 
@@ -124,8 +127,10 @@ def journeys():
     try:
         journeys = router.do_routing(origin, destination, departure, db.session)
     except NoTimetableFound as e:
+        current_app.logger.error(f'No timetable found: {e}')
         abort(CUSTOM_500_ERROR, str(e))
     except NoRouteFound as e:
+        current_app.logger.error(f'No route found: {e}')
         abort(CUSTOM_500_ERROR, str(e))
 
     resp = jsonify(journeys)
@@ -133,7 +138,7 @@ def journeys():
     return resp
 
 
-@bp.route("/stats")
+@bp.route('/stats')
 @log_activity
 def stats():
     """
@@ -151,7 +156,7 @@ def stats():
     return data_stats.load_stats()
 
 
-@bp.route("/stationplot/<string:date_range>.webp")
+@bp.route('/stationplot/<string:date_range>.webp')
 @log_activity
 def station_plot(date_range):
     """
@@ -172,21 +177,21 @@ def station_plot(date_range):
     if date_range in per_station_time.DEFAULT_PLOTS:
         path_to_plot = per_station_time.generate_default(plot_title=date_range)
     else:
-        date_range = date_range.split("-")
+        date_range = date_range.split('-')
         path_to_plot = per_station_time.generate_plot(
-            datetime.strptime(date_range[0], "%d.%m.%Y"),
-            datetime.strptime(date_range[1], "%d.%m.%Y"),
+            datetime.strptime(date_range[0], '%d.%m.%Y'),
+            datetime.strptime(date_range[1], '%d.%m.%Y'),
             use_cached_images=True,
         )
 
-    current_app.logger.info(f"Returning plot: {path_to_plot}")
+    current_app.logger.info(f'Returning plot: {path_to_plot}')
     # For some fucking reason flask searches the file from inside webserver
     # so we have to go back a bit even though
     # os.path.isfile('cache/plots/'+ plot_name + '.png') works
-    return send_file(path_to_plot, mimetype="image/webp")
+    return send_file(path_to_plot, mimetype='image/webp')
 
 
-@bp.route("/stationplot/limits")
+@bp.route('/stationplot/limits')
 @log_activity
 def limits():
     """

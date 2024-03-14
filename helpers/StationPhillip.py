@@ -1,21 +1,20 @@
 import datetime
-from typing import List, Literal, Optional, Tuple, Union, Set
+from dataclasses import dataclass
+from typing import Literal
 
 import geopy.distance
 import pandas as pd
 
 from config import CACHE_TIMEOUT_SECONDS
 from database.cached_table_fetch import cached_table_fetch
-from helpers import ttl_lru_cache
+from helpers.cache import ttl_lru_cache
 
-from dataclasses import dataclass
-
-DateSelector = Union[
-    datetime.datetime, List[datetime.datetime], Literal['latest'], Literal['all']
-]
-AllowedDuplicates = Union[
-    Literal['all'], Literal['first'], Literal['last'], Literal['none']
-]
+DateSelector = (
+    datetime.datetime | list[datetime.datetime] | Literal['latest'] | Literal['all']
+)
+AllowedDuplicates = (
+    Literal['all'] | Literal['first'] | Literal['last'] | Literal['none']
+)
 
 
 @dataclass
@@ -69,7 +68,7 @@ class StationPhillip:
 
     @property
     @ttl_lru_cache(CACHE_TIMEOUT_SECONDS, 1)
-    def sta_list(self) -> List[str]:
+    def sta_list(self) -> list[str]:
         return list(
             self._get_station(date=datetime.datetime.now())
             .sort_values(by='number_of_events', ascending=False)['name']
@@ -77,7 +76,7 @@ class StationPhillip:
         )
 
     @property
-    def evas(self) -> List[int]:
+    def evas(self) -> list[int]:
         return self.stations['eva'].unique().tolist()
 
     @property
@@ -109,7 +108,7 @@ class StationPhillip:
 
     @property
     @ttl_lru_cache(CACHE_TIMEOUT_SECONDS, 1)
-    def evas_by_name(self) -> dict[str, List[int]]:
+    def evas_by_name(self) -> dict[str, list[int]]:
         evas_by_name = {}
         for i in range(len(self.stations)):
             row = self.stations.iloc[i]
@@ -123,7 +122,7 @@ class StationPhillip:
 
     @property
     @ttl_lru_cache(CACHE_TIMEOUT_SECONDS, 1)
-    def evas_by_ds100(self) -> dict[str, List[int]]:
+    def evas_by_ds100(self) -> dict[str, list[int]]:
         evas_by_ds100 = {}
         for i in range(len(self.stations)):
             row = self.stations.iloc[i]
@@ -149,7 +148,7 @@ class StationPhillip:
         """
         yield from self.stations['name'].unique()
 
-    def to_gdf(self, date: DateSelector = None, index_cols: Tuple[str, ...] = None):
+    def to_gdf(self, date: DateSelector = None, index_cols: tuple[str, ...] = None):
         """
         Convert stations to geopandas GeoDataFrame.
 
@@ -210,7 +209,7 @@ class StationPhillip:
     def _filter_stations_by_date(
         date: DateSelector,
         stations_to_filter: pd.DataFrame,
-        drop_duplicates_by: Union[str, List],
+        drop_duplicates_by: str | list,
         allow_duplicates: AllowedDuplicates = 'all',
     ):
         stations_to_filter = stations_to_filter.sort_index()
@@ -246,9 +245,9 @@ class StationPhillip:
     def _get_station(
         self,
         date: DateSelector,
-        name: Union[str, List[str]] = None,
-        eva: Union[int, List[int]] = None,
-        ds100: Union[str, List[str]] = None,
+        name: str | list[str] = None,
+        eva: int | list[int] = None,
+        ds100: str | list[str] = None,
         allow_duplicates: AllowedDuplicates = 'all',
     ) -> pd.DataFrame:
         if name is not None:
@@ -342,7 +341,7 @@ class StationPhillip:
             stations = stations.droplevel(level=['name', 'eva', 'ds100'])
             return stations
 
-    def _best_eva(self, evas: List[int]) -> int:
+    def _best_eva(self, evas: list[int]) -> int:
         """
         Several station names might link to the same eva.
         Thats generally kind of a problem. Evas for normal
@@ -379,10 +378,10 @@ class StationPhillip:
     def get_eva_(
         self,
         date: DateSelector,
-        name: Optional[Union[str, List[str]]] = None,
-        ds100: Optional[Union[str, List[str]]] = None,
+        name: str | list[str] | None = None,
+        ds100: str | list[str] | None = None,
         allow_duplicates: AllowedDuplicates = 'all',
-    ) -> Union[int, pd.Series]:
+    ) -> int | pd.Series:
         """
         Get eva from name or ds100
 
@@ -422,10 +421,10 @@ class StationPhillip:
     def get_name_(
         self,
         date: DateSelector,
-        eva: Optional[Union[int, List[int]]] = None,
-        ds100: Optional[Union[str, List[str]]] = None,
+        eva: int | list[int] | None = None,
+        ds100: str | list[str] | None = None,
         allow_duplicates: AllowedDuplicates = 'all',
-    ) -> Union[str, pd.Series]:
+    ) -> str | pd.Series:
         """
         Get name from eva or ds100
 
@@ -462,10 +461,10 @@ class StationPhillip:
     def get_ds100(
         self,
         date: DateSelector,
-        eva: Optional[Union[int, List[int]]] = None,
-        name: Optional[Union[str, List[str]]] = None,
+        eva: int | list[int] | None = None,
+        name: str | list[str] | None = None,
         allow_duplicates: AllowedDuplicates = 'all',
-    ) -> Union[str, pd.Series]:
+    ) -> str | pd.Series:
         """
         Get ds100 from eva or name
 
@@ -506,11 +505,11 @@ class StationPhillip:
     def get_location_(
         self,
         date: DateSelector,
-        eva: Optional[Union[int, List[int]]] = None,
-        name: Optional[Union[str, List[str]]] = None,
-        ds100: Optional[Union[str, List[str]]] = None,
+        eva: int | list[int] | None = None,
+        name: str | list[str] | None = None,
+        ds100: str | list[str] | None = None,
         allow_duplicates: AllowedDuplicates = 'all',
-    ) -> Union[Tuple[float, float], pd.DataFrame]:
+    ) -> tuple[float, float] | pd.DataFrame:
         """
         Get location from eva, name or ds100
 
@@ -593,7 +592,9 @@ class StationPhillip:
 
 
 if __name__ == '__main__':
-    import helpers.bahn_vorhersage
+    from helpers.bahn_vorhersage import COLORFUL_ART
+
+    print(COLORFUL_ART)
 
     stations = StationPhillip(prefer_cache=False)
 

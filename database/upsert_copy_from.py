@@ -1,8 +1,9 @@
-import sqlalchemy
-import io
-from sqlalchemy.orm import Session
 import csv
-from typing import List
+import io
+
+import sqlalchemy
+from sqlalchemy.orm import Session
+
 
 class psql_csv_dialect(csv.Dialect):
     """Describe the usual properties of Unix-generated CSV files."""
@@ -14,7 +15,8 @@ class psql_csv_dialect(csv.Dialect):
     lineterminator = '\n'
     quoting = csv.QUOTE_MINIMAL
 
-def tuples_to_csv(tuples: List[tuple]) -> str:
+
+def tuples_to_csv(tuples: list[tuple]) -> str:
     """Convert a list of tuples to a csv string
 
     Parameters
@@ -33,13 +35,14 @@ def tuples_to_csv(tuples: List[tuple]) -> str:
     fbuf.seek(0)
     return fbuf.read()
 
+
 def upsert_copy_from(
     table: sqlalchemy.schema.Table,
     temp_table: sqlalchemy.schema.Table,
     csv: str,
     engine: sqlalchemy.engine.Engine,
 ):
-    sql_clear = f"TRUNCATE {temp_table.fullname}"
+    sql_clear = f'TRUNCATE {temp_table.fullname}'
     with Session(engine) as session:
         session.execute(sqlalchemy.text(sql_clear))
         session.commit()

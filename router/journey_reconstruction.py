@@ -2,13 +2,16 @@ from bisect import bisect_left
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from itertools import pairwise
-from typing import Dict, List
 
 from gtfs.routes import Routes, RouteType
 from gtfs.stops import StopSteffen
 from gtfs.transfers import Transfer
-from router.constants import (MINIMUM_TRANSFER_TIME, NO_STOP_ID,
-                              WALK_FROM_ORIGIN_TRIP_ID, WALKING_TRIP_ID)
+from router.constants import (
+    MINIMUM_TRANSFER_TIME,
+    NO_STOP_ID,
+    WALK_FROM_ORIGIN_TRIP_ID,
+    WALKING_TRIP_ID,
+)
 from router.datatypes import Connection, Reachability
 
 
@@ -17,9 +20,9 @@ def utc_ts_to_iso(ts: int) -> str:
 
 
 def extract_reachability_chain(
-    stops: Dict[int, List[Reachability]],
+    stops: dict[int, list[Reachability]],
     destination: Reachability,
-) -> List[Reachability]:
+) -> list[Reachability]:
     journey = [destination]
     previous = destination
     while True:
@@ -35,9 +38,9 @@ def extract_reachability_chain(
 
 
 def extract_reachability_chains(
-    stops: Dict[int, List[Reachability]],
+    stops: dict[int, list[Reachability]],
     destination_stop_id: int,
-) -> List[List[Reachability]]:
+) -> list[list[Reachability]]:
     reachability_chains = []
     for reachability in stops[destination_stop_id]:
         reachability_chains.append(extract_reachability_chain(stops, reachability))
@@ -45,7 +48,7 @@ def extract_reachability_chains(
 
 
 def match_connection_to_reachability(
-    connections: List[Connection],
+    connections: list[Connection],
     reachability: Reachability,
 ):
     start_index = bisect_left(
@@ -57,7 +60,7 @@ def match_connection_to_reachability(
 
 
 def get_next_connection(
-    connections: List[Connection],
+    connections: list[Connection],
     connection: Connection,
 ):
     start_index = bisect_left(connections, connection.ar_ts, key=lambda c: c.dp_ts)
@@ -67,7 +70,7 @@ def get_next_connection(
 
 
 def match_transfer_to_reachability(
-    transfers: Dict[int, List[Transfer]],
+    transfers: dict[int, list[Transfer]],
     reachability: Reachability,
     to_stop_id: int,
     is_from_origin: bool = False,
@@ -102,16 +105,16 @@ def match_transfer_to_reachability(
 
 
 def extract_journeys(
-    stops: Dict[int, List[Reachability]],
+    stops: dict[int, list[Reachability]],
     destination_stop_id: int,
-    connections: List[Connection],
-    transfers: Dict[int, List[Transfer]],
-) -> List[List[Connection]]:
+    connections: list[Connection],
+    transfers: dict[int, list[Transfer]],
+) -> list[list[Connection]]:
     reachability_chains = extract_reachability_chains(stops, destination_stop_id)
 
     journeys = []
     for reachability_chain in reachability_chains:
-        sparse_journey: List[Connection] = []
+        sparse_journey: list[Connection] = []
         for i, reachability in enumerate(reachability_chain):
             if reachability.current_trip_id == WALKING_TRIP_ID:
                 sparse_journey.append(
@@ -148,7 +151,7 @@ def extract_journeys(
                     match_connection_to_reachability(connections, reachability)
                 )
 
-        journey: List[Connection] = []
+        journey: list[Connection] = []
         if len(sparse_journey) == 1:
             journey.append(sparse_journey[0])
         else:
@@ -178,7 +181,7 @@ def connections_equal(c1: Connection, c2: Connection):
     )
 
 
-def clean_alternatives(journey: List[Connection], alternatives: List[List[Connection]]):
+def clean_alternatives(journey: list[Connection], alternatives: list[list[Connection]]):
     for i, alternative in enumerate(alternatives):
         for start_index in range(len(alternative)):
             if alternative[start_index] not in journey:
@@ -188,7 +191,7 @@ def clean_alternatives(journey: List[Connection], alternatives: List[List[Connec
     return alternatives
 
 
-def journey_simplification(journey: List[Connection]):
+def journey_simplification(journey: list[Connection]):
     simplified_journey = []
 
     dp_ts = journey[0].dp_ts
@@ -230,9 +233,9 @@ def journey_simplification(journey: List[Connection]):
     return simplified_journey
 
 
-def remove_duplicate_journeys(journeys: List[List[Connection]]):
+def remove_duplicate_journeys(journeys: list[list[Connection]]):
     journeys = sorted(journeys, key=lambda j: j[0].dp_ts)
-    unique_journeys: List[List[Connection]] = []
+    unique_journeys: list[list[Connection]] = []
     for journey in journeys:
         for unique_journey in reversed(unique_journeys):
             if journey[0].dp_ts > unique_journey[0].dp_ts:
@@ -313,7 +316,7 @@ class FPTFLeg:
     departurePlatform: str
     arrival: str
     arrivalPlatform: str
-    stopovers: List[FPTFStopover]
+    stopovers: list[FPTFStopover]
     distance: int
     line: FPTFLine | None
     walking: bool = False
@@ -323,15 +326,15 @@ class FPTFLeg:
 
 @dataclass
 class FPTFJourney:
-    legs: List[FPTFLeg]
+    legs: list[FPTFLeg]
     type: str = 'journey'
 
     @staticmethod
     def from_journey(
-        journey: List[Connection], routes: Dict[int, Routes], stop_steffen: StopSteffen
+        journey: list[Connection], routes: dict[int, Routes], stop_steffen: StopSteffen
     ) -> 'FPTFJourney':
-        legs: List[FPTFLeg] = []
-        stopovers: List[FPTFStopover] = []
+        legs: list[FPTFLeg] = []
+        stopovers: list[FPTFStopover] = []
 
         dp_ts = journey[0].dp_ts
         dp_stop_id = journey[0].dp_platform_id
@@ -377,7 +380,7 @@ class FPTFJourney:
                 dp_ts = c2.dp_ts
                 dp_stop_id = c2.dp_platform_id
                 dist_traveled = 0
-                stopovers: List[FPTFStopover] = []
+                stopovers: list[FPTFStopover] = []
             else:
                 line = FPTFLine.from_route(routes[c1.trip_id])
                 dp_stop = stop_steffen.get_stop(stop_id=dp_stop_id)
@@ -401,7 +404,7 @@ class FPTFJourney:
                 dp_ts = c2.dp_ts
                 dp_stop_id = c2.dp_platform_id
                 dist_traveled = 0
-                stopovers: List[FPTFStopover] = []
+                stopovers: list[FPTFStopover] = []
 
         if journey[-1].trip_id == WALKING_TRIP_ID:
             ar_stop = stop_steffen.get_stop(stop_id=journey[-1].ar_stop_id)
@@ -447,4 +450,4 @@ class FPTFJourney:
 @dataclass
 class FPTFJourneyAndAlternatives:
     journey: FPTFJourney
-    alternatives: List[FPTFJourney]
+    alternatives: list[FPTFJourney]

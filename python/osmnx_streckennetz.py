@@ -1,34 +1,32 @@
 import itertools
 import math
-from typing import Dict, Iterable, List, Tuple
+from collections.abc import Iterable
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
-from helpers import pairwise
-
+import geoalchemy2
 import geopandas as gpd
 import geopy.distance
+import igraph as ig
 import matplotlib.pyplot as plt
 import numpy as np
-import osmnx as ox
 import pandas as pd
 import shapely
-from osmnx import _downloader, settings
-from shapely.geometry import LineString, MultiPoint, Point, Polygon, MultiLineString
-from tqdm import tqdm
-from concurrent.futures import ProcessPoolExecutor, as_completed
-import igraph as ig
-import xxhash
 import sqlalchemy
-import geoalchemy2
+import xxhash
+from osmnx import _downloader, settings
+from shapely.geometry import LineString, MultiPoint, Point, Polygon
+from tqdm import tqdm
 
 from database.cached_table_fetch import cached_table_fetch_postgis
 from database.engine import get_engine
+from helpers import pairwise
 from helpers.StationPhillip import StationPhillip
 
 RAIL_FILTER = (
-    f'["railway"~"rail|tram|narrow_gauge|light_rail|subway"]'
-    f'["railway"!~"proposed|construction|disused|abandoned|razed|miniature"]'
-    f'["service"!~"yard|spur"]'
-    f'["gauge"~"750|760|800|900|1000|1435|1445|1450|1458|1520|1524|1620|1668|750;1435|1435;750|760;1435|1435;760|1000;1435|1435;1000|1435;1520|1520;1435|1435;1668"]'
+    '["railway"~"rail|tram|narrow_gauge|light_rail|subway"]'
+    '["railway"!~"proposed|construction|disused|abandoned|razed|miniature"]'
+    '["service"!~"yard|spur"]'
+    '["gauge"~"750|760|800|900|1000|1435|1445|1450|1458|1520|1524|1620|1668|750;1435|1435;750|760;1435|1435;760|1000;1435|1435;1000|1435;1520|1520;1435|1435;1668"]'
 )
 
 USEFUL_TAGS_RAIL_WAYS = [
@@ -68,7 +66,7 @@ def _convert_node(element, useful_tags):
     return element['id'], node
 
 
-def _convert_path(element: Dict, useful_tags: Iterable[str]) -> List[Dict]:
+def _convert_path(element: dict, useful_tags: Iterable[str]) -> list[dict]:
     tags = {}
 
     # remove any consecutive duplicate elements in the list of nodes
@@ -86,7 +84,7 @@ def _convert_path(element: Dict, useful_tags: Iterable[str]) -> List[Dict]:
     return edges
 
 
-def _add_geometry_to_edges(edges: List[Dict], nodes: Dict[int, Dict]):
+def _add_geometry_to_edges(edges: list[dict], nodes: dict[int, dict]):
     for edge in edges:
         edge['geometry'] = LineString(
             [
@@ -99,7 +97,7 @@ def _add_geometry_to_edges(edges: List[Dict], nodes: Dict[int, Dict]):
     return edges
 
 
-def _parse_osm_nodes_paths(response_json: Dict) -> Tuple[Dict[int, Dict], List[Dict]]:
+def _parse_osm_nodes_paths(response_json: dict) -> tuple[dict[int, dict], list[dict]]:
     nodes = {}
     edges = []
     for element in response_json['elements']:
@@ -114,7 +112,7 @@ def _parse_osm_nodes_paths(response_json: Dict) -> Tuple[Dict[int, Dict], List[D
     return nodes, edges
 
 
-def get_gdf_from_osm(polygon: Polygon) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+def get_gdf_from_osm(polygon: Polygon) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     # download the network data from OSM within buffered polygon
     response_jsons = _downloader._osm_network_download(
         polygon=polygon, network_type=None, custom_filter=RAIL_FILTER
@@ -208,7 +206,7 @@ def edges_mergeable(edge1: ig.Edge, edge2: ig.Edge) -> bool:
     return attributes1 == attributes2
 
 
-def simplify(nodes, edges) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+def simplify(nodes, edges) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     replace_ids = {key: i for i, key in enumerate(nodes['index'])}
     edges['u'] = edges['u'].map(replace_ids.get)
     edges['v'] = edges['v'].map(replace_ids.get)
@@ -230,7 +228,7 @@ def simplify(nodes, edges) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
                 'halt',
             ]:
                 # Do not simplify nodes that will already be simplified
-                if (node.index in node_indices_to_touch):
+                if node.index in node_indices_to_touch:
                     continue
                 if edges_mergeable(node.all_edges()[0], node.all_edges()[1]):
                     node_indices_to_touch.add(node.index)
@@ -360,7 +358,7 @@ def plot_algorithm(
     v=None,
     splitted=None,
     closest_edge=None,
-    more_plots: List[Tuple] = None,
+    more_plots: list[tuple] = None,
 ):
     fig, ax = plt.subplots()
     ax.set_aspect('equal', 'datalim')
@@ -455,7 +453,7 @@ def split_edge(
     line: LineString,
     orth_line: LineString,
     plot: bool = False,
-) -> Dict | None:
+) -> dict | None:
     """Split the geometry of an edge.
 
     Parameters
@@ -720,6 +718,8 @@ def main():
 
 
 if __name__ == '__main__':
-    import helpers.bahn_vorhersage
+    from helpers.bahn_vorhersage import COLORFUL_ART
+
+    print(COLORFUL_ART)
 
     main()

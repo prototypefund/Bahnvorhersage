@@ -8,7 +8,7 @@ ART = """
 █████████████████████████████████████████████
  ▜█▀▀▜█▘                       ▜█▀▀▜█▘   ▀▀▀
 """
-COLORFULL_ART = """
+COLORFUL_ART = """
 \033[37m████████████████████████████████████▇▆▅▃▁\x1b[0m
 \033[1;37;40m       Bahn-Vorhersage      ███████▙  ▜\x1b[0m\033[37m██▆▁\x1b[0m
 \033[37m███████████████████████████████████████████▃\x1b[0m
@@ -16,7 +16,7 @@ COLORFULL_ART = """
 \033[37m█████████████████████████████████████████████\x1b[0m
 \033[90m ▜█▀▀▜█▘                       ▜█▀▀▜█▘\x1b[0m   \033[37m▀▀▀\x1b[0m
 """
-COLORFULL_ECO_ART = """
+COLORFUL_ECO_ART = """
 \033[37m████████████████████████████████████▇▆▅▃▁\x1b[0m
 \033[1;37;40m       Bahn-Vorhersage      ███████▙  ▜\x1b[0m\033[37m██▆▁\x1b[0m
 \033[37m███████████████████████████████████████████▃\x1b[0m
@@ -29,7 +29,7 @@ COLORFULL_ECO_ART = """
 # print(ART)
 
 # print('COLORFULL_ART:')
-print(COLORFULL_ART)
+# print(COLORFUL_ART)
 
 # print('COLORFULL_ECO_ART:')
 # print(COLORFULL_ECO_ART)

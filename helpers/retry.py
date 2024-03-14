@@ -1,5 +1,6 @@
 from functools import wraps
 
+
 def retry(max_retries):
     def decorator(func):
         @wraps(func)
@@ -13,5 +14,7 @@ def retry(max_retries):
                     retries_left -= 1
                     if retries_left == 0:
                         raise e
+
         return wrapper
+
     return decorator

@@ -1,10 +1,8 @@
 import datetime
 import pickle
-from typing import Optional
 
 import dask.dataframe as dd
 import pandas as pd
-from dask.distributed import Client
 
 from config import ENCODER_PATH, RTD_CACHE_PATH, RTD_TABLENAME
 from database.engine import DB_CONNECT_STRING, get_engine
@@ -244,7 +242,7 @@ def _save_encoders(rtd):
         dict_keys = rtd[key].head(1).cat.categories.to_list()
         # Add {None: -1} to dict to handle missing values
         cat_dict = {**dict(zip(dict_keys, range(len(dict_keys)))), **{None: -1}}
-        pickle.dump(cat_dict, open(ENCODER_PATH.format(encoder=key), "wb"))
+        pickle.dump(cat_dict, open(ENCODER_PATH.format(encoder=key), 'wb'))
 
 
 def _parse(rtd: dd.DataFrame) -> dd.DataFrame:
@@ -311,7 +309,7 @@ def upgrade_rtd():
         view_query = 'CREATE OR REPLACE VIEW new_rtd AS {}'.format(
             str(
                 query.compile(
-                    dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+                    dialect=postgresql.dialect(), compile_kwargs={'literal_binds': True}
                 )
             )
         )
@@ -351,12 +349,12 @@ def upgrade_rtd():
 
 
 def load_data(
-    max_date: Optional[datetime.datetime] = None,
-    min_date: Optional[datetime.datetime] = None,
+    max_date: datetime.datetime | None = None,
+    min_date: datetime.datetime | None = None,
     long_distance_only: bool = False,
     load_categories: bool = True,
-    path: Optional[str] = None,
-    **kwargs
+    path: str | None = None,
+    **kwargs,
 ) -> dd.DataFrame:
     """
     Try to load data from disk. If not present, pull db to disk and then open it.
@@ -386,9 +384,11 @@ def load_data(
 
     Examples
     --------
-    >>> RtdRay.load_data(columns=['station'],
-    ...                   min_date=datetime.datetime(2021, 1, 1),
-    ...                   max_date=datetime.datetime(2021, 2, 1))
+    >>> RtdRay.load_data(
+    ...     columns=['station'],
+    ...     min_date=datetime.datetime(2021, 1, 1),
+    ...     max_date=datetime.datetime(2021, 2, 1),
+    ... )
     Dask DataFrame Structure:
                             station
     npartitions=400
@@ -453,7 +453,7 @@ def load_for_ml_model(
     return_times=False,
     return_status=False,
     obstacles=True,
-    **kwargs
+    **kwargs,
 ) -> dd.DataFrame:
     """
     Load columns that are used in machine learning
@@ -555,8 +555,10 @@ def load_for_ml_model(
         return rtd.drop(columns=['ar_ct', 'ar_pt', 'dp_ct', 'dp_pt'], axis=0)
 
 
-if __name__ == "__main__":
-    import helpers.bahn_vorhersage
+if __name__ == '__main__':
+    from helpers.bahn_vorhersage import COLORFUL_ART
+
+    print(COLORFUL_ART)
 
     rtd = load_data(columns=['ar_pt'])
 

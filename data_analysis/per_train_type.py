@@ -26,7 +26,7 @@ class PerCategoryAnalysis(abc.ABC):
     def generate_data(self) -> pd.DataFrame:
         from dask.distributed import Client
 
-        with Client(n_workers=n_dask_workers, threads_per_worker=2) as client:
+        with Client(n_workers=n_dask_workers, threads_per_worker=2):
             rtd = RtdRay.load_data(
                 columns=[
                     'c',
@@ -100,9 +100,9 @@ class PerCategoryAnalysis(abc.ABC):
         use_trains = np.logical_not(np.isnan(delays))
         delays = delays[use_trains]
 
-        fig, ax = plt.subplots(subplot_kw=dict(aspect="equal"))
+        fig, ax = plt.subplots(subplot_kw=dict(aspect='equal'))
         ax.set_title(f'Ø Verspätung pro {self.category_name}', fontsize=30)
-        ax.axis("off")
+        ax.axis('off')
 
         type_count = (
             self.data.loc[use_trains, 'ar_delay_count']
@@ -110,7 +110,7 @@ class PerCategoryAnalysis(abc.ABC):
         ).to_numpy()
 
         cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
-            "", ["green", "yellow", "red"]
+            '', ['green', 'yellow', 'red']
         )
         bubble_plot = BubbleChart(area=type_count, bubble_spacing=40)
         bubble_plot.collapse(n_iterations=100)
@@ -128,10 +128,10 @@ class PerCategoryAnalysis(abc.ABC):
             np.zeros(len(delays)), np.zeros(len(delays)), s=0, c=delays, cmap=cmap
         )
         colorbar = fig.colorbar(scatter)
-        colorbar.solids.set_edgecolor("face")
+        colorbar.solids.set_edgecolor('face')
         colorbar.outline.set_linewidth(0)
         colorbar.ax.get_yaxis().labelpad = 15
-        colorbar.ax.set_ylabel("Ø Verspätung in Minuten", rotation=270)
+        colorbar.ax.set_ylabel('Ø Verspätung in Minuten', rotation=270)
 
         ax.relim()
         ax.autoscale_view()
@@ -154,16 +154,16 @@ class PerCategoryAnalysis(abc.ABC):
 
         cancellations = 100 - (happened * 100)
 
-        fig, ax = plt.subplots(subplot_kw=dict(aspect="equal"))
+        fig, ax = plt.subplots(subplot_kw=dict(aspect='equal'))
         ax.set_title(f'Prozent ausgefallene Züge je {self.category_name}', fontsize=30)
-        ax.axis("off")
+        ax.axis('off')
         type_count = (
             self.data.loc[use_trains, 'ar_delay_count']
             + self.data.loc[use_trains, 'dp_delay_count']
         ).to_numpy()
 
         cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
-            "", ["green", "yellow", "red"]
+            '', ['green', 'yellow', 'red']
         )
         bubble_plot = BubbleChart(area=type_count, bubble_spacing=40)
         bubble_plot.collapse(n_iterations=100)
@@ -187,10 +187,10 @@ class PerCategoryAnalysis(abc.ABC):
             cmap=cmap,
         )
         colorbar = fig.colorbar(scatter)
-        colorbar.solids.set_edgecolor("face")
+        colorbar.solids.set_edgecolor('face')
         colorbar.outline.set_linewidth(0)
         colorbar.ax.get_yaxis().labelpad = 15
-        colorbar.ax.set_ylabel("Prozent ausgefallene Züge", rotation=270)
+        colorbar.ax.set_ylabel('Prozent ausgefallene Züge', rotation=270)
 
         ax.relim()
         ax.autoscale_view()
@@ -431,7 +431,9 @@ class PlatformAnalysis(PerCategoryAnalysis):
 
 
 if __name__ == '__main__':
-    import helpers.bahn_vorhersage
+    from helpers.bahn_vorhersage import COLORFUL_ART
+
+    print(COLORFUL_ART)
 
     tta = TrainTypeAnalysis(generate=False, prefer_cahce=True)
     tta.plot_type_delay(save_as='delay_per_train_type.png')

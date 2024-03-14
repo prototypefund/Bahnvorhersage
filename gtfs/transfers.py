@@ -1,16 +1,18 @@
 import enum
-from typing import Dict, Generator, List, Tuple
+from collections import namedtuple
 
 import geopy.distance
+import sqlalchemy
+from shapely import STRtree
+from shapely.geometry import Point
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import BigInteger
-import sqlalchemy
-from collections import namedtuple
+from tqdm import tqdm
 
 from database.base import Base, create_all
 from database.engine import get_engine, sessionfactory
-from gtfs.stops import Stops, LocationType, StopSteffen
 from database.upsert import upsert_with_retry
+from gtfs.stops import StopSteffen
 
 
 class TransferType(enum.Enum):
@@ -59,13 +61,13 @@ class Transfers(Base):
         )
 
 
-def get_transfers() -> Dict[int, List[Transfer]]:
+def get_transfers() -> dict[int, list[Transfer]]:
     engine, Session = sessionfactory()
 
     with Session() as session:
         result = session.scalars(sqlalchemy.select(Transfers)).all()
 
-    transfers: Dict[int, List[Transfer]] = {}
+    transfers: dict[int, list[Transfer]] = {}
     for row in result:
         row: Transfers
         transfer = Transfer(
@@ -86,10 +88,6 @@ WALKING_SPEED_M_S = 1.0
 MAX_WALKING_TIME_S = 30 * 60
 MAX_WALKING_DISTANCE_M = WALKING_SPEED_M_S * MAX_WALKING_TIME_S
 MAX_DEGREE_DISTANCE_SEARCH_SPACE = 0.5
-
-from tqdm import tqdm
-from shapely import STRtree
-from shapely.geometry import Point
 
 
 def calculate_transfers_from_stops(stop_dicts):

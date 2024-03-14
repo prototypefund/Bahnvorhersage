@@ -1,8 +1,8 @@
-from helpers import RtdRay
 import matplotlib.pyplot as plt
-from config import CACHE_PATH
 import pandas as pd
-import matplotlib.pyplot as plt
+import seaborn as sn
+
+from config import CACHE_PATH
 
 # SELECT summary, count(summary) as count, avg(category) as category FROM simpler_obstacles WHERE category = 0 GROUP BY summary ORDER BY summary DESC;
 #                                 summary                                 | count |        category
@@ -43,13 +43,14 @@ import matplotlib.pyplot as plt
 #  Störung: Behördliche Maßnahme  - Feuerwehr- oder Notarzteinsatz        |    22 | 0.00000000000000000000
 
 priorities_text = {
-    'obstacles_priority_24' : 'Totalsperrung',
-    'obstacles_priority_37' : 'Fahren auf dem Gegengleis mit Zs 8 oder Befehl',
-    'obstacles_priority_63' : 'Fahrzeitverlängerung auf Regellaufweg',
-    'obstacles_priority_65' : 'Fahren auf dem Gegengleis mit Zs 6',
-    'obstacles_priority_70' : 'Sonstiges',
-    'obstacles_priority_80' : 'Abweichung vom Fahrplan für Zugmeldestellen',
+    'obstacles_priority_24': 'Totalsperrung',
+    'obstacles_priority_37': 'Fahren auf dem Gegengleis mit Zs 8 oder Befehl',
+    'obstacles_priority_63': 'Fahrzeitverlängerung auf Regellaufweg',
+    'obstacles_priority_65': 'Fahren auf dem Gegengleis mit Zs 6',
+    'obstacles_priority_70': 'Sonstiges',
+    'obstacles_priority_80': 'Abweichung vom Fahrplan für Zugmeldestellen',
 }
+
 
 def analyze_single_priority(priority_col: str, obstacle_rtd, non_obstacle_rtd):
     obstacle_rtd = obstacle_rtd.loc[obstacle_rtd[priority_col] > 0]
@@ -68,26 +69,57 @@ def analyze_single_priority(priority_col: str, obstacle_rtd, non_obstacle_rtd):
     print('=====================')
     print('Number of datapoints:', len(obstacle_rtd))
     print('\t\twith\twithout\tdelta')
-    print('ar_delay', round(ar_mean_with, 2), round(ar_mean_without, 2), round(ar_mean_with - ar_mean_without, 2), sep='\t')
-    print('dp_delay', round(dp_mean_with, 2), round(dp_mean_without, 2), round(dp_mean_with - dp_mean_without, 2), sep='\t')
-    print('ar_cancel', round(ar_cancelations_with, 4), round(ar_cancelations_without, 4), round(ar_cancelations_with - ar_cancelations_without, 4), sep='\t')
-    print('dp_cancel', round(dp_cancelations_with, 4), round(dp_cancelations_without, 4), round(dp_cancelations_with - dp_cancelations_without, 4), sep='\t')
+    print(
+        'ar_delay',
+        round(ar_mean_with, 2),
+        round(ar_mean_without, 2),
+        round(ar_mean_with - ar_mean_without, 2),
+        sep='\t',
+    )
+    print(
+        'dp_delay',
+        round(dp_mean_with, 2),
+        round(dp_mean_without, 2),
+        round(dp_mean_with - dp_mean_without, 2),
+        sep='\t',
+    )
+    print(
+        'ar_cancel',
+        round(ar_cancelations_with, 4),
+        round(ar_cancelations_without, 4),
+        round(ar_cancelations_with - ar_cancelations_without, 4),
+        sep='\t',
+    )
+    print(
+        'dp_cancel',
+        round(dp_cancelations_with, 4),
+        round(dp_cancelations_without, 4),
+        round(dp_cancelations_with - dp_cancelations_without, 4),
+        sep='\t',
+    )
     print()
 
-    non_obstacle_rtd.groupby('ar_delay')['ar_pt'].count().rename('No obstacles').plot(logy=True, legend=True, title=priorities_text[priority_col])
-    obstacle_rtd.groupby('ar_delay')['ar_pt'].count().rename('obstacles').plot(logy=True, legend=True)
+    non_obstacle_rtd.groupby('ar_delay')['ar_pt'].count().rename('No obstacles').plot(
+        logy=True, legend=True, title=priorities_text[priority_col]
+    )
+    obstacle_rtd.groupby('ar_delay')['ar_pt'].count().rename('obstacles').plot(
+        logy=True, legend=True
+    )
     plt.savefig(f'data/{priority_col}_ar.png')
     plt.close()
     # plt.show()
-    non_obstacle_rtd.groupby('dp_delay')['dp_pt'].count().rename('No obstacles').plot(logy=True, legend=True, title=priorities_text[priority_col])
-    obstacle_rtd.groupby('dp_delay')['dp_pt'].count().rename('obstacles').plot(logy=True, legend=True)
+    non_obstacle_rtd.groupby('dp_delay')['dp_pt'].count().rename('No obstacles').plot(
+        logy=True, legend=True, title=priorities_text[priority_col]
+    )
+    obstacle_rtd.groupby('dp_delay')['dp_pt'].count().rename('obstacles').plot(
+        logy=True, legend=True
+    )
     plt.savefig(f'data/{priority_col}_dp.png')
     plt.close()
     # plt.show()
 
-if __name__ == '__main__':
-    import helpers.fancy_print_tcp
 
+if __name__ == '__main__':
     # obstacle_rtd = RtdRay.load_data(min_date=datetime.datetime(2021, 3, 14)).compute()
     # non_obstacle_rtd = obstacle_rtd.loc[
     #     ~(obstacle_rtd['obstacles_priority_24'] > 0) &
@@ -113,16 +145,16 @@ if __name__ == '__main__':
 
     # Filter data errors and extremes
     obstacle_rtd = obstacle_rtd.loc[
-        (obstacle_rtd['ar_delay'] >= -5) &
-        (obstacle_rtd['dp_delay'] >= -1) &
-        (obstacle_rtd['ar_delay'] <= 100) &
-        (obstacle_rtd['dp_delay'] <= 100)
+        (obstacle_rtd['ar_delay'] >= -5)
+        & (obstacle_rtd['dp_delay'] >= -1)
+        & (obstacle_rtd['ar_delay'] <= 100)
+        & (obstacle_rtd['dp_delay'] <= 100)
     ]
     non_obstacle_rtd = non_obstacle_rtd.loc[
-        (non_obstacle_rtd['ar_delay'] >= -5) &
-        (non_obstacle_rtd['dp_delay'] >= -1) &
-        (non_obstacle_rtd['ar_delay'] <= 100) &
-        (non_obstacle_rtd['dp_delay'] <= 100)
+        (non_obstacle_rtd['ar_delay'] >= -5)
+        & (non_obstacle_rtd['dp_delay'] >= -1)
+        & (non_obstacle_rtd['ar_delay'] <= 100)
+        & (non_obstacle_rtd['dp_delay'] <= 100)
     ]
 
     # analyze_single_priority('obstacles_priority_24', obstacle_rtd, non_obstacle_rtd)
@@ -147,10 +179,34 @@ if __name__ == '__main__':
     print('===')
     print('Number of datapoints:', len(obstacle_rtd))
     print('\t\twith\twithout\tdelta')
-    print('ar_delay', round(ar_mean_with, 2), round(ar_mean_without, 2), round(ar_mean_with - ar_mean_without, 2), sep='\t')
-    print('dp_delay', round(dp_mean_with, 2), round(dp_mean_without, 2), round(dp_mean_with - dp_mean_without, 2), sep='\t')
-    print('ar_cancel', round(ar_cancelations_with, 4), round(ar_cancelations_without, 4), round(ar_cancelations_with - ar_cancelations_without, 4), sep='\t')
-    print('dp_cancel', round(dp_cancelations_with, 4), round(dp_cancelations_without, 4), round(dp_cancelations_with - dp_cancelations_without, 4), sep='\t')
+    print(
+        'ar_delay',
+        round(ar_mean_with, 2),
+        round(ar_mean_without, 2),
+        round(ar_mean_with - ar_mean_without, 2),
+        sep='\t',
+    )
+    print(
+        'dp_delay',
+        round(dp_mean_with, 2),
+        round(dp_mean_without, 2),
+        round(dp_mean_with - dp_mean_without, 2),
+        sep='\t',
+    )
+    print(
+        'ar_cancel',
+        round(ar_cancelations_with, 4),
+        round(ar_cancelations_without, 4),
+        round(ar_cancelations_with - ar_cancelations_without, 4),
+        sep='\t',
+    )
+    print(
+        'dp_cancel',
+        round(dp_cancelations_with, 4),
+        round(dp_cancelations_without, 4),
+        round(dp_cancelations_with - dp_cancelations_without, 4),
+        sep='\t',
+    )
     print()
 
     ml_columns = [
@@ -168,14 +224,22 @@ if __name__ == '__main__':
     sn.heatmap(corr, annot=False, cmap='coolwarm', vmin=-1, vmax=1)
     plt.show()
 
-    non_obstacle_rtd.groupby('ar_delay')['ar_pt'].count().rename('No obstacles').plot(logy=True, legend=True, title='Alle Bauarbeiten')
-    obstacle_rtd.groupby('ar_delay')['ar_pt'].count().rename('obstacles').plot(logy=True, legend=True)
-    plt.savefig(f'data/all_ar.png')
+    non_obstacle_rtd.groupby('ar_delay')['ar_pt'].count().rename('No obstacles').plot(
+        logy=True, legend=True, title='Alle Bauarbeiten'
+    )
+    obstacle_rtd.groupby('ar_delay')['ar_pt'].count().rename('obstacles').plot(
+        logy=True, legend=True
+    )
+    plt.savefig('data/all_ar.png')
     plt.close()
     # plt.show()
-    non_obstacle_rtd.groupby('dp_delay')['dp_pt'].count().rename('No obstacles').plot(logy=True, legend=True, title='Alle Bauarbeiten')
-    obstacle_rtd.groupby('dp_delay')['dp_pt'].count().rename('obstacles').plot(logy=True, legend=True)
-    plt.savefig(f'data/all_dp.png')
+    non_obstacle_rtd.groupby('dp_delay')['dp_pt'].count().rename('No obstacles').plot(
+        logy=True, legend=True, title='Alle Bauarbeiten'
+    )
+    obstacle_rtd.groupby('dp_delay')['dp_pt'].count().rename('obstacles').plot(
+        logy=True, legend=True
+    )
+    plt.savefig('data/all_dp.png')
     plt.close()
     # plt.show()
     # plt.scatter(x=obstacle_rtd['length_sum'], y=obstacle_rtd['ar_delay'], alpha=0.01)

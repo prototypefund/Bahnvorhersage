@@ -1,4 +1,4 @@
-from typing import Any, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -59,9 +59,9 @@ class BetriebsstellenBill:
             geometry=gpd.points_from_xy(
                 betriebsstellen_with_location.lon, betriebsstellen_with_location.lat
             ),
-        ).set_crs("EPSG:4326")
+        ).set_crs('EPSG:4326')
 
-    def get_name(self, ds100: Union[str, Any]) -> Union[str, pd.Series]:
+    def get_name(self, ds100: str | Any) -> str | pd.Series:
         """Get the name of a Betriebsstelle or multiple Betriebsstellen
 
         Parameters
@@ -83,7 +83,7 @@ class BetriebsstellenBill:
             names.loc[:] = self.ds100_index_betriebsstellen.loc[:, 'name']
             return names
 
-    def get_ds100(self, name: Union[str, Any]) -> Union[str, pd.Series]:
+    def get_ds100(self, name: str | Any) -> str | pd.Series:
         if isinstance(name, str):
             return self.name_index_betriebsstellen.at[name, 'ds100']
         else:
@@ -93,9 +93,9 @@ class BetriebsstellenBill:
 
     def get_location(
         self,
-        name: Optional[Union[str, Any]] = None,
-        ds100: Optional[Union[str, Any]] = None,
-    ) -> Union[Tuple[float, float], pd.DataFrame]:
+        name: str | Any | None = None,
+        ds100: str | Any | None = None,
+    ) -> tuple[float, float] | pd.DataFrame:
         """
         Get the location (lon, lat) of a Betriebsstelle or multiple Betriebsstellen
 
@@ -135,6 +135,6 @@ class BetriebsstellenBill:
                 return locations
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     betriebsstellen = BetriebsstellenBill()
     print('len:', len(betriebsstellen))

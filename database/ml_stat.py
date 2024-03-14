@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from database.base import Base
 from database.engine import get_engine
-from helpers import ttl_lru_cache
+from helpers.cache import ttl_lru_cache
 
 
 class MlStat(Base):

@@ -1,10 +1,11 @@
-from database.base import Base
-from datetime import datetime, timezone
-from sqlalchemy.orm import Mapped, mapped_column, Session
-from sqlalchemy.types import BigInteger, JSON
-from typing import Dict
 import json
-from rtd_crawler.hash64 import xxhash64
+from datetime import UTC, datetime
+
+from sqlalchemy.orm import Mapped, Session, mapped_column
+from sqlalchemy.types import JSON, BigInteger
+
+from database.base import Base
+from helpers.hash64 import xxhash64
 
 
 class UniqueChange(Base):
@@ -14,11 +15,11 @@ class UniqueChange(Base):
     time_crawled: Mapped[datetime]
     change: Mapped[str] = mapped_column(JSON)
 
-    def __init__(self, change: Dict) -> None:
+    def __init__(self, change: dict) -> None:
         change_str = json.dumps(change, sort_keys=True)
         self.hash_id = xxhash64(change['id'])
         self.change_hash = xxhash64(change_str)
-        self.time_crawled = datetime.now(timezone.utc)
+        self.time_crawled = datetime.now(UTC)
         self.change = change_str
 
     def as_dict(self):

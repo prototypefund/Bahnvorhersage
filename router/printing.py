@@ -1,6 +1,5 @@
 from datetime import datetime
 from itertools import pairwise
-from typing import Dict, List
 
 from gtfs.routes import Routes
 from gtfs.stops import StopSteffen
@@ -26,7 +25,7 @@ def human_readable_reachability(reachability: Reachability, stop_steffen: StopSt
 
 
 def journey_to_str(
-    journey: List[Connection], stop_steffen: StopSteffen, routes: Dict[int, Routes]
+    journey: list[Connection], stop_steffen: StopSteffen, routes: dict[int, Routes]
 ):
     dp_ts = datetime.fromtimestamp(
         journey[0].dp_ts
@@ -81,9 +80,9 @@ def journey_to_str(
 
 
 def print_journeys(
-    journeys: List[List[Connection]],
+    journeys: list[list[Connection]],
     stop_steffen: StopSteffen,
-    routes: Dict[int, Routes],
+    routes: dict[int, Routes],
 ):
     for journey in journeys:
         print(journey_to_str(journey, stop_steffen, routes=routes))

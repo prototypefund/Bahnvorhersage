@@ -47,7 +47,7 @@ def profile(sort='cumtime', lines=50, strip_dirs=False):
             stats = pstats.Stats(file.name)
             if strip_dirs:
                 stats.strip_dirs()
-            if isinstance(sort, (tuple, list)):
+            if isinstance(sort, tuple | list):
                 stats.sort_stats(*sort)
             else:
                 stats.sort_stats(sort)

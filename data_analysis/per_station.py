@@ -1,37 +1,31 @@
-import os
-import pandas as pd
-import dask.dataframe as dd
-import io
-import numpy as np
-from PIL import Image
 import datetime
-from shapely.ops import clip_by_rect
-import shapely.geometry
-from dataclasses import dataclass
-import matplotlib
 import hashlib
+import io
+import os
+from dataclasses import dataclass
+
+import cartopy
+import cartopy.crs as ccrs
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import shapely.geometry
+from matplotlib import colors
+from PIL import Image
+from shapely.ops import clip_by_rect
+
+from config import CACHE_PATH, n_dask_workers
+from database.cached_table_fetch import cached_table_fetch
+from helpers import RtdRay, groupby_index_to_flat
+from helpers.cache import ttl_lru_cache
+from helpers.StationPhillip import StationPhillip
 
 matplotlib.use('Agg')
-from matplotlib import colors
-import matplotlib.pyplot as plt
-
 plt.style.use('dark_background')
-import cartopy.crs as ccrs
-import cartopy
-
 # Configure cache path in kubernetes
-if os.path.isdir("/usr/src/app/cache"):
+if os.path.isdir('/usr/src/app/cache'):
     cartopy.config['data_dir'] = '/usr/src/app/cache'
-# Cartopy requirements
-# apt-get install libproj-dev proj-data proj-bin
-# apt-get install libgeos-dev
-# Install proj from source
-# sudo ldconfig
-
-from helpers import RtdRay, groupby_index_to_flat, ttl_lru_cache
-from helpers.StationPhillip import StationPhillip
-from database.cached_table_fetch import cached_table_fetch
-from config import CACHE_PATH, n_dask_workers
 
 
 def image_to_webp(buffer: io.BytesIO, path: str) -> None:
@@ -95,7 +89,7 @@ def create_base_plot(
             'state_borders': '#adb5bd',
         }
     else:
-        raise ValueError(f"Unknown color scheme {color_scheme}")
+        raise ValueError(f'Unknown color scheme {color_scheme}')
 
     fig, ax = plt.subplots(subplot_kw={'projection': crs})
 
@@ -154,13 +148,13 @@ def create_base_plot(
 
 
 class PerStationOverTime(StationPhillip):
-    DEFAULT_PLOTS = ["no data available", "default"]
+    DEFAULT_PLOTS = ['no data available', 'default']
     MAP_CRS = ccrs.Mercator(
         central_longitude=MAX_LON - (MAX_LON - MIN_LON) / 2,
         min_latitude=MIN_LAT,
         max_latitude=MAX_LAT,
     )
-    PLOTS_DIR = f"{CACHE_PATH}/plots/"
+    PLOTS_DIR = f'{CACHE_PATH}/plots/'
     PLOT_PATH = os.path.join(PLOTS_DIR, '{version}_{title}.webp')
 
     version: str
@@ -194,7 +188,7 @@ class PerStationOverTime(StationPhillip):
         self.fig, self.ax = create_base_plot(crs=self.MAP_CRS, bbox=BBOX_GERMANY)
 
         self.cmap = colors.LinearSegmentedColormap.from_list(
-            "", ["green", "yellow", "red"]
+            '', ['green', 'yellow', 'red']
         )
 
         self.sc = self.ax.scatter(
@@ -213,39 +207,39 @@ class PerStationOverTime(StationPhillip):
         )
 
         self.colorbar = self.fig.colorbar(self.sc)
-        self.colorbar.solids.set_edgecolor("face")
+        self.colorbar.solids.set_edgecolor('face')
         self.colorbar.outline.set_linewidth(0)
 
         self.colorbar.ax.get_yaxis().labelpad = 15
-        self.colorbar.ax.set_ylabel("Ø Verspätung in Minuten", rotation=270)
+        self.colorbar.ax.set_ylabel('Ø Verspätung in Minuten', rotation=270)
 
     def data_generator(self) -> pd.DataFrame:
         rtd = RtdRay.load_data(
-        columns=[
-            "ar_pt",
-            "dp_pt",
-            "station",
-            "ar_delay",
-            "ar_happened",
-            "dp_delay",
-            "dp_happened",
-            "lat",
-            "lon",
-        ],
-        min_date=datetime.datetime(2021, 9, 1),
-    )
+            columns=[
+                'ar_pt',
+                'dp_pt',
+                'station',
+                'ar_delay',
+                'ar_happened',
+                'dp_delay',
+                'dp_happened',
+                'lat',
+                'lon',
+            ],
+            min_date=datetime.datetime(2021, 9, 1),
+        )
 
         # Use dask Client to do groupby as the groupby is complex and scales well on local cluster.
         from dask.distributed import Client
 
-        with Client(n_workers=n_dask_workers, threads_per_worker=1) as client:
+        with Client(n_workers=n_dask_workers, threads_per_worker=1):
             # Generate an index with self.limits.freq for groupby over time and station
-            rtd["stop_hour"] = (
-                rtd["ar_pt"].fillna(value=rtd["dp_pt"]).dt.round(self.limits.freq)
+            rtd['stop_hour'] = (
+                rtd['ar_pt'].fillna(value=rtd['dp_pt']).dt.round(self.limits.freq)
             )
 
-            rtd["single_index_for_groupby"] = (
-                rtd["stop_hour"].astype("str") + rtd["station"].astype("str")
+            rtd['single_index_for_groupby'] = (
+                rtd['stop_hour'].astype('str') + rtd['station'].astype('str')
             ).apply(hash, meta=(None, 'int64'))
 
             # Label encode station, as this speeds up the groupby tremendously (10 minutes
@@ -254,17 +248,17 @@ class PerStationOverTime(StationPhillip):
             rtd = rtd.drop(columns=['ar_pt', 'dp_pt'])
 
             data: pd.DataFrame = (
-                rtd.groupby("single_index_for_groupby", sort=False)
+                rtd.groupby('single_index_for_groupby', sort=False)
                 .agg(
                     {
-                        "ar_delay": ["mean"],
-                        "ar_happened": ["sum"],
-                        "dp_delay": ["mean"],
-                        "dp_happened": ["sum"],
-                        "stop_hour": ["first"],
-                        "station": ["first"],
-                        "lat": ['first'],
-                        "lon": ['first'],
+                        'ar_delay': ['mean'],
+                        'ar_happened': ['sum'],
+                        'dp_delay': ['mean'],
+                        'dp_happened': ['sum'],
+                        'stop_hour': ['first'],
+                        'station': ['first'],
+                        'lat': ['first'],
+                        'lon': ['first'],
                     }
                 )
                 .compute()
@@ -302,8 +296,8 @@ class PerStationOverTime(StationPhillip):
             pd.util.hash_pandas_object(self.data, index=True).values
         ).hexdigest()
 
-        self.limits.max = self.data["stop_hour"].max()
-        self.limits.min = self.data["stop_hour"].min()
+        self.limits.max = self.data['stop_hour'].max()
+        self.limits.min = self.data['stop_hour'].min()
 
     def aggregate_preagregated_data(
         self, start_time: datetime.datetime, end_time: datetime.datetime
@@ -312,17 +306,17 @@ class PerStationOverTime(StationPhillip):
 
         # Extract data that is between start_time and end_time
         current_data = self.data.loc[
-            (start_time <= self.data["stop_hour"]) & (self.data["stop_hour"] < end_time)
+            (start_time <= self.data['stop_hour']) & (self.data['stop_hour'] < end_time)
         ].copy()
 
         if not current_data.empty:
             # As self.data is already pre-aggregated we need to compute the weighted
             # mean of the delays. This requires several steps with pandas.
             # Get the number of data-points in each pre-aggregated datapoint
-            group_sizes = current_data.groupby("station").agg(
+            group_sizes = current_data.groupby('station').agg(
                 {
-                    "ar_happened_sum": "sum",
-                    "dp_happened_sum": "sum",
+                    'ar_happened_sum': 'sum',
+                    'dp_happened_sum': 'sum',
                 }
             )
             # For each pre-aggregated datapoint of each station, calculate its fraction of stops
@@ -353,14 +347,14 @@ class PerStationOverTime(StationPhillip):
                 ['ar_delay_mean', 'dp_delay_mean']
             ]
 
-            current_data = current_data.groupby("station").agg(
+            current_data = current_data.groupby('station').agg(
                 {
-                    "ar_delay_mean": "sum",
-                    "ar_happened_sum": "sum",
-                    "dp_delay_mean": "sum",
-                    "dp_happened_sum": "sum",
-                    "lat": "first",
-                    "lon": "first",
+                    'ar_delay_mean': 'sum',
+                    'ar_happened_sum': 'sum',
+                    'dp_delay_mean': 'sum',
+                    'dp_happened_sum': 'sum',
+                    'lat': 'first',
+                    'lon': 'first',
                 }
             )
             current_data = current_data.fillna(0)
@@ -404,7 +398,7 @@ class PerStationOverTime(StationPhillip):
             end_time = end_time + datetime.timedelta(hours=self.limits.freq_hours)
 
         plot_title = (
-            start_time.strftime("%d.%m.%Y") + "-" + end_time.strftime("%d.%m.%Y")
+            start_time.strftime('%d.%m.%Y') + '-' + end_time.strftime('%d.%m.%Y')
         )
 
         plot_path = self.PLOT_PATH.format(version=self.version, title=plot_title)
@@ -420,8 +414,8 @@ class PerStationOverTime(StationPhillip):
             # how many days of date were requested.
             n_days = (end_time - start_time).days
             size = (
-                current_data.loc[:, ["ar_happened_sum"]].to_numpy()[:, 0]
-                + current_data.loc[:, ["dp_happened_sum"]].to_numpy()[:, 0]
+                current_data.loc[:, ['ar_happened_sum']].to_numpy()[:, 0]
+                + current_data.loc[:, ['dp_happened_sum']].to_numpy()[:, 0]
             )
             size = size / n_days
             # 2000 is the average max number of trains on the busiest station.
@@ -429,7 +423,7 @@ class PerStationOverTime(StationPhillip):
             size = (size / 2000) * 70
 
             color = (
-                current_data.loc[:, ["ar_delay_mean"]].to_numpy().astype(float)[:, 0]
+                current_data.loc[:, ['ar_delay_mean']].to_numpy().astype(float)[:, 0]
             )
 
             # change the positions
@@ -444,7 +438,7 @@ class PerStationOverTime(StationPhillip):
             self.sc.set_array(color)
 
             self.ax.set_title(
-                plot_title.replace("_", ":").replace('-', ' - '), fontsize=12
+                plot_title.replace('_', ':').replace('-', ' - '), fontsize=12
             )
             memory_buffer = io.BytesIO()
             self.fig.savefig(
@@ -461,8 +455,10 @@ class PerStationOverTime(StationPhillip):
         return plot_path
 
 
-if __name__ == "__main__":
-    import helpers.bahn_vorhersage
+if __name__ == '__main__':
+    from helpers.bahn_vorhersage import COLORFUL_ART
+
+    print(COLORFUL_ART)
 
     # per_station_time = PerStationOverTime(generate=False, prefer_cache=True)
     # per_station_time.generate_plot(
@@ -476,15 +472,17 @@ if __name__ == "__main__":
 
     start = time.time()
     per_station_time = PerStationOverTime(generate=True, prefer_cache=True)
-    data = per_station_time.aggregate_preagregated_data(datetime.datetime(2022, 1, 1), datetime.datetime(2022, 12, 31))
-    import geopandas as gpd 
+    data = per_station_time.aggregate_preagregated_data(
+        datetime.datetime(2022, 1, 1), datetime.datetime(2022, 12, 31)
+    )
+    import geopandas as gpd
 
     gdf = gpd.GeoDataFrame(
         data,
         geometry=gpd.points_from_xy(data.lon, data.lat),
-        crs="EPSG:4326",
+        crs='EPSG:4326',
     )
-    gdf.to_file('stations_2022.gpkg', driver='GPKG', layer='stations') 
+    gdf.to_file('stations_2022.gpkg', driver='GPKG', layer='stations')
 
     # per_station_time.generate_plot(
     #     datetime.datetime(2021, 3, 1, hour=0), datetime.datetime(2021, 3, 10, hour=0)

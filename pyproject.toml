@@ -32,11 +32,30 @@ dependencies = [
     "tqdm==4.66.1",
     "tueplots==0.0.10",
     "xgboost==2.0.0",
-    "xxhash==3.4.1"
+    "xxhash==3.4.1",
 ]
+requires-python = ">= 3.12"
+
+[project.optional-dependencies]
+dev = ["pre-commit", "ruff"]
 
 [tool.setuptools]
-packages = ['api', 'gtfs', 'parser', 'router', 'helpers', 'crawler', 'database', 'ml_models', 'webserver', 'rtd_crawler', 'update_butler', 'data_analysis', 'model_analysis']
+packages = [
+    'api',
+    'crawler',
+    'data_analysis',
+    'database',
+    'gtfs',
+    'helpers',
+    'ml_models',
+    'parser',
+    'router',
+    'webserver',
+]
 
-[tool.black]
-skip-string-normalization = true
+[tool.ruff.format]
+quote-style = "single"
+docstring-code-format = true
+
+[tool.ruff.lint]
+extend-select = ["I", "UP"]

@@ -1,16 +1,17 @@
-from typing import Literal, Tuple, Iterable
+import math
+import pickle
+from collections.abc import Iterable
+from datetime import timedelta
+from typing import Literal
+
 import numpy as np
 import pandas as pd
-from helpers.ttl_lru_cache import ttl_lru_cache
-import pickle
 from xgboost import XGBClassifier
-from datetime import timedelta
-import math
+
 from config import ENCODER_PATH, JSON_MODEL_PATH
-from helpers.StreckennetzSteffi import StreckennetzSteffi
 from database.ris_transfer_time import TransferInfo
-
-
+from helpers.cache import ttl_lru_cache
+from helpers.StreckennetzSteffi import StreckennetzSteffi
 
 CATEGORICALS = ['o', 'c', 'n', 'station', 'pp']
 FEATURES = [
@@ -58,6 +59,7 @@ FEATURE_DTYPES = {
     'day': 'int',
     'stay_time': 'float',
 }
+
 
 def load_model(minute: int, ar_or_dp: Literal['ar', 'dp'], gpu=False) -> XGBClassifier:
     """Load trained XGBClassifier model for prediction form disk
@@ -149,14 +151,14 @@ class Predictor:
                 features, validate_features=False
             )[:, 1]
         return -np.sort(-prediction, axis=1)
-    
+
     def shift_predictions_by_transfer_time(
         self,
         ar_predictions: np.ndarray,
         dp_predictions: np.ndarray,
         transfer_times: np.ndarray,
         needed_transfer_times: Iterable[TransferInfo],
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         for i, (minutes, needed_transfer_time) in enumerate(
             zip(transfer_times, needed_transfer_times)
         ):
@@ -224,21 +226,21 @@ class Predictor:
         tuple[pd.DataFrame, pd.DataFrame]
             ar_data, dp_data
         """
-        dtypes = {
-            'station': 'int',
-            'lat': 'float',
-            'lon': 'float',
-            'o': 'int',
-            'c': 'int',
-            'n': 'int',
-            'distance_to_start': 'float',
-            'distance_to_end': 'float',
-            'pp': 'int',
-            'stop_id': 'int',
-            'minute': 'int',
-            'day': 'int',
-            'stay_time': 'float',
-        }
+        # dtypes = {
+        #     'station': 'int',
+        #     'lat': 'float',
+        #     'lon': 'float',
+        #     'o': 'int',
+        #     'c': 'int',
+        #     'n': 'int',
+        #     'distance_to_start': 'float',
+        #     'distance_to_end': 'float',
+        #     'pp': 'int',
+        #     'stop_id': 'int',
+        #     'minute': 'int',
+        #     'day': 'int',
+        #     'stay_time': 'float',
+        # }
         ar_data = pd.DataFrame(
             columns=FEATURES,
             index=range(len(segments)),
@@ -288,20 +290,27 @@ class Predictor:
             ar_data.at[i, 'stop_id'] = segment['ar_stop_id']
             dp_data.at[i, 'stop_id'] = segment['dp_stop_id']
 
-            is_bus = True if (segment['ar_c'] == 'bus' or segment['dp_c'] == 'bus') else False
+            is_bus = (
+                True
+                if (segment['ar_c'] == 'bus' or segment['dp_c'] == 'bus')
+                else False
+            )
 
             ar_data.at[i, 'distance_to_start'] = streckennetz.route_length(
                 segment['full_trip'][: ar_data.at[i, 'stop_id'] + 1],
                 is_bus=is_bus,
             )
             ar_data.at[i, 'distance_to_end'] = streckennetz.route_length(
-                segment['full_trip'][ar_data.at[i, 'stop_id'] :], is_bus=is_bus,
+                segment['full_trip'][ar_data.at[i, 'stop_id'] :],
+                is_bus=is_bus,
             )
             dp_data.at[i, 'distance_to_start'] = streckennetz.route_length(
-                segment['full_trip'][: dp_data.at[i, 'stop_id'] + 1], is_bus=is_bus,
+                segment['full_trip'][: dp_data.at[i, 'stop_id'] + 1],
+                is_bus=is_bus,
             )
             dp_data.at[i, 'distance_to_end'] = streckennetz.route_length(
-                segment['full_trip'][dp_data.at[i, 'stop_id'] :], is_bus=is_bus,
+                segment['full_trip'][dp_data.at[i, 'stop_id'] :],
+                is_bus=is_bus,
             )
 
             ar_data.at[i, 'minute'] = (

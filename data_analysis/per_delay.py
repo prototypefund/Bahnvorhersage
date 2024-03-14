@@ -1,5 +1,3 @@
-from typing import Optional
-
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import seaborn as sns
@@ -40,7 +38,7 @@ class DelayAnalysis:
         )
         from dask.distributed import Client
 
-        with Client(n_workers=n_dask_workers, threads_per_worker=2) as client:
+        with Client(n_workers=n_dask_workers, threads_per_worker=2):
             rtd = (
                 rtd.groupby('ar_delay')
                 .agg(
@@ -68,7 +66,11 @@ class DelayAnalysis:
             rtd['dp_cancellation'] = 1 - rtd['dp_happened_sum'] / rtd['dp_pt_count']
         return rtd
 
-    def plot(self, loggy=False, save_as: Optional[str] = None,):
+    def plot(
+        self,
+        loggy=False,
+        save_as: str | None = None,
+    ):
         cols = ['ar', 'dp', 'ar_cancellation', 'dp_cancellation']
         fig, ax1 = plt.subplots()
 
@@ -80,7 +82,7 @@ class DelayAnalysis:
             legend=False,
         )
 
-        ax1.tick_params(axis="both", labelsize=20)
+        ax1.tick_params(axis='both', labelsize=20)
         index = self.data.index.to_numpy()
         ax1.set_xlim(index.min(), index.max())
         ax1.xaxis.set_major_locator(ticker.MaxNLocator(nbins='auto', integer=True))
@@ -96,7 +98,7 @@ class DelayAnalysis:
         ax1.set_ylabel('Probability density', fontsize=30)
 
         fig.legend(fontsize=20)
-        
+
         if save_as:
             fig.set_size_inches(13.6, 8.5)
             fig.savefig(save_as, dpi=300, bbox_inches='tight')
@@ -105,7 +107,9 @@ class DelayAnalysis:
 
 
 if __name__ == '__main__':
-    import helpers.bahn_vorhersage
+    from helpers.bahn_vorhersage import COLORFUL_ART
+
+    print(COLORFUL_ART)
 
     delay = DelayAnalysis(prefere_cache=True, generate=False)
     delay.plot(save_as='per_delay_fern.png', loggy=False)

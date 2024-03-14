@@ -1,16 +1,16 @@
-from typing import Callable, Optional
+from collections.abc import Callable
 
 import geopandas as gpd
 import pandas as pd
-from rtd_crawler.hash64 import xxhash64
 
 from config import CACHE_PATH
 from database.engine import DB_CONNECT_STRING, get_engine
+from helpers.hash64 import xxhash64
 
 
 def cached_table_fetch_postgis(
     tablename: str,
-    prefer_cache: Optional[bool] = False,
+    prefer_cache: bool | None = False,
     **kwargs,
 ) -> gpd.GeoDataFrame:
     cache_path = f'{CACHE_PATH}/{tablename}.parquet'
@@ -28,7 +28,7 @@ def cached_table_fetch_postgis(
             **kwargs,
         )
         df.to_parquet(cache_path)
-    except Exception as ex:
+    except Exception:
         df = gpd.read_parquet(cache_path)
 
     return df
@@ -36,7 +36,7 @@ def cached_table_fetch_postgis(
 
 def cached_sql_fetch(
     sql: str,
-    prefer_cache: Optional[bool] = False,
+    prefer_cache: bool | None = False,
     **kwargs,
 ) -> gpd.GeoDataFrame:
     cache_name = hex(xxhash64(sql))
@@ -50,7 +50,7 @@ def cached_sql_fetch(
     try:
         df = pd.read_sql(sql, con=DB_CONNECT_STRING, **kwargs)
         df.to_parquet(cache_path)
-    except Exception as ex:
+    except Exception:
         df = pd.read_parquet(cache_path)
 
     return df
@@ -58,9 +58,9 @@ def cached_sql_fetch(
 
 def cached_table_fetch(
     tablename: str,
-    prefer_cache: Optional[bool] = False,
-    generate: Optional[bool] = False,
-    table_generator: Optional[Callable[[], pd.DataFrame]] = None,
+    prefer_cache: bool | None = False,
+    generate: bool | None = False,
+    table_generator: Callable[[], pd.DataFrame] | None = None,
     **kwargs,
 ) -> pd.DataFrame:
     """
@@ -104,7 +104,7 @@ def cached_table_fetch(
     try:
         df = pd.read_sql_table(tablename, DB_CONNECT_STRING, **kwargs)
         return df
-    except Exception as ex:
+    except Exception:
         try:
             return pd.read_pickle(cache_path)
         except FileNotFoundError:
@@ -146,7 +146,7 @@ def pd_to_psql(df, uri, table_name, schema_name=None, if_exists='fail', sep=',')
 
     if schema_name is not None:
         sql_engine = sqlalchemy.create_engine(
-            uri, connect_args={'options': '-csearch_path={}'.format(schema_name)}
+            uri, connect_args={'options': f'-csearch_path={schema_name}'}
         )
     else:
         sql_engine = sqlalchemy.create_engine(uri)

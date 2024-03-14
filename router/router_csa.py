@@ -1,12 +1,9 @@
-from bisect import bisect_left
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from itertools import pairwise
-from typing import Dict, List, Tuple
 
 import sqlalchemy
 from sqlalchemy.orm import Session as SessionType
-from tqdm import tqdm
 
 from database.engine import sessionfactory
 from gtfs.connections import Connections as DBConnections
@@ -14,32 +11,38 @@ from gtfs.routes import Routes
 from gtfs.stops import StopSteffen
 from gtfs.transfers import Transfer, get_transfers
 from gtfs.trips import Trips
-from helpers.profiler import profile
-from router.constants import (ADDITIONAL_SEARCH_WINDOW_HOURS,
-                              MAX_EXPECTED_DELAY_SECONDS,
-                              MAX_METERS_DRIVING_AWAY, MAX_SEARCH_WINDOW_HOURS,
-                              MINIMUM_TRANSFER_TIME, N_ROUTES_TO_FIND,
-                              NO_DELAYED_TRIP_ID, NO_STOP_ID, NO_TRIP_ID,
-                              STANDART_SEARCH_WINDOW_HOURS,
-                              WALK_FROM_ORIGIN_TRIP_ID, WALKING_TRIP_ID)
+from router.constants import (
+    ADDITIONAL_SEARCH_WINDOW_HOURS,
+    MAX_EXPECTED_DELAY_SECONDS,
+    MAX_METERS_DRIVING_AWAY,
+    MAX_SEARCH_WINDOW_HOURS,
+    MINIMUM_TRANSFER_TIME,
+    N_ROUTES_TO_FIND,
+    NO_DELAYED_TRIP_ID,
+    NO_STOP_ID,
+    NO_TRIP_ID,
+    STANDART_SEARCH_WINDOW_HOURS,
+    WALK_FROM_ORIGIN_TRIP_ID,
+    WALKING_TRIP_ID,
+)
 from router.datatypes import Changeover, Connection, Reachability
 from router.exceptions import NoRouteFound, NoTimetableFound
-from router.journey_reconstruction import (FPTFJourney,
-                                           FPTFJourneyAndAlternatives,
-                                           clean_alternatives,
-                                           extract_journeys,
-                                           remove_duplicate_journeys)
-from router.pareto import (relaxed_alternative_pareto_dominated,
-                           relaxed_pareto_dominated)
-from router.printing import print_journeys
+from router.journey_reconstruction import (
+    FPTFJourney,
+    FPTFJourneyAndAlternatives,
+    clean_alternatives,
+    extract_journeys,
+    remove_duplicate_journeys,
+)
+from router.pareto import relaxed_alternative_pareto_dominated, relaxed_pareto_dominated
 
 # TODO:
 # - sort out splitting and merging trains
 
 
 def _get_routes_from_db(
-    trip_ids: List[int], session: SessionType
-) -> List[Tuple[Routes, int]]:
+    trip_ids: list[int], session: SessionType
+) -> list[tuple[Routes, int]]:
     stmt = (
         sqlalchemy.select(Routes, Trips.trip_id)
         .join(Trips, Routes.route_id == Trips.route_id)
@@ -49,7 +52,7 @@ def _get_routes_from_db(
     return session.execute(stmt).all()
 
 
-def get_routes(trip_ids: List[int], session: SessionType) -> Dict[int, Routes]:
+def get_routes(trip_ids: list[int], session: SessionType) -> dict[int, Routes]:
     routes = _get_routes_from_db(trip_ids, session)
 
     routes = {trip_id: route for route, trip_id in routes}
@@ -174,7 +177,7 @@ def reachability_from_trip_reachability(
 
 def add_reachability_to_pareto(
     reachability: Reachability,
-    pareto_set: List[Reachability],
+    pareto_set: list[Reachability],
     is_alternative: bool,
 ):
     was_appended = False
@@ -215,11 +218,11 @@ def add_reachability_to_pareto(
 
 
 def csa(
-    connections: List[Connection],
-    stops: Dict[int, List[Reachability]],
-    trips: Dict[int, List[Reachability]],
-    transfers: Dict[int, List[Transfer]],
-    heuristics: Dict[int, int],
+    connections: list[Connection],
+    stops: dict[int, list[Reachability]],
+    trips: dict[int, list[Reachability]],
+    transfers: dict[int, list[Transfer]],
+    heuristics: dict[int, int],
     delayed_trip_id: int,
     min_delay: int,
     destination_stop_id: int,
@@ -232,7 +235,7 @@ def csa(
         if connection.dp_ts > early_stopping_ts:
             return stops, True, early_stopping_ts, r_ident_id
 
-        new_reachabilities: List[Reachability] = []
+        new_reachabilities: list[Reachability] = []
 
         # Was the trip reached already?
         if connection.trip_id in trips:
@@ -361,8 +364,8 @@ class RoutingParams:
     dp_ts: datetime
     session: SessionType
     n_hours_to_future: int
-    heuristics: Dict[int, int]
-    connections: List[Connection]
+    heuristics: dict[int, int]
+    connections: list[Connection]
 
 
 class RouterCSA:
@@ -373,13 +376,13 @@ class RouterCSA:
 
     def run_csa(
         self,
-        stops: Dict[int, List[Reachability]],
+        stops: dict[int, list[Reachability]],
         search_alternatives: bool,
         r_ident_id: int = 10,  # 0-9 are reserved for special cases
         delayed_trip_id: int = NO_DELAYED_TRIP_ID,
         min_delay: int = 0,
-    ) -> Dict[int, List[Reachability]]:
-        trips: Dict[int, List[Reachability]] = dict()
+    ) -> dict[int, list[Reachability]]:
+        trips: dict[int, list[Reachability]] = dict()
         new_connections = self.params.connections
 
         while True:
@@ -433,7 +436,7 @@ class RouterCSA:
         destination: str,
         dp_ts: datetime,
         session: SessionType,
-    ) -> List[FPTFJourneyAndAlternatives]:
+    ) -> list[FPTFJourneyAndAlternatives]:
         destination_stop_id = self.stop_steffen.names_to_ids[destination][0]
         self.params = RoutingParams(
             origin=origin,
@@ -544,9 +547,9 @@ class RouterCSA:
 
     def find_alternative_connections(
         self,
-        journey: List[Connection],
+        journey: list[Connection],
     ):
-        changeovers: List[Changeover] = []
+        changeovers: list[Changeover] = []
 
         is_regio = 1
         last_transfer_station = journey[0].dp_stop_id
@@ -649,9 +652,9 @@ class RouterCSA:
 
     def to_fptf(
         self,
-        journeys: List[List[Connection]],
-        alternatives: List[List[List[Connection]]],
-    ) -> List[FPTFJourneyAndAlternatives]:
+        journeys: list[list[Connection]],
+        alternatives: list[list[list[Connection]]],
+    ) -> list[FPTFJourneyAndAlternatives]:
         trip_ids = set()
         for journey in journeys:
             for connection in journey:
@@ -670,7 +673,7 @@ class RouterCSA:
         #     print('Alternatives:')
         #     print_journeys(alternatives_for_journey, self.stop_steffen, routes=routes)
 
-        journey_and_alternatives: List[FPTFJourneyAndAlternatives] = []
+        journey_and_alternatives: list[FPTFJourneyAndAlternatives] = []
 
         for journey, alternatives_for_journey in zip(journeys, alternatives):
             journey_and_alternatives.append(
@@ -704,6 +707,8 @@ def main():
 
 
 if __name__ == '__main__':
-    import helpers.bahn_vorhersage
+    from helpers.bahn_vorhersage import COLORFUL_ART
+
+    print(COLORFUL_ART)
 
     main()

@@ -2,24 +2,69 @@ import enum
 import urllib.parse
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from datetime import datetime, date
-from typing import List, Literal, Set, Union, Dict
+from datetime import date, datetime
+from typing import Literal
 
 import lxml.etree as etree
 import pandas as pd
+import pytz
 import requests
 
-from rtd_crawler.hash64 import xxhash64
-from rtd_crawler.parser_helpers import db_to_utc, parse_id, parse_path
-from rtd_crawler.xml_parser import xml_to_json
+from helpers.hash64 import xxhash64
 from helpers.retry import retry
-
+from helpers.xml_parser import xml_to_json
 
 PLAN_URL = 'https://iris.noncd.db.de/iris-tts/timetable/plan/'
 CHANGES_URL = 'https://iris.noncd.db.de/iris-tts/timetable/fchg/'
 RECENT_CHANGES_URL = 'https://iris.noncd.db.de/iris-tts/timetable/rchg/'
 
 IRIS_TIMEOUT = 90
+
+
+def db_to_utc(dt: str | None) -> datetime | None:
+    """
+    Convert bahn time in format: '%y%m%d%H%M' to datetime.
+    As it is fastest to directly construct a datetime object from this, no strptime is used.
+
+    Args:
+        dt (str): bahn time format
+
+    Returns:
+        datetime.datetime: converted bahn time
+    """
+    if dt is None:
+        return None
+    local_datetime = datetime(
+        int('20' + dt[0:2]), int(dt[2:4]), int(dt[4:6]), int(dt[6:8]), int(dt[8:10])
+    )
+    local_tz = pytz.timezone('Europe/Berlin')
+    local_datetime = local_tz.localize(local_datetime)
+    utc_datetime = local_datetime.astimezone(pytz.utc)
+    return utc_datetime
+
+
+def parse_path(path: str | None) -> list[str] | None:
+    if path is None or not path:
+        return None
+    return path.split('|')
+
+
+def parse_id(id: str) -> tuple[int, datetime, int]:
+    """
+    Parse a stop_id into its components
+
+    Parameters
+    ----------
+    id : str
+        A stop_id
+
+    Returns
+    -------
+    tuple[int, datetime, int]
+        trip_id, date_id, stop_id
+    """
+    trip_id, date_id, stop_id = id.rsplit('-', 2)
+    return int(trip_id), db_to_utc(date_id), int(stop_id)
 
 
 class EventStatus(enum.Enum):
@@ -166,7 +211,7 @@ class Event:
     changed_distant_endpoint: str
     cancellation_time: datetime
     changed_platform: str
-    changed_path: List[str]
+    changed_path: list[str]
     changed_status: EventStatus
     changed_time: datetime
     distant_change: int
@@ -175,16 +220,16 @@ class Event:
     messages: Message
     planned_distant_endpoint: str
     planned_platform: str
-    planned_path: List[str]
+    planned_path: list[str]
     planned_status: EventStatus
     planned_time: datetime
     transition: str
-    wings: List[str]
+    wings: list[str]
 
     def __init__(self, event: dict) -> None:
         if 'dc' in event:
             raise NotImplementedError(
-                f'Found wieird event. Please report this to the developers: {event}'
+                f'Found weird event. Please report this to the developers: {event}'
             )
 
         self.changed_distant_endpoint = event['cde'] if 'cde' in event else None
@@ -257,7 +302,7 @@ class TripReference:
     label and reference trips, if available.
     """
 
-    refered_trips: List[TripLabel]
+    refered_trips: list[TripLabel]
     trip_label: TripLabel
 
 
@@ -372,7 +417,7 @@ class IrisStation:
     valid_from: datetime
     valid_to: datetime
     creationts: datetime
-    meta: List[int] = field(default_factory=list)
+    meta: list[int] = field(default_factory=list)
 
     def __init__(self, iris_station: dict) -> None:
         self.name = iris_station['name']
@@ -390,7 +435,7 @@ class IrisStation:
         self.meta = parse_meta(iris_station.get('meta', ''))
 
 
-def xml_str_to_json(xml_response: str) -> List[Dict]:
+def xml_str_to_json(xml_response: str) -> list[dict]:
     xml_response = etree.fromstring(xml_response.encode())
     return list(xml_to_json(single) for single in xml_response)
 
@@ -411,7 +456,7 @@ def stations_equal(iris_station: IrisStation, station: pd.Series) -> bool:
     )
 
 
-def parse_meta(meta: str) -> List[int]:
+def parse_meta(meta: str) -> list[int]:
     """Parse meta string from IRIS
 
     Parameters
@@ -430,7 +475,7 @@ def parse_meta(meta: str) -> List[int]:
     return list(map(int, meta))
 
 
-def get_stations_from_iris(search_term: Union[str, int]) -> IrisStation | None:
+def get_stations_from_iris(search_term: str | int) -> IrisStation | None:
     """
     Search IRIS for a station either by name or eva number
 
@@ -479,8 +524,8 @@ def get_stations_from_iris(search_term: Union[str, int]) -> IrisStation | None:
 
 
 def search_iris_multiple(
-    search_terms: Set[Union[str, int]]
-) -> Iterator[Union[IrisStation, None]]:
+    search_terms: set[str | int],
+) -> Iterator[IrisStation | None]:
     """Search IRIS for multiple stations
 
     Parameters
@@ -499,7 +544,7 @@ def search_iris_multiple(
 
 
 @retry(max_retries=3)
-def _make_iris_request(url: str, session: requests.Session = None) -> List[Dict]:
+def _make_iris_request(url: str, session: requests.Session = None) -> list[dict]:
     if session is None:
         r = requests.get(url, timeout=IRIS_TIMEOUT)
     else:
@@ -508,18 +553,20 @@ def _make_iris_request(url: str, session: requests.Session = None) -> List[Dict]
     return xml_str_to_json(r.text)
 
 
-def get_plan(eva: int, date: date, hour: int, session: requests.Session = None) -> List[Dict]:
+def get_plan(
+    eva: int, date: date, hour: int, session: requests.Session = None
+) -> list[dict]:
     return _make_iris_request(
         PLAN_URL + f"{eva}/{date.strftime('%y%m%d')}/{hour:02d}", session=session
     )
 
 
-def get_all_changes(eva: int, session: requests.Session = None) -> List[Dict]:
-    return _make_iris_request(CHANGES_URL + f"{eva}", session=session)
+def get_all_changes(eva: int, session: requests.Session = None) -> list[dict]:
+    return _make_iris_request(CHANGES_URL + f'{eva}', session=session)
 
 
-def get_recent_changes(eva: int, session: requests.Session = None) -> List[Dict]:
-    return _make_iris_request(RECENT_CHANGES_URL + f"{eva}", session=session)
+def get_recent_changes(eva: int, session: requests.Session = None) -> list[dict]:
+    return _make_iris_request(RECENT_CHANGES_URL + f'{eva}', session=session)
 
 
 if __name__ == '__main__':

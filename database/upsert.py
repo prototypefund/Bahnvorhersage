@@ -1,15 +1,15 @@
-from typing import List
+import random
+import time
 
 import sqlalchemy
 from sqlalchemy.dialects.postgresql import Insert, insert
-from helpers.batcher import batcher
-import random
-import time
 from sqlalchemy.orm import Session
+
+from helpers.batcher import batcher
 
 
 def create_upsert_statement(
-    table: sqlalchemy.sql.schema.Table, rows: List[dict]
+    table: sqlalchemy.sql.schema.Table, rows: list[dict]
 ) -> Insert:
     stmt = insert(table).values(rows)
 
@@ -26,7 +26,7 @@ def create_upsert_statement(
 def upsert_base(
     session: sqlalchemy.orm.Session,
     table: sqlalchemy.sql.schema.Table,
-    rows: List[dict],
+    rows: list[dict],
 ) -> None:
     """Upsert rows to table using session
 
@@ -47,7 +47,7 @@ def upsert_base(
 def do_nothing_upsert_base(
     session: sqlalchemy.orm.Session,
     table: sqlalchemy.sql.schema.Table,
-    rows: List[dict],
+    rows: list[dict],
 ) -> None:
     """Upsert rows to table using session with do nothing if exists logic
 
@@ -72,7 +72,7 @@ def do_nothing_upsert_base(
 def upsert_with_retry(
     engine: sqlalchemy.engine.Engine,
     table: sqlalchemy.sql.schema.Table,
-    rows: List[dict],
+    rows: list[dict],
 ):
     with Session(engine) as session:
         for row_batch in batcher(rows, 5_000):
